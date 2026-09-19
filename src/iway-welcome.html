@@ -207,12 +207,29 @@
   .btn:hover{transform:translateY(-2px);}
   .btn.ghost{background:transparent; color:var(--ink); border-color:var(--line-strong);}
   .btn.ghost:hover{background:var(--ink); color:var(--paper); border-color:var(--ink);}
-  .hero-meta{
-    margin-top:38px; padding-top:20px; border-top:1.5px solid var(--line-strong);
-    display:flex; gap:28px; flex-wrap:wrap;
-    font-family:var(--mono); font-size:12px; letter-spacing:.04em; color:var(--on-tint-blue);
+  /* ——— первый экран: плитки прогресса ——— */
+  .hero-prog{margin-top:32px; display:grid; grid-template-columns:repeat(3,1fr); gap:12px;}
+  @media (max-width:760px){ .hero-prog{grid-template-columns:1fr;} }
+  .hp{
+    display:block; padding:16px 18px 18px; border-radius:16px; text-decoration:none;
+    background:var(--paper); border:1.5px solid var(--band-3); color:var(--ink);
+    transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease;
   }
-  .hero-meta b{display:block; font-family:var(--body); font-size:15px; font-weight:700; color:var(--on-tint); letter-spacing:0; margin-top:3px;}
+  a.hp:hover{transform:translateY(-2px); border-color:var(--blue-deep); box-shadow:0 8px 20px rgba(0,112,38,.10);}
+  a.hp:focus-visible{outline:none; border-color:var(--blue-deep); box-shadow:0 0 0 3px rgba(0,112,38,.22);}
+  .hp-fact{background:transparent; border-style:dashed;}
+  .hp-r{display:block; font-family:var(--mono); font-size:11px; letter-spacing:.11em; text-transform:uppercase; color:var(--ink-3);}
+  .hp-v{display:block; margin-top:9px; font-family:var(--display); font-weight:600; font-size:20px; letter-spacing:-.01em;}
+  .hp-bar{display:block; margin-top:13px; height:6px; border-radius:99px; background:var(--line); overflow:hidden;}
+  .hp-bar b{display:block; height:100%; width:0; background:var(--blue); transition:width .35s ease;}
+  .hp-s{display:block; margin-top:11px; font-size:13px; color:var(--ink-2);}
+  a.hp .hp-s::after{content:' →'; color:var(--blue-deep); font-weight:600;}
+
+  /* ——— мягкое появление блоков при прокрутке ———
+     Класс js-reveal ставит сам скрипт: без него и при prefers-reduced-motion
+     всё видно сразу, поэтому страница не может «залипнуть» невидимой. */
+  .js-reveal .reveal{opacity:0; transform:translateY(14px);}
+  .js-reveal .reveal.in{opacity:1; transform:none; transition:opacity .45s ease, transform .45s ease;}
 
   /* ——— цифры ——— */
   .figures{margin-top:34px; display:grid; grid-template-columns:repeat(3,1fr); gap:0; border-top:1.5px solid var(--ink); border-bottom:1.5px solid var(--ink);}
@@ -367,10 +384,9 @@
 
   /* служебные подписи: Fedra Demi вместо прежнего моношрифта */
   .eyebrow,.nav a,.ready,.val .v-i,.h-num,.h-date,.meter,
-  .startdate label,.countdown .c,.contact .r,.gallery,.greet label,.hero-meta,.wm-tag{
+  .startdate label,.countdown .c,.contact .r,.gallery,.greet label,.hp-r,.wm-tag{
     font-weight:600; font-variant-numeric:lining-nums tabular-nums;
   }
-  .hero-meta b{font-weight:700;}
 
   /* ——— экран входа ——— */
   .gate{min-height:88vh; display:flex; align-items:center; justify-content:center; padding:40px 20px;}
@@ -897,9 +913,25 @@
     <div class="actions">
       <a class="btn" href="https://forms.yandex.ru/cloud/6493df255d2a061c298dc678" target="_blank" rel="noopener">Заполнить анкету нового сотрудника</a>
     </div>
-    <div class="hero-meta">
-      <div>Первый день<b id="mDate">—</b></div>
-      <div>Отдел<b id="mDept">—</b></div>
+    <!-- живой прогресс вместо статичной строки: те же цифры, что в блоках ниже -->
+    <div class="hero-prog">
+      <a class="hp" href="#docs">
+        <span class="hp-r">Документы</span>
+        <span class="hp-v" id="hpDocs">—</span>
+        <span class="hp-bar"><b id="hpDocsFill"></b></span>
+        <span class="hp-s" id="hpDocsNote">Отметь, что уже готово</span>
+      </a>
+      <a class="hp" href="#plan">
+        <span class="hp-r">Первый день</span>
+        <span class="hp-v" id="hpDay">—</span>
+        <span class="hp-bar"><b id="hpDayFill"></b></span>
+        <span class="hp-s" id="hpDayNote">План по шагам</span>
+      </a>
+      <div class="hp hp-fact">
+        <span class="hp-r">Выход</span>
+        <span class="hp-v" id="mDate">—</span>
+        <span class="hp-s" id="hpLeft">дату сообщит HR</span>
+      </div>
     </div>
     <nav class="nav" aria-label="Разделы страницы">
       <a href="#about">Компания</a>
@@ -3008,12 +3040,35 @@
       saveChain = saveChain.then(function(){ return state.store.saveEmployee(state.rec); }).catch(function(){});
     }, 400);
   }
+  /* Появление блоков при прокрутке. Наблюдаем контейнеры, а не отдельные
+     строки: сетки ценностей и карточек склеены в один блок, и разъезжаться им
+     нельзя. Включаем только когда страница уже показана — у скрытой ничего не
+     пересекается с окном, и блоки остались бы невидимыми. */
+  var revealArmed = false;
+  function armReveal(){
+    if(revealArmed || reduce || !('IntersectionObserver' in window)) return;
+    var boxes = document.querySelectorAll(
+      '#viewEmployee section .wrap > .eyebrow, #viewEmployee section .wrap > h2,' +
+      '#viewEmployee section .wrap > .lead,' +
+      '.team-grid, .figures, .mission, .values, .doc-group, .docs-send,' +
+      '.startdate, .horizon, .culture, .gallery, .faq, .contacts');
+    if(!boxes.length) return;
+    revealArmed = true;
+    document.documentElement.classList.add('js-reveal');
+    var shown = new IntersectionObserver(function(entries, obs){
+      entries.forEach(function(en){
+        if(!en.isIntersecting) return;
+        en.target.classList.add('in');
+        obs.unobserve(en.target);
+      });
+    }, {rootMargin:'0px 0px -8% 0px', threshold:.08});
+    boxes.forEach(function(el){ el.classList.add('reveal'); shown.observe(el); });
+  }
   function renderEmployee(){
     var rec = state.rec, d = deptByName(rec.dept);
     $('heroName').textContent = rec.firstName + ', добро пожаловать';
     $('heroEyebrow').textContent = 'Пребординг · ' + (rec.dept || 'i’way');
     $('whoName').textContent = rec.firstName + ' ' + rec.lastName;
-    $('mDept').textContent = rec.dept || '—';
     $('tDept').textContent = rec.dept || '—';
     $('tEmail').textContent = rec.email || 'Создаётся — выдадим в первый день';
     $('tHead').textContent = (d && d.head) || 'Уточняется';
@@ -3032,16 +3087,21 @@
       $('cdNum').textContent = diff > 0 ? diff : (diff === 0 ? 'Сегодня' : 'В команде');
       $('cdCap').textContent = diff > 0 ? plural(diff, 'день до выхода', 'дня до выхода', 'дней до выхода')
         : (diff === 0 ? 'твой первый день' : plural(-diff, 'день в i’way', 'дня в i’way', 'дней в i’way'));
+      $('hpLeft').textContent = diff > 0
+        ? 'через ' + diff + ' ' + plural(diff, 'день', 'дня', 'дней')
+        : (diff === 0 ? 'сегодня твой первый день' : 'ты уже в команде');
       document.querySelectorAll('.h-date').forEach(function(el){
         var off = parseInt(el.getAttribute('data-offset'), 10);
         el.textContent = (off === 90 ? 'по ' : '') + fmtLong.format(new Date(start.getTime() + off * 86400000));
       });
     } else {
       $('cdNum').textContent = '—'; $('cdCap').textContent = 'дату сообщит HR';
+      $('hpLeft').textContent = 'дату сообщит HR';
       document.querySelectorAll('.h-date').forEach(function(el){ el.textContent = '—'; });
     }
     applyPage();
     initChecks();
+    armReveal();
   }
 
   var checksReady = false;
@@ -3130,6 +3190,15 @@
     var dayDone = $('dayList').querySelectorAll('.check[aria-pressed="true"]').length;
     $('dayCount').textContent = dayDone + ' из ' + dayItems.length;
     $('dayFill').style.width = (dayDone / dayItems.length * 100) + '%';
+
+    /* плитки первого экрана — те же stats, отдельного счёта нет */
+    $('hpDocs').textContent = ds.done + ' из ' + ds.total;
+    $('hpDocsFill').style.width = (ds.total ? ds.done / ds.total * 100 : 0) + '%';
+    $('hpDocsNote').textContent = ds.sentAt ? 'список отправлен в HR'
+      : (ds.ready ? 'собрано — можно отправлять' : 'отметь, что уже готово');
+    $('hpDay').textContent = dayDone + ' из ' + dayItems.length;
+    $('hpDayFill').style.width = (dayItems.length ? dayDone / dayItems.length * 100 : 0) + '%';
+    $('hpDayNote').textContent = dayDone ? 'продолжить план' : 'план по шагам';
 
     var total = ds.total + dayItems.length, done = ds.done + dayDone;
     var pct = total ? Math.round(done / total * 100) : 0;
