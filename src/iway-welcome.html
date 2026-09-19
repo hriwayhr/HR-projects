@@ -1760,79 +1760,83 @@
     });
   }
   function buildOffer(rec){
+    /* Порядок и формулировки — как в исходном тексте оффера: сплошной текст
+       абзацами, без перекомпоновки в таблицы. Меняются только подстановки. */
     var o = offerOf(rec);
     var F = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
     var tasks = offerLines(o.tasks);
     var deadline = o.deadline ? fmtShort.format(new Date(o.deadline + 'T00:00:00')) : '';
-    var facts = [['Должность', o.position], ['Испытательный срок', o.probation],
-                 ['Рабочий график', o.schedule], ['Часы работы', o.hours],
-                 ['Руководитель', o.head], ['Место работы', OFFER_PLACE]]
-                .filter(function(f){ return (f[1] || '').trim(); });
+    var parts = [], plain = [];
 
-    function bullets(list, color){
-      return list.map(function(t){
-        return '<tr><td width="18" valign="top" style="padding:5px 0;font-family:' + F +
-          ';font-size:15px;line-height:1.6;color:' + color + ';">•</td>' +
-          '<td style="padding:5px 0;font-family:' + F + ';font-size:15px;line-height:1.6;color:#5A6055;">' +
-          esc(t) + '</td></tr>';
-      }).join('');
+    function para(html, text, weight){
+      parts.push('<tr><td style="padding:16px 32px 0;font-family:' + F +
+        ';font-size:16px;line-height:1.65;color:#5A6055;' +
+        (weight ? 'font-weight:700;color:#3A3F34;' : '') + '">' + html + '</td></tr>');
+      if(text) plain.push(text);
     }
-    var factRows = facts.map(function(f, i){
-      var line = i ? 'border-top:1px solid #DCEAE0;' : '';
-      return '<tr><td style="' + line + 'padding:11px 0;font-family:' + F + ';font-size:14px;color:#7E8C7F;" width="42%" valign="top">' +
-        esc(f[0]) + '</td><td style="' + line + 'padding:11px 0;font-family:' + F +
-        ';font-size:15px;color:#3A3F34;font-weight:600;" valign="top">' + esc(f[1]) + '</td></tr>';
-    }).join('');
-    var payRows = [['На испытательном сроке', o.payProbation], ['После испытательного срока', o.payAfter]]
-      .filter(function(f){ return (f[1] || '').trim(); })
-      .map(function(f, i){
-        var line = i ? 'border-top:1px solid #DCEAE0;' : '';
-        return '<tr><td style="' + line + 'padding:11px 0;font-family:' + F + ';font-size:14px;color:#7E8C7F;" width="42%" valign="top">' +
-          esc(f[0]) + '</td><td style="' + line + 'padding:11px 0;font-family:' + F +
-          ';font-size:15px;color:#3A3F34;font-weight:600;" valign="top">' + esc(f[1]) + '</td></tr>';
-      }).join('');
+    function list(items, lead, leadText){
+      para(esc(lead), leadText || lead);
+      parts.push('<tr><td style="padding:8px 32px 0;">' +
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">' +
+        items.map(function(t){
+          return '<tr><td width="18" valign="top" style="padding:4px 0;font-family:' + F +
+            ';font-size:15px;line-height:1.6;color:#009634;">•</td>' +
+            '<td style="padding:4px 0;font-family:' + F + ';font-size:15px;line-height:1.6;color:#5A6055;">' +
+            esc(t) + '</td></tr>';
+        }).join('') + '</table></td></tr>');
+      plain.push(items.map(function(t){ return '- ' + t; }).join('\n'));
+    }
+    function val(v){ return esc((v || '').trim()); }
 
-    function card(inner){
-      return '<tr><td style="padding:22px 32px 0;">' +
-        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#EDF6EF" style="background-color:#EDF6EF;border-radius:16px;">' +
-        '<tr><td style="padding:14px 26px;font-family:' + F + ';">' +
-        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">' + inner + '</table>' +
-        '</td></tr></table></td></tr>';
+    para('Если вы получили это письмо, значит мы были впечатлены вашим опытом и видим вас частью нашей сплочённой команды i’way! Нам кажется, вы именно тот человек, который готов менять представления о сервисе трансферов вместе с нами!',
+         'Если вы получили это письмо, значит мы были впечатлены вашим опытом и видим вас частью нашей сплочённой команды i’way! Нам кажется, вы именно тот человек, который готов менять представления о сервисе трансферов вместе с нами!');
+
+    if(o.position){
+      para('Мы рады сделать вам предложение о работе в должности «<b style="color:#3A3F34;">' + val(o.position) + '</b>».',
+           'Мы рады сделать вам предложение о работе в должности «' + o.position.trim() + '».');
     }
-    function para(html, top){
-      return '<tr><td style="padding:' + (top || 20) + 'px 32px 0;font-family:' + F +
-        ';font-size:16px;line-height:1.65;color:#5A6055;">' + html + '</td></tr>';
+    if(tasks.length) list(tasks, 'Что предстоит делать:');
+
+    para('В i’way предусмотрено официальное трудоустройство, согласно ТК РФ.',
+         'В i’way предусмотрено официальное трудоустройство, согласно ТК РФ.');
+    if(o.probation){
+      para('Испытательный срок составляет <b style="color:#3A3F34;">' + val(o.probation) + '</b>, начиная с первого дня трудоустройства.',
+           'Испытательный срок составляет ' + o.probation.trim() + ', начиная с первого дня трудоустройства.');
     }
-    function head(t){
-      return '<tr><td style="padding:26px 32px 0;font-family:' + F +
-        ';font-size:16px;font-weight:700;color:#3A3F34;">' + esc(t) + '</td></tr>';
+    if(o.schedule) para('Рабочий график: <b style="color:#3A3F34;">' + val(o.schedule) + '</b>', 'Рабочий график: ' + o.schedule.trim());
+    if(o.hours) para('Часы работы: <b style="color:#3A3F34;">' + val(o.hours) + '</b>', 'Часы работы: ' + o.hours.trim());
+
+    var pay = [];
+    if(o.payProbation) pay.push('на испытательном сроке составит ' + o.payProbation.trim() + ';');
+    if(o.payAfter) pay.push('после прохождения испытательного срока – ' + o.payAfter.trim() + '.');
+    if(pay.length) list(pay, 'Заработная плата:');
+
+    list(OFFER_GUARANTEES, 'Также мы гарантируем:');
+
+    if(o.head){
+      para('Вашим непосредственным руководителем будет: <b style="color:#3A3F34;">' + val(o.head) + '</b>.',
+           'Вашим непосредственным руководителем будет: ' + o.head.trim() + '.');
     }
+    para('Место работы: <b style="color:#3A3F34;">' + esc(OFFER_PLACE) + '</b>.', 'Место работы: ' + OFFER_PLACE + '.');
+    if(deadline){
+      para('Ответ на оффер необходимо дать до <b style="color:#3A3F34;">' + esc(deadline) + 'г</b> включительно.',
+           'Ответ на оффер необходимо дать до ' + deadline + 'г включительно.');
+    }
+    para('В случае возникновения вопросов, мы открыты к диалогу и ждем обратную связь ответным письмом.',
+         'В случае возникновения вопросов, мы открыты к диалогу и ждем обратную связь ответным письмом.');
+    para('Будем рады видеть вас частью нашей команды i’way!', 'Будем рады видеть вас частью нашей команды i’way!', true);
 
     var body =
       '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#F3F5F1" style="background-color:#F3F5F1;">' +
       '<tr><td align="center" style="padding:28px 12px;">' +
       '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF" style="width:100%;max-width:600px;background-color:#FFFFFF;border-radius:20px;">' +
       '<tr><td style="padding:36px 32px 0;">' + MAIL_LOGO + '</td></tr>' +
-      '<tr><td style="padding:26px 32px 0;font-family:' + F +
-      ';font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#009634;">Предложение о работе</td></tr>' +
-      '<tr><td style="padding:14px 32px 0;font-family:' + F +
-      ';font-size:28px;line-height:1.25;font-weight:700;color:#3A3F34;letter-spacing:-0.3px;">Здравствуйте, ' +
-      esc(rec.firstName) + '!</td></tr>' +
-      para('Если вы получили это письмо, значит мы были впечатлены вашим опытом и видим вас частью нашей сплочённой команды i’way! Нам кажется, вы именно тот человек, который готов менять представления о сервисе трансферов вместе с нами!') +
-      (o.position ? para('Мы рады сделать вам предложение о работе в должности «<b style="color:#3A3F34;">' + esc(o.position) + '</b>».') : '') +
-      (tasks.length ? head('Что предстоит делать') +
-        '<tr><td style="padding:10px 32px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">' +
-        bullets(tasks, '#009634') + '</table></td></tr>' : '') +
-      (factRows ? card(factRows) : '') +
-      para('В i’way предусмотрено официальное трудоустройство, согласно ТК РФ. Испытательный срок начинается с первого дня трудоустройства.') +
-      (payRows ? head('Заработная плата') + card(payRows) : '') +
-      head('Также мы гарантируем') +
-      '<tr><td style="padding:10px 32px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">' +
-      bullets(OFFER_GUARANTEES, '#009634') + '</table></td></tr>' +
-      (deadline ? para('Ответ на оффер необходимо дать до <b style="color:#3A3F34;">' + esc(deadline) + '</b> включительно.', 26) : '') +
-      para('В случае возникновения вопросов, мы открыты к диалогу и ждём обратную связь ответным письмом.') +
-      '<tr><td style="padding:26px 32px 36px;font-family:' + F +
-      ';font-size:16px;line-height:1.65;font-weight:700;color:#3A3F34;">Будем рады видеть вас частью нашей команды i’way!</td></tr>' +
+      '<tr><td style="padding:28px 32px 0;font-family:' + F +
+      ';font-size:26px;line-height:1.25;font-weight:700;color:#3A3F34;letter-spacing:-0.3px;">Предложение о работе</td></tr>' +
+      '<tr><td style="padding:20px 32px 0;font-family:' + F +
+      ';font-size:16px;line-height:1.65;color:#3A3F34;font-weight:600;">Здравствуйте, ' + esc(rec.firstName) + '!</td></tr>' +
+      parts.join('') +
+      '<tr><td style="height:36px;"></td></tr>' +
       '</table>' +
       '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">' +
       '<tr><td style="padding:18px 32px 6px;font-family:' + F + ';font-size:12px;color:#9AA096;">команда i’way · ' +
@@ -1845,19 +1849,7 @@
       '<div style="display:none;max-height:0;overflow:hidden;opacity:0;">Предложение о работе' +
       (o.position ? ' — ' + o.position : '') + '</div>' + body + '</body></html>';
 
-    var text = 'Предложение о работе\n\nЗдравствуйте, ' + rec.firstName + '!\n\n' +
-      'Если вы получили это письмо, значит мы были впечатлены вашим опытом и видим вас частью нашей сплочённой команды i’way!\n\n' +
-      (o.position ? 'Мы рады сделать вам предложение о работе в должности «' + o.position + '».\n\n' : '') +
-      (tasks.length ? 'Что предстоит делать:\n' + tasks.map(function(t){ return '- ' + t; }).join('\n') + '\n\n' : '') +
-      facts.map(function(f){ return f[0] + ': ' + f[1]; }).join('\n') + '\n\n' +
-      'В i’way предусмотрено официальное трудоустройство, согласно ТК РФ.\n' +
-      'Испытательный срок начинается с первого дня трудоустройства.\n\n' +
-      (o.payProbation ? 'Заработная плата на испытательном сроке: ' + o.payProbation + '\n' : '') +
-      (o.payAfter ? 'После испытательного срока: ' + o.payAfter + '\n' : '') + '\n' +
-      'Также мы гарантируем:\n' + OFFER_GUARANTEES.map(function(t){ return '- ' + t; }).join('\n') + '\n\n' +
-      (deadline ? 'Ответ на оффер необходимо дать до ' + deadline + ' включительно.\n\n' : '') +
-      'В случае возникновения вопросов, мы открыты к диалогу и ждём обратную связь ответным письмом.\n\n' +
-      'Будем рады видеть вас частью нашей команды i’way!';
+    var text = 'Предложение о работе\n\nЗдравствуйте, ' + rec.firstName + '!\n\n' + plain.join('\n\n');
 
     return {
       subject: rec.firstName + ', предложение о работе в i’way' + (o.position ? ' — ' + o.position : ''),
