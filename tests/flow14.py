@@ -74,7 +74,7 @@ with sync_playwright() as p:
 
     pg.fill('[data-faq="q0"]', 'Во сколько приходить в первый день?')
     pg.fill('[data-faq="a0"]', 'К 10:00, точный адрес пришлёт HR-партнёр.')
-    pg.click('#addFaq'); pg.wait_for_timeout(300)
+    pg.click('#add-faq'); pg.wait_for_timeout(300)
     last = len(base_q)
     pg.fill('[data-faq="q%d"]' % last, 'Есть ли парковка?')
     pg.fill('[data-faq="a%d"]' % last, 'Да, по пропуску <b>оформим</b> в первый день.')
@@ -102,7 +102,7 @@ with sync_playwright() as p:
 
     pg.evaluate("location.hash='#admin'"); pg.wait_for_timeout(800)
     pg.click('#tabPage'); pg.wait_for_timeout(400)
-    pg.click('#resetFaq'); pg.wait_for_timeout(300)
+    pg.click('#reset-faq'); pg.wait_for_timeout(300)
     pg.click('#savePage'); pg.wait_for_timeout(700)
     login(pg)
     qs2 = pg.eval_on_selector_all('#faq details summary', 'e => e.map(x => x.textContent)')
@@ -122,7 +122,7 @@ with sync_playwright() as p:
     pg.fill('[data-contact="v1"]', '+7 495 000-00-00')
     pg.fill('[data-contact="href1"]', 'tel:+74950000000')
     pg.fill('[data-contact="href2"]', 'javascript:alert(1)')     # чужая схема — не пускаем
-    pg.click('#addContact'); pg.wait_for_timeout(300)
+    pg.click('#add-contact'); pg.wait_for_timeout(300)
     pg.fill('[data-contact="r3"]', 'Телеграм HR')
     pg.fill('[data-contact="v3"]', 'iwayHR')
     pg.fill('[data-contact="href3"]', 'https://t.me/iwayHR')
@@ -139,12 +139,55 @@ with sync_playwright() as p:
 
     pg.evaluate("location.hash='#admin'"); pg.wait_for_timeout(800)
     pg.click('#tabPage'); pg.wait_for_timeout(400)
-    pg.click('#resetContact'); pg.wait_for_timeout(300)
+    pg.click('#reset-contact'); pg.wait_for_timeout(300)
     pg.click('#savePage'); pg.wait_for_timeout(700)
     login(pg)
     back = pg.eval_on_selector_all('#contacts .contact .r', 'e => e.map(x => x.textContent)')
     assert back == base_c, 'исходные контакты не вернулись: ' + str(back)
     print('«Вернуть исходные» восстановил контакты')
+
+    # ——— документы: правка не должна ронять отметки сотрудника ———
+    login(pg)
+    pg.click('#docList [data-key="passport"]'); pg.wait_for_timeout(700)
+    assert pg.get_attribute('#docList [data-key="passport"]', 'aria-pressed') == 'true', 'отметка не поставилась'
+    print('сотрудник отметил паспорт')
+
+    pg.evaluate("location.hash='#admin'"); pg.wait_for_timeout(800)
+    pg.click('#tabPage'); pg.wait_for_timeout(400)
+    pg.fill('[data-docreq="t0"]', 'Паспорт (разворот с пропиской)')
+    pg.click('#add-docreq'); pg.wait_for_timeout(300)
+    n = len(pg.query_selector_all('#pageRows [data-docreq^="t"]')) - 1
+    pg.fill('[data-docreq="t%d"]' % n, 'Военно-учётный документ')
+    pg.check('[data-docreq="mil%d"]' % n)
+    pg.click('#savePage'); pg.wait_for_timeout(700)
+
+    login(pg)
+    first = pg.inner_text('#docList .check:first-child .c-t')
+    assert 'разворот с пропиской' in first, 'название документа не подменилось: ' + first
+    assert pg.get_attribute('#docList [data-key="passport"]', 'aria-pressed') == 'true', 'отметка потерялась при правке списка'
+    mil = pg.query_selector_all('#docList .check[data-doc="mil"]')
+    assert len(mil) == 2, 'признак «только для мужчин» не сохранился: %s' % len(mil)
+    assert all(pg.evaluate('e => e.hidden', el) for el in mil), 'мужской документ показан женщине'
+    print('название изменено, отметка цела, новый документ скрыт по полу')
+
+    # ——— план, ценности, карточки «Жизни» ———
+    pg.evaluate("location.hash='#admin'"); pg.wait_for_timeout(800)
+    pg.click('#tabPage'); pg.wait_for_timeout(400)
+    pg.fill('[data-day="t0"]', 'Встреча с HR и оформление')
+    pg.fill('[data-week="t0"]', 'Пройти вводный курс о компании')
+    pg.fill('[data-month="t0"]', 'Сверка целей на 30 днях')
+    pg.fill('[data-val="t0"]', 'Лидерство')
+    pg.fill('[data-cult="k0"]', 'Внутренние события')
+    pg.click('#savePage'); pg.wait_for_timeout(700)
+
+    login(pg)
+    assert 'Встреча с HR и оформление' in pg.inner_text('#dayList .check:first-child .c-t'), 'план первого дня не обновился'
+    assert 'вводный курс' in pg.inner_text('#planWeek li:first-child'), 'список первой недели не обновился'
+    assert 'Сверка целей' in pg.inner_text('#planMonths li:first-child'), 'список 30/60/90 не обновился'
+    assert pg.inner_text('#aboutValues .val:first-child .v-t') == 'Лидерство', 'ценность не обновилась'
+    assert pg.inner_text('#aboutValues .val:first-child .v-i') == 'Ценность 01', 'нумерация ценностей сбилась'
+    assert pg.inner_text('#cultureCards .cult:first-child .k') == 'Внутренние события', 'карточка «Жизни» не обновилась'
+    print('план, ценности и карточки правятся')
     b.close()
 assert not errs, errs
 print('ОШИБКИ:', errs or 'нет')

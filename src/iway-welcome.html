@@ -879,7 +879,7 @@
       <p class="eyebrow" style="margin-bottom:10px;">Миссия</p>
       <p>Делать трансферы удобными и предсказуемыми — в России и по всему миру. Мы слушаем клиентов, понимаем их потребности и создаём стандарты сервиса, на которые ориентируются другие.</p>
     </div>
-    <div class="values">
+    <div class="values" id="aboutValues">
       <div class="val">
         <div class="v-i">Ценность 01</div>
         <div class="v-t">Лидерство и новаторство</div>
@@ -981,11 +981,11 @@
         <span class="h-date" data-offset="0">—</span>
       </div>
       <div class="checklist" id="dayList">
-        <button class="check" type="button" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Встреча с HR: оформление и вводный разговор</span></button>
-        <button class="check" type="button" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Знакомство с командой и руководителем</span></button>
-        <button class="check" type="button" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Рабочее место и доступы к системам</span></button>
-        <button class="check" type="button" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Обзор основных инструментов: как устроен день команды</span></button>
-        <button class="check" type="button" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Знакомство с базой знаний</span></button>
+        <button class="check" type="button" data-key="day0" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Встреча с HR: оформление и вводный разговор</span></button>
+        <button class="check" type="button" data-key="day1" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Знакомство с командой и руководителем</span></button>
+        <button class="check" type="button" data-key="day2" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Рабочее место и доступы к системам</span></button>
+        <button class="check" type="button" data-key="day3" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Обзор основных инструментов: как устроен день команды</span></button>
+        <button class="check" type="button" data-key="day4" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Знакомство с базой знаний</span></button>
       </div>
       <p class="meter"><span id="dayCount">0 из 5</span><span class="meter-bar"><b id="dayFill"></b></span></p>
     </div>
@@ -996,7 +996,7 @@
         <span class="h-title">Первая неделя</span>
         <span class="h-date" data-offset="7">—</span>
       </div>
-      <ul class="plain">
+      <ul class="plain" id="planWeek">
         <li>Пройти вводное обучение о компании и продукте</li>
         <li>Изучить регламенты и процессы своего направления</li>
         <li>Поставить с руководителем цели на 30, 60 и 90 дней</li>
@@ -1009,7 +1009,7 @@
         <span class="h-title">30 · 60 · 90 дней</span>
         <span class="h-date" data-offset="90">—</span>
       </div>
-      <ul class="plain">
+      <ul class="plain" id="planMonths">
         <li>Обязательный вводный курс о компании и продукте — его проходят все новые сотрудники</li>
         <li>Регулярные встречи 1:1 с руководителем</li>
         <li>Сверка целей на отметках 30, 60 и 90 дней</li>
@@ -1029,7 +1029,7 @@
     <p class="eyebrow">Жизнь в i'way</p>
     <h2>Работа — это ещё не всё</h2>
     <p class="lead">Стабильная и растущая компания, где мнение каждого имеет значение. Мы держим баланс работы и отдыха, поддерживаем инициативы сотрудников и бережём атмосферу, в которой хочется работать.</p>
-    <div class="culture">
+    <div class="culture" id="cultureCards">
       <div class="cult mark"><div class="k">Внутренние мероприятия</div><div class="d">Квизы, хакатоны, дни рождения команды и большие корпоративы</div></div>
       <div class="cult"><div class="k">Спорт и ЗОЖ</div><div class="d">Забеги, турниры и инициативы для тех, кто любит движение</div></div>
       <div class="cult"><div class="k">Благотворительность</div><div class="d">Волонтёрские проекты, к которым может присоединиться каждый</div></div>
@@ -1784,9 +1784,11 @@
     };
   }
   function dayStats(rec){
-    var p = rec.progress || {}, total = document.querySelectorAll('#dayList .check').length, done = 0;
-    for(var i = 0; i < total; i++) if(p['day' + i]) done++;
-    return {done: done, total: total};
+    var p = rec.progress || {};
+    var items = document.querySelectorAll('#dayList .check[data-key]');
+    var done = 0;
+    Array.prototype.forEach.call(items, function(el){ if(p[el.getAttribute('data-key')]) done++; });
+    return {done: done, total: items.length};
   }
   function cell(){ return document.createElement('td'); }
   function miniBtn(text, cls){
@@ -2133,9 +2135,7 @@
     {key:'faq',      name:'Вопросы'},
     {key:'contacts', name:'Контакты'}
   ];
-  var pageDefaults = null, faqDefaults = null, contactDefaults = null;
-  function faqBox(){ return document.querySelector('#faq .faq'); }
-  function contactsBox(){ return document.querySelector('#contacts .contacts'); }
+  var pageDefaults = null;
   function pageParts(key){
     var el = $(key);
     if(!el) return null;
@@ -2145,15 +2145,7 @@
   function capturePageDefaults(){
     if(pageDefaults) return;
     pageDefaults = {};
-    faqDefaults = Array.prototype.slice.call(document.querySelectorAll('#faq .faq details')).map(function(d){
-      return {q: d.querySelector('summary').textContent.trim(), a: d.querySelector('.a').textContent.trim()};
-    });
-    contactDefaults = Array.prototype.slice.call(document.querySelectorAll('#contacts .contacts .contact')).map(function(row){
-      var link = row.querySelector('a.go');
-      return {r: row.querySelector('.r').textContent.trim(),
-              v: row.querySelector('.v').textContent.trim(),
-              href: link ? link.getAttribute('href') : ''};
-    });
+    captureLists();
     PAGE_SECTIONS.forEach(function(sec){
       var p = pageParts(sec.key);
       pageDefaults[sec.key] = {
@@ -2162,18 +2154,15 @@
       };
     });
   }
-  /* текст кладём через textContent: HR пишет обычный текст, не разметку */
-  function renderFaq(items){
-    var box = faqBox(); if(!box) return;
-    box.innerHTML = '';
-    items.filter(function(it){ return (it.q || '').trim(); }).forEach(function(it){
-      var d = document.createElement('details');
-      var q = document.createElement('summary'); q.textContent = it.q;
-      var a = document.createElement('p'); a.className = 'a'; a.textContent = it.a || '';
-      d.appendChild(q); d.appendChild(a); box.appendChild(d);
-    });
-  }
-  /* ссылку пускаем только по знакомым схемам: поле правит человек, а открывают все */
+  /* ——— Списки разделов ———
+     На каждый вид списка пара: читатель снимает исходное из вёрстки,
+     писатель собирает его обратно. Текст всегда через textContent — HR пишет
+     текст, а не разметку. */
+  var CHECK_SVG = '<svg viewBox="0 0 12 12" fill="none" aria-hidden="true">' +
+    '<path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  function txt(el){ return el ? el.textContent.replace(/\s+/g, ' ').trim() : ''; }
+  function nodes(box, sel){ return Array.prototype.slice.call(box.querySelectorAll(sel)); }
+
   function safeHref(href){
     href = (href || '').trim();
     return /^(https?:|mailto:|tel:)/i.test(href) ? href : '';
@@ -2184,30 +2173,152 @@
     var v = (it.v || '').trim();                       /* почту превращаем в ссылку сами */
     return (v.indexOf('@') > -1 && v.indexOf(' ') === -1) ? 'mailto:' + v : '';
   }
-  function renderContacts(items){
-    var box = contactsBox(); if(!box) return;
-    box.innerHTML = '';
-    items.filter(function(it){ return (it.r || '').trim(); }).forEach(function(it){
-      var row = document.createElement('div'); row.className = 'contact';
-      var left = document.createElement('div');
-      var r = document.createElement('div'); r.className = 'r'; r.textContent = it.r;
-      var v = document.createElement('div'); v.className = 'v'; v.textContent = it.v || '';
-      left.appendChild(r); left.appendChild(v); row.appendChild(left);
-      var href = contactHref(it);
-      if(href){
-        var a = document.createElement('a'); a.className = 'go'; a.href = href;
-        if(/^https?:/i.test(href)){ a.target = '_blank'; a.rel = 'noopener'; }
-        a.textContent = /^mailto:/i.test(href) ? 'Написать →' : (/^tel:/i.test(href) ? 'Позвонить →' : 'Открыть →');
-        row.appendChild(a);
-      } else {
-        var sp = document.createElement('span'); sp.className = 'go';
-        sp.style.cssText = 'margin-left:auto; font-weight:600; font-size:14px; color:var(--ink-3);';
-        sp.textContent = 'Уточняется';
-        row.appendChild(sp);
-      }
-      box.appendChild(row);
+
+  var LIST_READERS = {
+    faq: function(box){ return nodes(box, 'details').map(function(d){
+      return {q: txt(d.querySelector('summary')), a: txt(d.querySelector('.a'))}; }); },
+    contacts: function(box){ return nodes(box, '.contact').map(function(row){
+      var a = row.querySelector('a.go');
+      return {r: txt(row.querySelector('.r')), v: txt(row.querySelector('.v')),
+              href: a ? a.getAttribute('href') : ''}; }); },
+    check: function(box){ return nodes(box, '.check[data-key]').map(function(el){
+      return {key: el.getAttribute('data-key'), t: txt(el.querySelector('.c-t')),
+              mil: el.getAttribute('data-doc') === 'mil'}; }); },
+    plain: function(box){ return nodes(box, 'li').map(function(li){ return {t: txt(li)}; }); },
+    values: function(box){ return nodes(box, '.val').map(function(v){
+      return {t: txt(v.querySelector('.v-t')), d: txt(v.querySelector('.v-d'))}; }); },
+    cards: function(box){ return nodes(box, '.cult').map(function(c){
+      return {k: txt(c.querySelector('.k')), d: txt(c.querySelector('.d'))}; }); }
+  };
+
+  var LIST_WRITERS = {
+    faq: function(box, items){
+      items.forEach(function(it){
+        var d = document.createElement('details');
+        var q = document.createElement('summary'); q.textContent = it.q;
+        var a = document.createElement('p'); a.className = 'a'; a.textContent = it.a || '';
+        d.appendChild(q); d.appendChild(a); box.appendChild(d);
+      });
+    },
+    contacts: function(box, items){
+      items.forEach(function(it){
+        var row = document.createElement('div'); row.className = 'contact';
+        var left = document.createElement('div');
+        var r = document.createElement('div'); r.className = 'r'; r.textContent = it.r;
+        var v = document.createElement('div'); v.className = 'v'; v.textContent = it.v || '';
+        left.appendChild(r); left.appendChild(v); row.appendChild(left);
+        var href = contactHref(it);
+        if(href){
+          var a = document.createElement('a'); a.className = 'go'; a.href = href;
+          if(/^https?:/i.test(href)){ a.target = '_blank'; a.rel = 'noopener'; }
+          a.textContent = /^mailto:/i.test(href) ? 'Написать →' : (/^tel:/i.test(href) ? 'Позвонить →' : 'Открыть →');
+          row.appendChild(a);
+        } else {
+          var sp = document.createElement('span'); sp.className = 'go';
+          sp.style.cssText = 'margin-left:auto; font-weight:600; font-size:14px; color:var(--ink-3);';
+          sp.textContent = 'Уточняется';
+          row.appendChild(sp);
+        }
+        box.appendChild(row);
+      });
+    },
+    check: function(box, items){
+      items.forEach(function(it){
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = 'check';
+        b.setAttribute('data-key', it.key || ('k' + randHex(4)));
+        if(it.mil) b.setAttribute('data-doc', 'mil');
+        b.setAttribute('aria-pressed', 'false');
+        var mark = document.createElement('span'); mark.className = 'box';
+        mark.innerHTML = CHECK_SVG;                    /* постоянная разметка, не из поля HR */
+        var t = document.createElement('span'); t.className = 'c-t'; t.textContent = it.t;
+        b.appendChild(mark); b.appendChild(t); box.appendChild(b);
+      });
+    },
+    plain: function(box, items){
+      items.forEach(function(it){
+        var li = document.createElement('li'); li.textContent = it.t; box.appendChild(li);
+      });
+    },
+    values: function(box, items){
+      items.forEach(function(it, i){
+        var d = document.createElement('div'); d.className = 'val';
+        var vi = document.createElement('div'); vi.className = 'v-i';
+        vi.textContent = 'Ценность ' + (i < 9 ? '0' : '') + (i + 1);   /* нумерация своя, иначе разъедется */
+        var vt = document.createElement('div'); vt.className = 'v-t'; vt.textContent = it.t;
+        var vd = document.createElement('div'); vd.className = 'v-d'; vd.textContent = it.d || '';
+        d.appendChild(vi); d.appendChild(vt); d.appendChild(vd); box.appendChild(d);
+      });
+    },
+    cards: function(box, items){
+      items.forEach(function(it, i){
+        var d = document.createElement('div'); d.className = 'cult' + (i === 0 ? ' mark' : '');
+        var k = document.createElement('div'); k.className = 'k'; k.textContent = it.k;
+        var dd = document.createElement('div'); dd.className = 'd'; dd.textContent = it.d || '';
+        d.appendChild(k); d.appendChild(dd); box.appendChild(d);
+      });
+    }
+  };
+
+  var LIST_SPECS = {
+    about: [{cfg:'items', attr:'val', label:'Ценности', sel:'#aboutValues', kind:'values',
+             fields:[['t','Ценность','input'], ['d','Описание','textarea']],
+             add:'+ Добавить ценность', del:'Удалить ценность',
+             note:'Номер («Ценность 01») проставляется сам по порядку.'}],
+    docs: [{cfg:'items', attr:'docreq', label:'Обязательные — оригиналы', sel:'#docList', kind:'check',
+            fields:[['t','Документ','input'], ['mil','Только для мужчин','checkbox']],
+            add:'+ Добавить документ', del:'Удалить документ',
+            note:'Удалённый документ перестаёт учитываться в полноте пакета; отметки сотрудников по нему просто перестают читаться.'},
+           {cfg:'extra', attr:'docopt', label:'Не обязательные', sel:'#docExtra', kind:'check',
+            fields:[['t','Документ','input']],
+            add:'+ Добавить документ', del:'Удалить документ'}],
+    plan: [{cfg:'items', attr:'day', label:'План первого дня', sel:'#dayList', kind:'check',
+            fields:[['t','Пункт','input']], add:'+ Добавить пункт', del:'Удалить пункт'},
+           {cfg:'week', attr:'week', label:'Первая неделя', sel:'#planWeek', kind:'plain',
+            fields:[['t','Пункт','input']], add:'+ Добавить пункт', del:'Удалить пункт'},
+           {cfg:'months', attr:'month', label:'30 · 60 · 90 дней', sel:'#planMonths', kind:'plain',
+            fields:[['t','Пункт','input']], add:'+ Добавить пункт', del:'Удалить пункт'}],
+    culture: [{cfg:'items', attr:'cult', label:'Карточки', sel:'#cultureCards', kind:'cards',
+            fields:[['k','Заголовок','input'], ['d','Описание','textarea']],
+            add:'+ Добавить карточку', del:'Удалить карточку',
+            note:'Первая карточка выделяется цветом.'}],
+    faq: [{cfg:'items', attr:'faq', label:'Вопросы', sel:'#faq .faq', kind:'faq',
+            fields:[['q','Вопрос','input'], ['a','Ответ','textarea']],
+            add:'+ Добавить вопрос', del:'Удалить вопрос'}],
+    contacts: [{cfg:'items', attr:'contact', label:'Контакты', sel:'#contacts .contacts', kind:'contacts',
+            fields:[['r','Контакт','input','HR-отдел'], ['v','Значение','input','hr@iway.ru'],
+                    ['href','Ссылка','input','необязательно: https://…, tel:+7…']],
+            add:'+ Добавить контакт', del:'Удалить контакт',
+            note:'Пустая ссылка — значение покажется без перехода, надпись «Уточняется». Для почты ссылка подставится сама.'}]
+  };
+
+  var listDefaults = {};
+  function specBox(spec){ return document.querySelector(spec.sel); }
+  function specId(secKey, spec){ return secKey + '.' + spec.cfg; }
+  function captureLists(){
+    Object.keys(LIST_SPECS).forEach(function(secKey){
+      LIST_SPECS[secKey].forEach(function(spec){
+        var box = specBox(spec);
+        listDefaults[specId(secKey, spec)] = box ? LIST_READERS[spec.kind](box) : [];
+      });
     });
   }
+  /* пустое значение = «как в вёрстке», ровно как у заголовков */
+  function listFor(cfg, spec, secKey){
+    var own = cfg[spec.cfg];
+    return (Array.isArray(own) && own.length) ? own : listDefaults[specId(secKey, spec)];
+  }
+  function writeLists(secKey, cfg){
+    (LIST_SPECS[secKey] || []).forEach(function(spec){
+      var box = specBox(spec); if(!box) return;
+      var first = spec.fields[0][0];
+      box.innerHTML = '';
+      LIST_WRITERS[spec.kind](box, listFor(cfg, spec, secKey).filter(function(it){
+        return (it[first] || '').trim();
+      }));
+    });
+  }
+
   function applyPage(){
     capturePageDefaults();
     PAGE_SECTIONS.forEach(function(sec){
@@ -2218,42 +2329,43 @@
       document.querySelectorAll('#viewEmployee .nav a[href="#' + sec.key + '"]').forEach(function(a){ a.hidden = off; });
       if(p.title) p.title.textContent = cfg.title || def.title;
       if(p.lead)  p.lead.textContent  = cfg.lead  || def.lead;
-      if(sec.key === 'faq') renderFaq(listFor(cfg, faqDefaults));
-      if(sec.key === 'contacts') renderContacts(listFor(cfg, contactDefaults));
+      writeLists(sec.key, cfg);
     });
   }
-  function listFor(cfg, defaults){
-    return (Array.isArray(cfg.items) && cfg.items.length) ? cfg.items : defaults;
-  }
-  /* Списковые редакторы (вопросы, контакты) — одна механика на оба:
-     пока HR не тронул список, правим копию исходного, «пусто» = как в вёрстке. */
-  var LIST_EDITORS = {
-    faq: {attr: 'faq', addId: 'addFaq', resetId: 'resetFaq',
-          defaults: function(){ return faqDefaults; },
-          fields: [['q', 'Вопрос', 'input'], ['a', 'Ответ', 'textarea']],
-          addLabel: '+ Добавить вопрос', delLabel: 'Удалить вопрос'},
-    contacts: {attr: 'contact', addId: 'addContact', resetId: 'resetContact',
-          defaults: function(){ return contactDefaults; },
-          fields: [['r', 'Контакт', 'input', 'HR-отдел'],
-                   ['v', 'Значение', 'input', 'hr@iway.ru'],
-                   ['href', 'Ссылка', 'input', 'необязательно: https://…, tel:+7…']],
-          addLabel: '+ Добавить контакт', delLabel: 'Удалить контакт',
-          note: 'Пустая ссылка — значение покажется без перехода, надпись «Уточняется». Для почты ссылка подставится сама.'}
-  };
-  function renderListEditor(host, cfg, spec){
+  function renderListEditor(host, cfg, secKey, spec){
     var wrap = document.createElement('div'); wrap.className = 'pg-faq';
+    if(spec.label){
+      var cap = document.createElement('div'); cap.className = 'pg-name';
+      cap.style.cssText = 'font-size:14px; margin-bottom:10px;';
+      cap.textContent = spec.label; wrap.appendChild(cap);
+    }
+    var body = document.createElement('div'); wrap.appendChild(body);
     function current(){
-      if(Array.isArray(cfg.items) && cfg.items.length) return cfg.items;
-      return spec.defaults().map(function(x){
-        var o = {}; spec.fields.forEach(function(f){ o[f[0]] = x[f[0]] || ''; }); return o;
+      var own = cfg[spec.cfg];
+      if(Array.isArray(own) && own.length) return own;
+      return listDefaults[specId(secKey, spec)].map(function(x){
+        var o = {};
+        spec.fields.forEach(function(f){ o[f[0]] = x[f[0]]; });
+        if(x.key) o.key = x.key;                 /* ключ отметок переносим как есть */
+        return o;
       });
     }
     function draw(){
       var list = current();
-      wrap.innerHTML = '';
+      body.innerHTML = '';
       list.forEach(function(it, i){
         var card = document.createElement('div'); card.className = 'pg-q';
         spec.fields.forEach(function(f, fi){
+          if(f[2] === 'checkbox'){
+            var lab = document.createElement('label'); lab.className = 'pg-toggle';
+            lab.style.marginTop = '10px';
+            var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!it[f[0]];
+            cb.setAttribute('data-' + spec.attr, f[0] + i);
+            cb.addEventListener('change', function(){ it[f[0]] = cb.checked; cfg[spec.cfg] = list; });
+            lab.appendChild(cb); lab.appendChild(document.createTextNode(f[1]));
+            card.appendChild(lab);
+            return;
+          }
           var d = document.createElement('div'); d.className = 'field';
           var l = document.createElement('label');
           l.textContent = fi === 0 ? f[1] + ' ' + (i + 1) : f[1];
@@ -2262,34 +2374,37 @@
           input.value = it[f[0]] || '';
           if(f[3]) input.placeholder = f[3];
           input.setAttribute('data-' + spec.attr, f[0] + i);
-          input.addEventListener('input', function(){ it[f[0]] = input.value; cfg.items = list; });
+          input.addEventListener('input', function(){ it[f[0]] = input.value; cfg[spec.cfg] = list; });
           d.appendChild(l); d.appendChild(input); card.appendChild(d);
         });
         var del = document.createElement('button');
-        del.type = 'button'; del.className = 'mini danger'; del.textContent = spec.delLabel;
+        del.type = 'button'; del.className = 'mini danger'; del.textContent = spec.del;
         del.setAttribute('data-' + spec.attr + '-del', i);
-        del.addEventListener('click', function(){ list.splice(i, 1); cfg.items = list; draw(); });
+        del.addEventListener('click', function(){ list.splice(i, 1); cfg[spec.cfg] = list; draw(); });
         card.appendChild(del);
-        wrap.appendChild(card);
+        body.appendChild(card);
       });
       var bar = document.createElement('div'); bar.className = 'actions';
       var add = document.createElement('button');
-      add.type = 'button'; add.className = 'mini'; add.id = spec.addId; add.textContent = spec.addLabel;
+      add.type = 'button'; add.className = 'mini'; add.id = 'add-' + spec.attr; add.textContent = spec.add;
       add.addEventListener('click', function(){
-        var blank = {}; spec.fields.forEach(function(f){ blank[f[0]] = ''; });
-        list.push(blank); cfg.items = list; draw();
+        var blank = {};
+        spec.fields.forEach(function(f){ blank[f[0]] = f[2] === 'checkbox' ? false : ''; });
+        if(spec.kind === 'check') blank.key = 'k' + randHex(4);   /* свой ключ, чужие отметки не трогаем */
+        list.push(blank); cfg[spec.cfg] = list; draw();
       });
       bar.appendChild(add);
-      if(Array.isArray(cfg.items)){
+      if(Array.isArray(cfg[spec.cfg])){
         var reset = document.createElement('button');
-        reset.type = 'button'; reset.className = 'mini'; reset.id = spec.resetId; reset.textContent = 'Вернуть исходные';
-        reset.addEventListener('click', function(){ delete cfg.items; draw(); });
+        reset.type = 'button'; reset.className = 'mini'; reset.id = 'reset-' + spec.attr;
+        reset.textContent = 'Вернуть исходные';
+        reset.addEventListener('click', function(){ delete cfg[spec.cfg]; draw(); });
         bar.appendChild(reset);
       }
-      wrap.appendChild(bar);
+      body.appendChild(bar);
       if(spec.note){
         var n = document.createElement('p'); n.className = 'hint'; n.style.marginTop = '10px';
-        n.textContent = spec.note; wrap.appendChild(n);
+        n.textContent = spec.note; body.appendChild(n);
       }
     }
     draw();
@@ -2332,7 +2447,7 @@
         input.addEventListener('input', function(){ cfg[f[0]] = input.value.trim(); });
         d.appendChild(l); d.appendChild(input); fields.appendChild(d);
       });
-      if(LIST_EDITORS[sec.key]) renderListEditor(fields, cfg, LIST_EDITORS[sec.key]);
+      (LIST_SPECS[sec.key] || []).forEach(function(spec){ renderListEditor(fields, cfg, sec.key, spec); });
       row.appendChild(fields);
       if(sec.note){
         var n = document.createElement('p'); n.className = 'hint'; n.style.marginTop = '10px';
@@ -2408,12 +2523,13 @@
 
   var checksReady = false;
   function applyGender(rec){
-    var mil = document.querySelector('#docList [data-doc="mil"]');
-    if(!mil) return;
+    /* документов «только для мужчин» может быть несколько: список правит HR */
     var female = g(rec, 'm', 'f') === 'f';
-    mil.hidden = female;
-    var note = mil.querySelector('.opt');
-    if(note) note.hidden = true;            /* для мужчин оговорка не нужна */
+    document.querySelectorAll('#docList [data-doc="mil"], #docExtra [data-doc="mil"]').forEach(function(mil){
+      mil.hidden = female;
+      var note = mil.querySelector('.opt');
+      if(note) note.hidden = true;          /* для мужчин оговорка не нужна */
+    });
   }
   function renderCard(){
     var row = document.querySelector('.cardrow[data-doc="card"]');
@@ -2432,15 +2548,16 @@
   function initChecks(){
     var progress = state.rec.progress || (state.rec.progress = {});
     applyGender(state.rec);
-    Array.prototype.slice.call(document.querySelectorAll('#docList [data-key], #docExtra [data-key]')).forEach(function(el){
+    /* списки может пересобрать HR, поэтому обработчик вешаем на сам узел, а не
+       один раз на всю страницу: иначе новые пункты остались бы немыми */
+    Array.prototype.slice.call(document.querySelectorAll(
+      '#docList [data-key], #docExtra [data-key], #dayList .check[data-key]')).forEach(function(el){
       var key = el.getAttribute('data-key');
       el.setAttribute('aria-pressed', progress[key] ? 'true' : 'false');
-      if(!checksReady) el.addEventListener('click', function(){ toggleItem(el, key); });
-    });
-    Array.prototype.slice.call($('dayList').querySelectorAll('.check')).forEach(function(el, i){
-      var key = 'day' + i;
-      el.setAttribute('aria-pressed', progress[key] ? 'true' : 'false');
-      if(!checksReady) el.addEventListener('click', function(){ toggleItem(el, key); });
+      if(!el.__bound){
+        el.__bound = true;
+        el.addEventListener('click', function(){ toggleItem(el, key); });
+      }
     });
     if(!checksReady){
       document.querySelectorAll('.cardrow .opt-btn').forEach(function(b){
