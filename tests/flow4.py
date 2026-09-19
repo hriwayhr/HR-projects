@@ -22,7 +22,7 @@ with sync_playwright() as p:
     ins=pg.query_selector_all('#deptRows tr td input')
     ins[0].fill('Клиентский сервис'); ins[1].fill('Мария Соколова, руководитель отдела'); ins[2].fill('Дмитрий Орлов, старший специалист'); ins[3].fill('#cs-team')
     pg.click('#saveDepts'); pg.wait_for_timeout(400)
-    pg.click('#tabPeople')
+    pg.click('#tabNew')
     pg.fill('#fLast','Иванова'); pg.fill('#fFirst','Анна'); pg.fill('#fPersonal','anna.ivanova@gmail.com')
     pg.select_option('#fDept','Клиентский сервис'); pg.fill('#fDate','2026-10-05'); pg.wait_for_timeout(200)
     pg.click('#newForm button[type=submit]'); pg.wait_for_timeout(900)

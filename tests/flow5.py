@@ -23,7 +23,7 @@ with sync_playwright() as p:
     ins=pg.query_selector_all('#deptRows tr td input')
     ins[0].fill('Клиентский сервис'); ins[1].fill('Мария Соколова, руководитель отдела'); ins[2].fill('Дмитрий Орлов, старший специалист')
     pg.click('#saveDepts'); pg.wait_for_timeout(400)
-    pg.click('#tabPeople')
+    pg.click('#tabNew')
     pg.fill('#fLast','Иванова'); pg.fill('#fFirst','Анна'); pg.fill('#fPersonal','anna.ivanova@gmail.com')
     pg.select_option('#fDept','Клиентский сервис'); pg.fill('#fDate','2026-10-05'); pg.wait_for_timeout(200)
     pg.click('#newForm button[type=submit]'); pg.wait_for_timeout(900)
@@ -44,6 +44,7 @@ with sync_playwright() as p:
     print('кнопка отправки:', pg.inner_text('#mailSent'))
     print('в базе sentAt:', bool(pg.evaluate("Object.values(window.__store).find(v=>v.code)?.sentAt")))
     pg.evaluate("window.scrollTo(0,0)"); pg.wait_for_timeout(300)
+    pg.click('#tabPeople'); pg.wait_for_timeout(300)
     pg.locator('.pgrid').scroll_into_view_if_needed(); pg.wait_for_timeout(300)
     card = pg.query_selector('.pcard')
     print('статус карточки:', card.query_selector('.chip').inner_text(),

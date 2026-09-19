@@ -23,12 +23,13 @@ with sync_playwright() as p:
     pg.click('#tabDepts'); pg.click('#addDept'); pg.wait_for_timeout(200)
     ins=pg.query_selector_all('#deptRows tr td input'); ins[0].fill('Клиентский сервис'); ins[1].fill('М. Соколова')
     pg.click('#saveDepts'); pg.wait_for_timeout(400)
-    pg.click('#tabPeople'); pg.fill('#fLast','Иванова'); pg.fill('#fFirst','Анна'); pg.fill('#fPersonal','a@ex.com')
+    pg.click('#tabNew'); pg.fill('#fLast','Иванова'); pg.fill('#fFirst','Анна'); pg.fill('#fPersonal','a@ex.com')
     pg.select_option('#fDept','Клиентский сервис'); pg.fill('#fDate','2026-10-05')
     pg.click('#newForm button[type=submit]'); pg.wait_for_timeout(900)
     print('карточек до удаления:', len(pg.query_selector_all('.pcard')))
 
     # логин меняется в окне настроек
+    pg.click('#tabPeople'); pg.wait_for_timeout(300)
     pg.locator('.pcard').first.locator('button', has_text='Настроить').click(); pg.wait_for_timeout(500)
     pg.fill('#eLogin','анна'); pg.click('#editSave'); pg.wait_for_timeout(700)
     print('логин в базе:', pg.evaluate("Object.values(window.__store).find(v=>v.code)?.login"))

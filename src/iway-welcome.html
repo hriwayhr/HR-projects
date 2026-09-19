@@ -601,7 +601,8 @@
       <span class="logo sm" role="img" aria-label="i'way"></span>
       <h1>Панель HR</h1>
       <div class="tabs" role="tablist">
-        <button class="tab" id="tabPeople" role="tab" aria-selected="true">Доступы</button>
+        <button class="tab" id="tabPeople" role="tab" aria-selected="true">Выданные доступы</button>
+        <button class="tab" id="tabNew" role="tab" aria-selected="false">Новый доступ</button>
         <button class="tab" id="tabDepts" role="tab" aria-selected="false">Отделы</button>
         <button class="tab" id="tabAdmins" role="tab" aria-selected="false">Администраторы</button>
       </div>
@@ -610,7 +611,43 @@
 
     <div class="notice" id="adminNotice" hidden></div>
 
+    <!-- Панель письма общая для обеих вкладок: её открывают и после создания
+         доступа, и кнопкой «Письмо» из карточки в списке. Внутри вкладки она
+         была бы невидима при вызове из другой. -->
+    <div class="panel" id="mailPanel" hidden>
+      <h2>Письмо-приглашение</h2>
+      <p class="sub" id="mailTo"></p>
+      <div class="mail-actions">
+        <button class="btn" type="button" id="mailCopyRich">Скопировать письмо</button>
+        <button class="mini" type="button" id="mailCopyAddr">Адрес</button>
+        <button class="mini" type="button" id="mailCopySubject">Тема</button>
+        <button class="mini" type="button" id="mailCopyHtml">HTML-код</button>
+        <button class="mini" type="button" id="mailCopyText">Текстом</button>
+        <button class="mini" type="button" id="mailSent">Отметить отправленным</button>
+      </div>
+      <ol class="mail-steps">
+        <li>Нажми «Скопировать письмо» — оно ляжет в буфер с вёрсткой.</li>
+        <li>Открой новое письмо <b>с hr@iway.ru</b>, вставь получателя и тему (кнопка «Тема»).</li>
+        <li>Вставь письмо в тело (Ctrl+V) и отправь — потом отметь отправленным.</li>
+        <li>В Яндекс.Почте вставляй обычным Ctrl+V, <b>не</b> «вставить без форматирования».</li>
+      </ol>
+      <p class="hint">Пароль виден только сейчас: восстановить его нельзя, можно выпустить новый кнопкой «Письмо заново».</p>
+      <iframe id="mailPreview" title="Предпросмотр письма" sandbox=""></iframe>
+    </div>
+
     <div id="panePeople">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Выданные доступы</h2>
+          <input id="peopleSearch" class="search" type="search" placeholder="Поиск по имени, логину, почте" autocomplete="off">
+        </div>
+        <div class="filters" id="peopleFilters" role="group" aria-label="Фильтр по статусу"></div>
+        <div class="pgrid" id="peopleGrid"></div>
+        <p class="empty" id="peopleEmpty" hidden></p>
+      </div>
+    </div>
+
+    <div id="paneNew" hidden>
       <div class="panel">
         <h2>Новый доступ</h2>
         <p class="sub">Заполни данные — почта и код сгенерируются автоматически, их можно поправить вручную.</p>
@@ -663,37 +700,6 @@
             <button class="mini" type="button" id="copyLink">Скопировать доступы</button>
           </div>
         </div>
-      </div>
-
-      <div class="panel" id="mailPanel" hidden>
-        <h2>Письмо-приглашение</h2>
-        <p class="sub" id="mailTo"></p>
-        <div class="mail-actions">
-          <button class="btn" type="button" id="mailCopyRich">Скопировать письмо</button>
-          <button class="mini" type="button" id="mailCopyAddr">Адрес</button>
-          <button class="mini" type="button" id="mailCopySubject">Тема</button>
-          <button class="mini" type="button" id="mailCopyHtml">HTML-код</button>
-          <button class="mini" type="button" id="mailCopyText">Текстом</button>
-          <button class="mini" type="button" id="mailSent">Отметить отправленным</button>
-        </div>
-        <ol class="mail-steps">
-          <li>Нажми «Скопировать письмо» — оно ляжет в буфер с вёрсткой.</li>
-          <li>Открой новое письмо <b>с hr@iway.ru</b>, вставь получателя и тему (кнопка «Тема»).</li>
-          <li>Вставь письмо в тело (Ctrl+V) и отправь — потом отметь отправленным.</li>
-          <li>В Яндекс.Почте вставляй обычным Ctrl+V, <b>не</b> «вставить без форматирования».</li>
-        </ol>
-        <p class="hint">Пароль виден только сейчас: восстановить его нельзя, можно выпустить новый кнопкой «Письмо заново».</p>
-        <iframe id="mailPreview" title="Предпросмотр письма" sandbox=""></iframe>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <h2>Выданные доступы</h2>
-          <input id="peopleSearch" class="search" type="search" placeholder="Поиск по имени, логину, почте" autocomplete="off">
-        </div>
-        <div class="filters" id="peopleFilters" role="group" aria-label="Фильтр по статусу"></div>
-        <div class="pgrid" id="peopleGrid"></div>
-        <p class="empty" id="peopleEmpty" hidden></p>
       </div>
     </div>
 
@@ -2064,12 +2070,14 @@
     }).catch(function(){ notify('Не удалось сохранить справочник', 'Попробуй ещё раз.'); });
   });
   function switchTab(t){
-    [['people', 'tabPeople', 'panePeople'], ['depts', 'tabDepts', 'paneDepts'], ['admins', 'tabAdmins', 'paneAdmins']].forEach(function(x){
+    [['people', 'tabPeople', 'panePeople'], ['new', 'tabNew', 'paneNew'],
+     ['depts', 'tabDepts', 'paneDepts'], ['admins', 'tabAdmins', 'paneAdmins']].forEach(function(x){
       $(x[1]).setAttribute('aria-selected', x[0] === t);
       $(x[2]).hidden = x[0] !== t;
     });
   }
   $('tabPeople').addEventListener('click', function(){ switchTab('people'); });
+  $('tabNew').addEventListener('click', function(){ switchTab('new'); });
   $('tabDepts').addEventListener('click', function(){ switchTab('depts'); });
   $('tabAdmins').addEventListener('click', function(){ switchTab('admins'); });
 
