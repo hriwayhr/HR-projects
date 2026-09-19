@@ -47,6 +47,7 @@ with sync_playwright() as p:
     print('М обязательных:', pg.inner_text('#docCount'), '| билет виден:', not pg.is_hidden('#docList [data-doc="mil"]'))
     # панель
     pg.goto(url+'#admin'); pg.wait_for_timeout(1300)
+    pg.click('#tabPeople'); pg.wait_for_timeout(300)   # список — на своей вкладке
     print('фильтры:', pg.inner_text('#peopleFilters').replace('\n',' | '))
     for c in pg.query_selector_all('.pcard'):
         print(' ', c.query_selector('.pc-name').inner_text(), '|', c.query_selector('.pc-docs-top b').inner_text(),

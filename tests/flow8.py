@@ -29,6 +29,7 @@ with sync_playwright() as p:
     print('в базе отмечено:', pg.evaluate("Object.keys(window.__store['employees/IW-TEST'].progress).length"))
     # HR открывает панель
     pg.goto(url+'#admin'); pg.wait_for_timeout(1200)
+    pg.click('#tabPeople'); pg.wait_for_timeout(300)   # список — на своей вкладке
     card = pg.query_selector('.pcard')
     print('карточка:', card.query_selector('.pc-docs-top b').inner_text(), '|', card.query_selector('.chip').inner_text())
     pg.locator('.pcard .linky').click(); pg.wait_for_timeout(500)

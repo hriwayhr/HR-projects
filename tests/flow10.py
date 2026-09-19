@@ -32,6 +32,7 @@ with sync_playwright() as p:
     pg.add_init_script(path=base+'mockdb.js')
     pg.add_init_script('window.__seed='+json.dumps(seed, ensure_ascii=False)+'; Object.assign(window.__store, window.__seed);')
     pg.goto(url+'#admin'); pg.wait_for_timeout(1300)
+    pg.click('#tabPeople'); pg.wait_for_timeout(300)   # список — на своей вкладке
     print('фильтры:', pg.inner_text('#peopleFilters').replace('\n',' | '))
     print('карточек:', len(pg.query_selector_all('.pcard')))
     # фильтр «Готовы к выходу»

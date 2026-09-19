@@ -602,8 +602,8 @@
       <span class="logo sm" role="img" aria-label="i'way"></span>
       <h1>Панель HR</h1>
       <div class="tabs" role="tablist">
-        <button class="tab" id="tabPeople" role="tab" aria-selected="true">Выданные доступы</button>
-        <button class="tab" id="tabNew" role="tab" aria-selected="false">Новый доступ</button>
+        <button class="tab" id="tabNew" role="tab" aria-selected="true">Новый доступ</button>
+        <button class="tab" id="tabPeople" role="tab" aria-selected="false">Выданные доступы</button>
         <button class="tab" id="tabDepts" role="tab" aria-selected="false">Отделы</button>
         <button class="tab" id="tabAdmins" role="tab" aria-selected="false">Администраторы</button>
       </div>
@@ -612,7 +612,7 @@
 
     <div class="notice" id="adminNotice" hidden></div>
 
-    <div id="panePeople">
+    <div id="panePeople" hidden>
       <div class="panel">
         <div class="panel-head">
           <h2>Выданные доступы</h2>
@@ -624,7 +624,7 @@
       </div>
     </div>
 
-    <div id="paneNew" hidden>
+    <div id="paneNew">
       <div class="panel">
         <h2>Новый доступ</h2>
         <p class="sub">Заполни данные — почта и код сгенерируются автоматически, их можно поправить вручную.</p>
@@ -759,6 +759,7 @@
         <button class="mini" type="button" id="mailCopyHtml">HTML-код</button>
         <button class="mini" type="button" id="mailCopyText">Текстом</button>
         <button class="mini" type="button" id="mailSent">Отметить отправленным</button>
+        <button class="mini" type="button" id="mailClose">Закрыть</button>
       </div>
       <ol class="mail-steps">
         <li>Нажми «Скопировать письмо» — оно ляжет в буфер с вёрсткой.</li>
@@ -1686,6 +1687,17 @@
   $('mailCopySubject').addEventListener('click', function(){ copyText(state.mail.subject, $('mailCopySubject'), 'Тема скопирована'); });
   $('mailCopyHtml').addEventListener('click', function(){ copyText(state.mail.full, $('mailCopyHtml'), 'Код скопирован'); });
   $('mailCopyText').addEventListener('click', function(){ copyText(state.mail.text, $('mailCopyText'), 'Текст скопирован'); });
+  $('mailClose').addEventListener('click', function(){
+    var rec = state.mailRec;
+    /* пароль показывается один раз: пока письмо не отмечено отправленным — спрашиваем */
+    if(rec && !rec.sentAt){
+      ask({title:'Закрыть письмо?', ok:'Закрыть',
+           text:'Пароль виден только сейчас — восстановить его нельзя, можно лишь выпустить новый, и тогда этот перестанет работать. Если письмо ещё не скопировано, сделай это до закрытия.'})
+        .then(function(v){ if(v) $('mailPanel').hidden = true; });
+      return;
+    }
+    $('mailPanel').hidden = true;
+  });
   $('mailSent').addEventListener('click', function(){
     var rec = state.mailRec;
     if(!rec) return;
