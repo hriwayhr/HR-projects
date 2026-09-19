@@ -620,10 +620,10 @@
       <div class="tabs" role="tablist">
         <button class="tab" id="tabNew" role="tab" aria-selected="true">Новый доступ</button>
         <button class="tab" id="tabPeople" role="tab" aria-selected="false">Выданные доступы</button>
-        <button class="tab" id="tabPage" role="tab" aria-selected="false">Страница сотрудника</button>
-        <button class="tab" id="tabTpl" role="tab" aria-selected="false">Шаблоны</button>
-        <button class="tab" id="tabDepts" role="tab" aria-selected="false">Отделы</button>
         <button class="tab" id="tabAdmins" role="tab" aria-selected="false">Администраторы</button>
+        <button class="tab" id="tabDepts" role="tab" aria-selected="false">Отделы</button>
+        <button class="tab" id="tabTpl" role="tab" aria-selected="false">Шаблоны</button>
+        <button class="tab" id="tabPage" role="tab" aria-selected="false">Страница сотрудника</button>
       </div>
       <div class="who"><span class="n" id="hrWho"></span><a href="#exit">Выйти</a></div>
     </div>
@@ -2981,9 +2981,9 @@
   });
 
   function switchTab(t){
-    [['people', 'tabPeople', 'panePeople'], ['new', 'tabNew', 'paneNew'], ['page', 'tabPage', 'panePage'],
-     ['tpl', 'tabTpl', 'paneTpl'],
-     ['depts', 'tabDepts', 'paneDepts'], ['admins', 'tabAdmins', 'paneAdmins']].forEach(function(x){
+    [['new', 'tabNew', 'paneNew'], ['people', 'tabPeople', 'panePeople'],
+     ['admins', 'tabAdmins', 'paneAdmins'], ['depts', 'tabDepts', 'paneDepts'],
+     ['tpl', 'tabTpl', 'paneTpl'], ['page', 'tabPage', 'panePage']].forEach(function(x){
       $(x[1]).setAttribute('aria-selected', x[0] === t);
       $(x[2]).hidden = x[0] !== t;
     });

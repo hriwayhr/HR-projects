@@ -15,6 +15,12 @@ with sync_playwright() as p:
     pg.add_init_script(path=base+'mockdb.js')
     pg.goto(url+'#admin'); pg.wait_for_timeout(700)
 
+    # порядок вкладок в шапке — как договорено с HR
+    order = pg.eval_on_selector_all('#viewAdmin .tabs .tab', 'els => els.map(e => e.id)')
+    want = ['tabNew', 'tabPeople', 'tabAdmins', 'tabDepts', 'tabTpl', 'tabPage']
+    assert order == want, 'порядок вкладок не тот: %s' % order
+    print('порядок вкладок:', ' · '.join(pg.eval_on_selector_all('#viewAdmin .tabs .tab', 'els => els.map(e => e.textContent)')))
+
     # первая вкладка открыта по умолчанию
     assert pg.is_visible('#newForm'), 'по умолчанию открыта не вкладка «Новый доступ»'
     assert not pg.is_visible('#peopleSearch'), 'список виден на вкладке создания'
