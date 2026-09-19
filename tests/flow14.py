@@ -64,6 +64,50 @@ with sync_playwright() as p:
     assert pg.inner_text('#docs h2') == default_title, 'пустое поле не вернуло исходный заголовок'
     assert pg.is_visible('#culture'), 'раздел не вернулся'
     print('пустое поле вернуло исходный текст, раздел вернулся')
+
+    # ——— вопросы: правка, добавление, удаление, возврат исходных ———
+    pg.evaluate("location.hash='#admin'"); pg.wait_for_timeout(800)
+    pg.click('#tabPage'); pg.wait_for_timeout(400)
+    base_q = pg.eval_on_selector_all('#pageRows [data-faq^="q"]', 'e => e.map(x => x.value)')
+    assert len(base_q) >= 5, 'вопросы не подставились в редактор: %d' % len(base_q)
+    print('вопросов в редакторе:', len(base_q))
+
+    pg.fill('[data-faq="q0"]', 'Во сколько приходить в первый день?')
+    pg.fill('[data-faq="a0"]', 'К 10:00, точный адрес пришлёт HR-партнёр.')
+    pg.click('#addFaq'); pg.wait_for_timeout(300)
+    last = len(base_q)
+    pg.fill('[data-faq="q%d"]' % last, 'Есть ли парковка?')
+    pg.fill('[data-faq="a%d"]' % last, 'Да, по пропуску <b>оформим</b> в первый день.')
+    pg.click('#savePage'); pg.wait_for_timeout(700)
+
+    login(pg)
+    qs = pg.eval_on_selector_all('#faq details summary', 'e => e.map(x => x.textContent)')
+    assert qs[0] == 'Во сколько приходить в первый день?', 'правка вопроса не доехала: ' + qs[0]
+    assert 'Есть ли парковка?' in qs, 'добавленный вопрос не появился'
+    assert len(qs) == len(base_q) + 1, 'не то число вопросов: %d' % len(qs)
+    print('у сотрудника вопросов:', len(qs), '| первый:', qs[0])
+    # HR пишет текст, а не разметку: теги не должны исполняться
+    marked = pg.eval_on_selector_all('#faq details .a', 'e => e.map(x => x.innerHTML)')
+    hit = [x for x in marked if 'оформим' in x]
+    assert hit and '<b>' not in hit[0], 'разметка из поля HR попала в страницу: ' + (hit[0] if hit else 'нет ответа')
+    print('разметка в ответе экранирована')
+
+    pg.evaluate("location.hash='#admin'"); pg.wait_for_timeout(800)
+    pg.click('#tabPage'); pg.wait_for_timeout(400)
+    pg.click('[data-faq-del="0"]'); pg.wait_for_timeout(300)
+    pg.click('#savePage'); pg.wait_for_timeout(700)
+    login(pg)
+    assert len(pg.query_selector_all('#faq details')) == len(base_q), 'удаление вопроса не доехало'
+    print('после удаления вопросов:', len(base_q))
+
+    pg.evaluate("location.hash='#admin'"); pg.wait_for_timeout(800)
+    pg.click('#tabPage'); pg.wait_for_timeout(400)
+    pg.click('#resetFaq'); pg.wait_for_timeout(300)
+    pg.click('#savePage'); pg.wait_for_timeout(700)
+    login(pg)
+    qs2 = pg.eval_on_selector_all('#faq details summary', 'e => e.map(x => x.textContent)')
+    assert qs2 == base_q, 'исходные вопросы не вернулись'
+    print('«Вернуть исходные» восстановил список из вёрстки')
     b.close()
 assert not errs, errs
 print('ОШИБКИ:', errs or 'нет')

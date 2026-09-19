@@ -471,6 +471,10 @@
   .pg-toggle{display:inline-flex; align-items:center; gap:8px; font-size:13.5px; color:var(--ink-2); cursor:pointer; white-space:nowrap;}
   .pg-toggle input{width:18px; height:18px; accent-color:var(--blue-deep); cursor:pointer;}
   .pg-fields{display:grid; gap:12px; margin-top:14px;}
+  .pg-faq{border-top:1px solid var(--line); padding-top:14px;}
+  .pg-q{border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:12px; background:var(--shell);}
+  .pg-q .field + .field{margin-top:10px;}
+  .pg-q .mini{margin-top:12px;}
   .pg-row.off .pg-fields{display:none;}
 
   /* ——— карточки сотрудников ——— */
@@ -2129,7 +2133,8 @@
     {key:'faq',      name:'Вопросы'},
     {key:'contacts', name:'Контакты'}
   ];
-  var pageDefaults = null;
+  var pageDefaults = null, faqDefaults = null;
+  function faqBox(){ return document.querySelector('#faq .faq'); }
   function pageParts(key){
     var el = $(key);
     if(!el) return null;
@@ -2139,12 +2144,26 @@
   function capturePageDefaults(){
     if(pageDefaults) return;
     pageDefaults = {};
+    faqDefaults = Array.prototype.slice.call(document.querySelectorAll('#faq .faq details')).map(function(d){
+      return {q: d.querySelector('summary').textContent.trim(), a: d.querySelector('.a').textContent.trim()};
+    });
     PAGE_SECTIONS.forEach(function(sec){
       var p = pageParts(sec.key);
       pageDefaults[sec.key] = {
         title: p && p.title ? p.title.textContent : '',
         lead:  p && p.lead  ? p.lead.textContent  : ''
       };
+    });
+  }
+  /* текст кладём через textContent: HR пишет обычный текст, не разметку */
+  function renderFaq(items){
+    var box = faqBox(); if(!box) return;
+    box.innerHTML = '';
+    items.filter(function(it){ return (it.q || '').trim(); }).forEach(function(it){
+      var d = document.createElement('details');
+      var q = document.createElement('summary'); q.textContent = it.q;
+      var a = document.createElement('p'); a.className = 'a'; a.textContent = it.a || '';
+      d.appendChild(q); d.appendChild(a); box.appendChild(d);
     });
   }
   function applyPage(){
@@ -2157,8 +2176,57 @@
       document.querySelectorAll('#viewEmployee .nav a[href="#' + sec.key + '"]').forEach(function(a){ a.hidden = off; });
       if(p.title) p.title.textContent = cfg.title || def.title;
       if(p.lead)  p.lead.textContent  = cfg.lead  || def.lead;
+      if(sec.key === 'faq'){
+        renderFaq(Array.isArray(cfg.items) && cfg.items.length ? cfg.items : faqDefaults);
+      }
     });
   }
+  function renderFaqEditor(host, cfg){
+    var wrap = document.createElement('div'); wrap.className = 'pg-faq';
+    /* пока HR не тронул список, редактируем копию исходного: пустое = «как в вёрстке» */
+    function current(){
+      return (Array.isArray(cfg.items) && cfg.items.length) ? cfg.items
+           : faqDefaults.map(function(x){ return {q: x.q, a: x.a}; });
+    }
+    function draw(){
+      var list = current();
+      wrap.innerHTML = '';
+      list.forEach(function(it, i){
+        var card = document.createElement('div'); card.className = 'pg-q';
+        [['q', 'Вопрос ' + (i + 1), 'input'], ['a', 'Ответ', 'textarea']].forEach(function(f){
+          var d = document.createElement('div'); d.className = 'field';
+          var l = document.createElement('label'); l.textContent = f[1];
+          var input = document.createElement(f[2]);
+          if(f[2] === 'textarea') input.rows = 2;
+          input.value = it[f[0]] || '';
+          input.setAttribute('data-faq', f[0] + i);
+          input.addEventListener('input', function(){ it[f[0]] = input.value; cfg.items = list; });
+          d.appendChild(l); d.appendChild(input); card.appendChild(d);
+        });
+        var del = document.createElement('button');
+        del.type = 'button'; del.className = 'mini danger'; del.textContent = 'Удалить вопрос';
+        del.setAttribute('data-faq-del', i);
+        del.addEventListener('click', function(){ list.splice(i, 1); cfg.items = list; draw(); });
+        card.appendChild(del);
+        wrap.appendChild(card);
+      });
+      var bar = document.createElement('div'); bar.className = 'actions';
+      var add = document.createElement('button');
+      add.type = 'button'; add.className = 'mini'; add.id = 'addFaq'; add.textContent = '+ Добавить вопрос';
+      add.addEventListener('click', function(){ list.push({q: '', a: ''}); cfg.items = list; draw(); });
+      bar.appendChild(add);
+      if(Array.isArray(cfg.items)){
+        var reset = document.createElement('button');
+        reset.type = 'button'; reset.className = 'mini'; reset.id = 'resetFaq'; reset.textContent = 'Вернуть исходные';
+        reset.addEventListener('click', function(){ delete cfg.items; draw(); });
+        bar.appendChild(reset);
+      }
+      wrap.appendChild(bar);
+    }
+    draw();
+    host.appendChild(wrap);
+  }
+
   function renderPageRows(){
     capturePageDefaults();
     var box = $('pageRows'); box.innerHTML = '';
@@ -2195,6 +2263,7 @@
         input.addEventListener('input', function(){ cfg[f[0]] = input.value.trim(); });
         d.appendChild(l); d.appendChild(input); fields.appendChild(d);
       });
+      if(sec.key === 'faq') renderFaqEditor(fields, cfg);
       row.appendChild(fields);
       if(sec.note){
         var n = document.createElement('p'); n.className = 'hint'; n.style.marginTop = '10px';
