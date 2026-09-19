@@ -21,6 +21,21 @@ with sync_playwright() as p:
     assert order == want, 'порядок вкладок не тот: %s' % order
     print('порядок вкладок:', ' · '.join(pg.eval_on_selector_all('#viewAdmin .tabs .tab', 'els => els.map(e => e.textContent)')))
 
+    # имя и «Выйти» — в правом верхнем углу, отдельной строкой над вкладками.
+    # Широкий экран: только на нём вкладки уместились бы в первую строку рядом
+    # с именем, поэтому проверяем именно здесь.
+    pg.set_viewport_size({'width': 1900, 'height': 1000}); pg.wait_for_timeout(200)
+    pos = pg.evaluate("""() => {
+      const bar = document.querySelector('#viewAdmin .admin-bar').getBoundingClientRect();
+      const who = document.querySelector('#viewAdmin .who').getBoundingClientRect();
+      const tabs = document.querySelector('#viewAdmin .tabs').getBoundingClientRect();
+      return {gap: bar.right - who.right, above: tabs.top - who.bottom};
+    }""")
+    assert pos['gap'] <= 2, 'имя не прижато к правому краю шапки: %s' % pos
+    assert pos['above'] >= 0, 'имя не над вкладками, а в одной строке с ними: %s' % pos
+    print('шапка: имя и «Выйти» в правом верхнем углу')
+    pg.set_viewport_size({'width': 1280, 'height': 1000}); pg.wait_for_timeout(200)
+
     # первая вкладка открыта по умолчанию
     assert pg.is_visible('#newForm'), 'по умолчанию открыта не вкладка «Новый доступ»'
     assert not pg.is_visible('#peopleSearch'), 'список виден на вкладке создания'

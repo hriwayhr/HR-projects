@@ -400,11 +400,13 @@
   /* ——— панель HR ——— */
   .admin{padding-block:28px 64px;}
   .admin-bar{
-    display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+    display:flex; align-items:center; gap:16px 16px; flex-wrap:wrap;
     padding-bottom:18px; border-bottom:1.5px solid var(--ink); margin-bottom:26px;
   }
   .admin-bar h1{font-size:23px; margin-right:auto;}
-  .tabs{display:flex; gap:6px;}
+  /* вкладки всегда своей строкой — имя и «Выйти» остаются в правом верхнем углу
+     и не уезжают под вкладки, как только их набирается много */
+  .tabs{display:flex; gap:6px; flex-wrap:wrap; flex-basis:100%;}
   .tab{
     font-family:var(--body); font-weight:600; font-size:13.5px; padding:8px 15px; border-radius:999px;
     border:1.5px solid var(--line-strong); background:transparent; color:var(--ink-2); cursor:pointer;
@@ -545,7 +547,10 @@
   .who{display:flex; align-items:center; gap:12px; font-size:13.5px; white-space:nowrap;}
   .who b{font-weight:600;}
   .who a{color:var(--blue-deep); font-weight:600; text-decoration:none;}
-  @media (max-width:1340px){ .who span.n{display:none;} .ready span:first-child{display:none;} }
+  /* в шапке сотрудника имя прячем рано: там же навигация и счётчик готовности.
+     В шапке HR имя стоит отдельной строкой справа — места хватает до телефона. */
+  @media (max-width:1340px){ #viewEmployee .who span.n{display:none;} .ready span:first-child{display:none;} }
+  @media (max-width:560px){ .who span.n{display:none;} }
   @media (max-width:860px){ .who{font-size:13px;} }
 </style>
 
@@ -617,6 +622,7 @@
     <div class="admin-bar">
       <span class="logo sm" role="img" aria-label="i'way"></span>
       <h1>Панель HR</h1>
+      <div class="who"><span class="n" id="hrWho"></span><a href="#exit">Выйти</a></div>
       <div class="tabs" role="tablist">
         <button class="tab" id="tabNew" role="tab" aria-selected="true">Новый доступ</button>
         <button class="tab" id="tabPeople" role="tab" aria-selected="false">Выданные доступы</button>
@@ -625,7 +631,6 @@
         <button class="tab" id="tabTpl" role="tab" aria-selected="false">Шаблоны</button>
         <button class="tab" id="tabPage" role="tab" aria-selected="false">Страница сотрудника</button>
       </div>
-      <div class="who"><span class="n" id="hrWho"></span><a href="#exit">Выйти</a></div>
     </div>
 
     <div class="notice" id="adminNotice" hidden></div>
