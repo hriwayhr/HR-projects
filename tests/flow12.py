@@ -28,6 +28,17 @@ with sync_playwright() as p:
     assert pg.query_selector('.hero .actions a.ghost') is None, 'кнопка «Что взять с собой» осталась'
     print('герой: почта и кнопка убраны')
 
+    # имя и «Выйти» — в правом верхнем углу шапки, правее счётчика готовности
+    pos = pg.evaluate("""() => {
+      const bar = document.querySelector('.topbar-in').getBoundingClientRect();
+      const who = document.querySelector('.topbar .who').getBoundingClientRect();
+      const ready = document.querySelector('.topbar .ready').getBoundingClientRect();
+      return {gap: bar.right - who.right, afterReady: who.left - ready.right};
+    }""")
+    assert pos['gap'] <= 21, 'имя не прижато к правому краю шапки (20px — отбивка шапки): %s' % pos
+    assert pos['afterReady'] >= 0, 'имя стоит левее счётчика готовности: %s' % pos
+    print('шапка: имя и «Выйти» в правом верхнем углу')
+
     # первый экран — навигация в герое, в шапке скрыта
     pg.evaluate('window.scrollTo(0,0)'); pg.wait_for_timeout(400)
     assert pg.is_visible('.hero .nav'), 'на первом экране нет навигации в герое'
