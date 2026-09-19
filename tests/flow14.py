@@ -108,6 +108,43 @@ with sync_playwright() as p:
     qs2 = pg.eval_on_selector_all('#faq details summary', 'e => e.map(x => x.textContent)')
     assert qs2 == base_q, 'исходные вопросы не вернулись'
     print('«Вернуть исходные» восстановил список из вёрстки')
+
+    # ——— контакты: правка, добавление, ссылки ———
+    pg.evaluate("location.hash='#admin'"); pg.wait_for_timeout(800)
+    pg.click('#tabPage'); pg.wait_for_timeout(400)
+    base_c = pg.eval_on_selector_all('#pageRows [data-contact^="r"]', 'e => e.map(x => x.value)')
+    assert len(base_c) == 3, 'контакты не подставились в редактор: ' + str(len(base_c))
+    print('контактов в редакторе:', base_c)
+
+    pg.fill('[data-contact="r0"]', 'HR-партнёр')
+    pg.fill('[data-contact="v0"]', 'hr@iway.ru')
+    pg.fill('[data-contact="href0"]', '')                        # почта сама станет ссылкой
+    pg.fill('[data-contact="v1"]', '+7 495 000-00-00')
+    pg.fill('[data-contact="href1"]', 'tel:+74950000000')
+    pg.fill('[data-contact="href2"]', 'javascript:alert(1)')     # чужая схема — не пускаем
+    pg.click('#addContact'); pg.wait_for_timeout(300)
+    pg.fill('[data-contact="r3"]', 'Телеграм HR')
+    pg.fill('[data-contact="v3"]', 'iwayHR')
+    pg.fill('[data-contact="href3"]', 'https://t.me/iwayHR')
+    pg.click('#savePage'); pg.wait_for_timeout(700)
+
+    login(pg)
+    rows = pg.eval_on_selector_all('#contacts .contact', 'e => e.map(x => ({r: x.querySelector(".r").textContent, v: x.querySelector(".v").textContent, href: x.querySelector("a.go") ? x.querySelector("a.go").getAttribute("href") : "", go: x.querySelector(".go").textContent}))')
+    assert len(rows) == 4, 'не то число контактов: ' + str(len(rows))
+    assert rows[0]['r'] == 'HR-партнёр' and rows[0]['href'] == 'mailto:hr@iway.ru', 'почта не стала ссылкой: ' + str(rows[0])
+    assert rows[1]['href'] == 'tel:+74950000000' and 'Позвонить' in rows[1]['go'], 'телефон не стал ссылкой: ' + str(rows[1])
+    assert rows[2]['href'] == '' and rows[2]['go'].strip() == 'Уточняется', 'javascript-ссылка прошла на страницу: ' + str(rows[2])
+    assert rows[3]['href'] == 'https://t.me/iwayHR' and 'Открыть' in rows[3]['go'], 'внешняя ссылка не встала: ' + str(rows[3])
+    print('контакты на странице:', [r['go'].strip() for r in rows])
+
+    pg.evaluate("location.hash='#admin'"); pg.wait_for_timeout(800)
+    pg.click('#tabPage'); pg.wait_for_timeout(400)
+    pg.click('#resetContact'); pg.wait_for_timeout(300)
+    pg.click('#savePage'); pg.wait_for_timeout(700)
+    login(pg)
+    back = pg.eval_on_selector_all('#contacts .contact .r', 'e => e.map(x => x.textContent)')
+    assert back == base_c, 'исходные контакты не вернулись: ' + str(back)
+    print('«Вернуть исходные» восстановил контакты')
     b.close()
 assert not errs, errs
 print('ОШИБКИ:', errs or 'нет')

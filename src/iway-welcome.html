@@ -2133,8 +2133,9 @@
     {key:'faq',      name:'Вопросы'},
     {key:'contacts', name:'Контакты'}
   ];
-  var pageDefaults = null, faqDefaults = null;
+  var pageDefaults = null, faqDefaults = null, contactDefaults = null;
   function faqBox(){ return document.querySelector('#faq .faq'); }
+  function contactsBox(){ return document.querySelector('#contacts .contacts'); }
   function pageParts(key){
     var el = $(key);
     if(!el) return null;
@@ -2146,6 +2147,12 @@
     pageDefaults = {};
     faqDefaults = Array.prototype.slice.call(document.querySelectorAll('#faq .faq details')).map(function(d){
       return {q: d.querySelector('summary').textContent.trim(), a: d.querySelector('.a').textContent.trim()};
+    });
+    contactDefaults = Array.prototype.slice.call(document.querySelectorAll('#contacts .contacts .contact')).map(function(row){
+      var link = row.querySelector('a.go');
+      return {r: row.querySelector('.r').textContent.trim(),
+              v: row.querySelector('.v').textContent.trim(),
+              href: link ? link.getAttribute('href') : ''};
     });
     PAGE_SECTIONS.forEach(function(sec){
       var p = pageParts(sec.key);
@@ -2166,6 +2173,41 @@
       d.appendChild(q); d.appendChild(a); box.appendChild(d);
     });
   }
+  /* ссылку пускаем только по знакомым схемам: поле правит человек, а открывают все */
+  function safeHref(href){
+    href = (href || '').trim();
+    return /^(https?:|mailto:|tel:)/i.test(href) ? href : '';
+  }
+  function contactHref(it){
+    var own = safeHref(it.href);
+    if(own) return own;
+    var v = (it.v || '').trim();                       /* почту превращаем в ссылку сами */
+    return (v.indexOf('@') > -1 && v.indexOf(' ') === -1) ? 'mailto:' + v : '';
+  }
+  function renderContacts(items){
+    var box = contactsBox(); if(!box) return;
+    box.innerHTML = '';
+    items.filter(function(it){ return (it.r || '').trim(); }).forEach(function(it){
+      var row = document.createElement('div'); row.className = 'contact';
+      var left = document.createElement('div');
+      var r = document.createElement('div'); r.className = 'r'; r.textContent = it.r;
+      var v = document.createElement('div'); v.className = 'v'; v.textContent = it.v || '';
+      left.appendChild(r); left.appendChild(v); row.appendChild(left);
+      var href = contactHref(it);
+      if(href){
+        var a = document.createElement('a'); a.className = 'go'; a.href = href;
+        if(/^https?:/i.test(href)){ a.target = '_blank'; a.rel = 'noopener'; }
+        a.textContent = /^mailto:/i.test(href) ? 'Написать →' : (/^tel:/i.test(href) ? 'Позвонить →' : 'Открыть →');
+        row.appendChild(a);
+      } else {
+        var sp = document.createElement('span'); sp.className = 'go';
+        sp.style.cssText = 'margin-left:auto; font-weight:600; font-size:14px; color:var(--ink-3);';
+        sp.textContent = 'Уточняется';
+        row.appendChild(sp);
+      }
+      box.appendChild(row);
+    });
+  }
   function applyPage(){
     capturePageDefaults();
     PAGE_SECTIONS.forEach(function(sec){
@@ -2176,52 +2218,79 @@
       document.querySelectorAll('#viewEmployee .nav a[href="#' + sec.key + '"]').forEach(function(a){ a.hidden = off; });
       if(p.title) p.title.textContent = cfg.title || def.title;
       if(p.lead)  p.lead.textContent  = cfg.lead  || def.lead;
-      if(sec.key === 'faq'){
-        renderFaq(Array.isArray(cfg.items) && cfg.items.length ? cfg.items : faqDefaults);
-      }
+      if(sec.key === 'faq') renderFaq(listFor(cfg, faqDefaults));
+      if(sec.key === 'contacts') renderContacts(listFor(cfg, contactDefaults));
     });
   }
-  function renderFaqEditor(host, cfg){
+  function listFor(cfg, defaults){
+    return (Array.isArray(cfg.items) && cfg.items.length) ? cfg.items : defaults;
+  }
+  /* Списковые редакторы (вопросы, контакты) — одна механика на оба:
+     пока HR не тронул список, правим копию исходного, «пусто» = как в вёрстке. */
+  var LIST_EDITORS = {
+    faq: {attr: 'faq', addId: 'addFaq', resetId: 'resetFaq',
+          defaults: function(){ return faqDefaults; },
+          fields: [['q', 'Вопрос', 'input'], ['a', 'Ответ', 'textarea']],
+          addLabel: '+ Добавить вопрос', delLabel: 'Удалить вопрос'},
+    contacts: {attr: 'contact', addId: 'addContact', resetId: 'resetContact',
+          defaults: function(){ return contactDefaults; },
+          fields: [['r', 'Контакт', 'input', 'HR-отдел'],
+                   ['v', 'Значение', 'input', 'hr@iway.ru'],
+                   ['href', 'Ссылка', 'input', 'необязательно: https://…, tel:+7…']],
+          addLabel: '+ Добавить контакт', delLabel: 'Удалить контакт',
+          note: 'Пустая ссылка — значение покажется без перехода, надпись «Уточняется». Для почты ссылка подставится сама.'}
+  };
+  function renderListEditor(host, cfg, spec){
     var wrap = document.createElement('div'); wrap.className = 'pg-faq';
-    /* пока HR не тронул список, редактируем копию исходного: пустое = «как в вёрстке» */
     function current(){
-      return (Array.isArray(cfg.items) && cfg.items.length) ? cfg.items
-           : faqDefaults.map(function(x){ return {q: x.q, a: x.a}; });
+      if(Array.isArray(cfg.items) && cfg.items.length) return cfg.items;
+      return spec.defaults().map(function(x){
+        var o = {}; spec.fields.forEach(function(f){ o[f[0]] = x[f[0]] || ''; }); return o;
+      });
     }
     function draw(){
       var list = current();
       wrap.innerHTML = '';
       list.forEach(function(it, i){
         var card = document.createElement('div'); card.className = 'pg-q';
-        [['q', 'Вопрос ' + (i + 1), 'input'], ['a', 'Ответ', 'textarea']].forEach(function(f){
+        spec.fields.forEach(function(f, fi){
           var d = document.createElement('div'); d.className = 'field';
-          var l = document.createElement('label'); l.textContent = f[1];
+          var l = document.createElement('label');
+          l.textContent = fi === 0 ? f[1] + ' ' + (i + 1) : f[1];
           var input = document.createElement(f[2]);
           if(f[2] === 'textarea') input.rows = 2;
           input.value = it[f[0]] || '';
-          input.setAttribute('data-faq', f[0] + i);
+          if(f[3]) input.placeholder = f[3];
+          input.setAttribute('data-' + spec.attr, f[0] + i);
           input.addEventListener('input', function(){ it[f[0]] = input.value; cfg.items = list; });
           d.appendChild(l); d.appendChild(input); card.appendChild(d);
         });
         var del = document.createElement('button');
-        del.type = 'button'; del.className = 'mini danger'; del.textContent = 'Удалить вопрос';
-        del.setAttribute('data-faq-del', i);
+        del.type = 'button'; del.className = 'mini danger'; del.textContent = spec.delLabel;
+        del.setAttribute('data-' + spec.attr + '-del', i);
         del.addEventListener('click', function(){ list.splice(i, 1); cfg.items = list; draw(); });
         card.appendChild(del);
         wrap.appendChild(card);
       });
       var bar = document.createElement('div'); bar.className = 'actions';
       var add = document.createElement('button');
-      add.type = 'button'; add.className = 'mini'; add.id = 'addFaq'; add.textContent = '+ Добавить вопрос';
-      add.addEventListener('click', function(){ list.push({q: '', a: ''}); cfg.items = list; draw(); });
+      add.type = 'button'; add.className = 'mini'; add.id = spec.addId; add.textContent = spec.addLabel;
+      add.addEventListener('click', function(){
+        var blank = {}; spec.fields.forEach(function(f){ blank[f[0]] = ''; });
+        list.push(blank); cfg.items = list; draw();
+      });
       bar.appendChild(add);
       if(Array.isArray(cfg.items)){
         var reset = document.createElement('button');
-        reset.type = 'button'; reset.className = 'mini'; reset.id = 'resetFaq'; reset.textContent = 'Вернуть исходные';
+        reset.type = 'button'; reset.className = 'mini'; reset.id = spec.resetId; reset.textContent = 'Вернуть исходные';
         reset.addEventListener('click', function(){ delete cfg.items; draw(); });
         bar.appendChild(reset);
       }
       wrap.appendChild(bar);
+      if(spec.note){
+        var n = document.createElement('p'); n.className = 'hint'; n.style.marginTop = '10px';
+        n.textContent = spec.note; wrap.appendChild(n);
+      }
     }
     draw();
     host.appendChild(wrap);
@@ -2263,7 +2332,7 @@
         input.addEventListener('input', function(){ cfg[f[0]] = input.value.trim(); });
         d.appendChild(l); d.appendChild(input); fields.appendChild(d);
       });
-      if(sec.key === 'faq') renderFaqEditor(fields, cfg);
+      if(LIST_EDITORS[sec.key]) renderListEditor(fields, cfg, LIST_EDITORS[sec.key]);
       row.appendChild(fields);
       if(sec.note){
         var n = document.createElement('p'); n.className = 'hint'; n.style.marginTop = '10px';
