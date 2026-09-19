@@ -834,7 +834,7 @@
     <div id="panePage" hidden>
       <div class="panel">
         <h2>Блоки страницы сотрудника</h2>
-        <p class="sub">Заголовок и подзаголовок можно переписать, лишние разделы — скрыть. Настройки общие для всех сотрудников. Пустое поле — остаётся текст по умолчанию, он подсказан в поле.</p>
+        <p class="sub">Заголовок и подзаголовок можно переписать, лишние разделы — скрыть. Настройки общие для всех сотрудников. Если очистить поле, вернётся исходный текст из вёрстки.</p>
         <div id="pageRows"></div>
         <div class="actions" style="margin-top:20px;">
           <button class="btn" type="button" id="savePage">Сохранить страницу</button>
@@ -3095,7 +3095,9 @@
         var l = document.createElement('label'); l.textContent = f[1];
         var input = document.createElement(f[0] === 'lead' ? 'textarea' : 'input');
         if(f[0] === 'lead') input.rows = 2;
-        input.value = cfg[f[0]] || '';
+        /* в поле сразу текущий текст, как во вкладке «Шаблоны»: править с места,
+           а не набирать заново поверх подсказки */
+        input.value = cfg[f[0]] || pageDefaults[sec.key][f[0]] || '';
         input.placeholder = pageDefaults[sec.key][f[0]];
         input.setAttribute('data-field', sec.key + '.' + f[0]);
         input.addEventListener('input', function(){ cfg[f[0]] = input.value.trim(); });

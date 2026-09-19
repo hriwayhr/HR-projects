@@ -32,10 +32,13 @@ with sync_playwright() as p:
     assert len(rows) >= 7, 'блоки страницы не отрисованы: %d' % len(rows)
     print('блоков в настройке:', len(rows))
 
-    # исходный текст подсказан в поле — по нему потом сверим сброс
-    default_title = pg.get_attribute('[data-field="docs.title"]', 'placeholder')
-    assert default_title, 'в поле нет подсказки с текстом по умолчанию'
-    print('текст по умолчанию:', default_title)
+    # текущий текст лежит в самом поле — его правят с места, не набирая заново
+    default_title = pg.input_value('[data-field="docs.title"]')
+    assert default_title, 'в поле нет текущего заголовка'
+    assert pg.get_attribute('[data-field="docs.title"]', 'placeholder') == default_title, \
+        'подсказка разошлась со значением поля'
+    assert pg.input_value('[data-field="docs.lead"]'), 'в поле нет текущего подзаголовка'
+    print('текст в поле:', default_title)
 
     # правим текст и скрываем «Жизнь»
     pg.fill('[data-field="docs.title"]', 'Документы к первому дню')
