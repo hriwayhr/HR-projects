@@ -1,0 +1,10 @@
+# рабочие файлы тестов
+tests/preview.html
+tests/letter.html
+tests/stripped.html
+tests/shots/
+__pycache__/
+
+# лицензионные файлы шрифта в репозиторий не кладём
+*.otf
+*.woff2
