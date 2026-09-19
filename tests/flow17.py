@@ -31,9 +31,15 @@ with sync_playwright() as p:
     pg.click('#tabTpl'); pg.wait_for_timeout(300)
     assert pg.is_visible('#paneTpl'), 'вкладка «Шаблоны» не открылась'
     assert not pg.is_visible('#panePage'), 'вкладка страницы осталась видимой'
-    ph = pg.get_attribute('[data-tpl="offer.body"]', 'placeholder')
-    assert 'Здравствуйте, {имя}!' in ph and 'Также мы гарантируем:' in ph, 'в подсказке нет исходного текста оффера'
-    print('вкладка «Шаблоны»: поля с подсказкой по умолчанию')
+    # текущий текст лежит в самом поле — его правят с места, а не набирают заново
+    cur = pg.input_value('[data-tpl="offer.body"]')
+    assert 'Здравствуйте, {имя}!' in cur and 'Также мы гарантируем:' in cur, \
+        'в поле нет текущего текста оффера:\n' + cur
+    assert pg.input_value('[data-tpl="intern.second"]').startswith('Мы рады вашему положительному ответу!'), \
+        'в поле нет текущего текста второго сообщения'
+    assert pg.input_value('[data-tpl="offer.subject"]').startswith('Оффер для {фамилия}'), \
+        'в поле нет текущей темы письма'
+    print('вкладка «Шаблоны»: в полях текущий текст, готовый к правке')
 
     # правим шаблон оффера
     body = ('Здравствуйте, {имя}!\n\n'
@@ -110,7 +116,7 @@ with sync_playwright() as p:
     pg.click('#tabTpl'); pg.wait_for_timeout(300)
     pg.click('#resetTpl'); pg.wait_for_timeout(400)
     pg.click('#dlgOk'); pg.wait_for_timeout(900)
-    assert pg.input_value('[data-tpl="offer.body"]') == '', 'поля не очистились'
+    assert 'Также мы гарантируем:' in pg.input_value('[data-tpl="offer.body"]'), 'в поле не вернулся исходный текст'
     assert not (pg.evaluate("window.__store['config/templates'].tpl.offer") or {}).get('body'), 'шаблон не сброшен в базе'
     pg.click('#tabPeople'); pg.wait_for_timeout(400)
     pg.locator('.pcard', has_text='Иванова').first.locator('button', has_text='Оффер').click()
