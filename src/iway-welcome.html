@@ -389,7 +389,7 @@
   }
   .field textarea{resize:vertical; min-height:62px; line-height:1.5;}
   .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--blue-deep); outline:none; box-shadow:0 0 0 3px rgba(0,112,38,.18);}
-  .field input[readonly]{background:var(--shell); color:var(--ink-2);}
+  .field input[readonly],.field textarea[readonly]{background:var(--shell); color:var(--ink-2);}
   .hint{font-size:12.5px; color:var(--ink-3); line-height:1.5;}
   .field .hint{margin-top:6px;}
   #gateLogin{letter-spacing:.06em; font-weight:600;}
@@ -682,9 +682,12 @@
             </div>
             <div class="team-preview" id="teamPreview">Выбери отдел — здесь появится команда, которую увидит сотрудник.</div>
           </div>
-          <h3 class="pg-name" style="font-size:16px; margin-top:28px;">Оффер</h3>
-          <p class="hint" style="margin:6px 0 16px;">Можно заполнить сразу — письмо соберётся после создания доступа. Пустые поля в письмо не попадут, дозаполнить можно позже кнопкой «Оффер» в карточке.</p>
-          <div class="form-grid" id="offerNew"></div>
+          <div id="offerBlock">
+            <h3 class="pg-name" style="font-size:16px; margin-top:28px;">Оффер</h3>
+            <p class="hint" style="margin:6px 0 16px;">Можно заполнить сразу — письмо соберётся после создания доступа. Пустые поля в письмо не попадут, дозаполнить можно позже кнопкой «Оффер» в карточке.</p>
+            <div class="form-grid" id="offerNew"></div>
+          </div>
+          <p class="hint" id="offerSkip" style="margin-top:22px;" hidden>Для этого отдела оффер не отправляется: после создания доступа появятся два сообщения для чата — в телеграм или на hh.ru.</p>
           <div class="actions" style="margin-top:20px;">
             <button class="btn" type="submit">Создать доступ</button>
           </div>
@@ -766,7 +769,7 @@
         <p class="sub">Эти данные подтягиваются в личную страницу сотрудника: он видит руководителя, старшего и чат своей команды.</p>
         <div class="tbl-wrap">
           <table class="tbl">
-            <thead><tr><th>Отдел</th><th>Руководитель</th><th>Старший в команде</th><th>Чат команды</th><th></th></tr></thead>
+            <thead><tr><th>Отдел</th><th>Руководитель</th><th>Старший в команде</th><th>Чат команды</th><th>Стажировка</th><th></th></tr></thead>
             <tbody id="deptRows"></tbody>
           </table>
         </div>
@@ -818,6 +821,26 @@
       </div>
       <p class="hint">Правки сохраняются сразу и сразу видны в предпросмотре.</p>
       <iframe id="offerPreview" title="Предпросмотр оффера" sandbox=""></iframe>
+    </div>
+
+    <div class="panel" id="chatPanel" hidden>
+      <h2>Сообщения для чата</h2>
+      <p class="sub" id="chatSub"></p>
+      <div class="field" style="margin-top:20px;">
+        <label for="chatMsg1">1 · Уточняем готовность к стажировке</label>
+        <textarea id="chatMsg1" rows="5" readonly></textarea>
+        <div class="mail-actions"><button class="mini" type="button" id="chatCopy1">Скопировать</button></div>
+      </div>
+      <div class="field" style="margin-top:22px;">
+        <label for="chatMsg2">2 · Детали выхода и доступы — после согласия</label>
+        <textarea id="chatMsg2" rows="12" readonly></textarea>
+        <div class="mail-actions">
+          <button class="mini" type="button" id="chatCopy2">Скопировать</button>
+          <button class="mini" type="button" id="chatSent">Отметить отправленным</button>
+          <button class="mini" type="button" id="chatClose">Закрыть</button>
+        </div>
+      </div>
+      <p class="hint" style="margin-top:14px;">Пароль виден только сейчас: восстановить его нельзя, при повторном открытии сообщений выпускается новый.</p>
     </div>
   </div>
 </div>
@@ -1470,7 +1493,7 @@
       $('peopleSearch').addEventListener('input', renderPeople);
       state.searchBound = true;
     }
-    fillDeptSelect(); renderDeptRows(); renderPageRows(); resetNewOffer(); refreshPeople(); watchPeople(); renderAdmins();
+    fillDeptSelect(); renderDeptRows(); renderPageRows(); resetNewOffer(); syncOfferBlock(); refreshPeople(); watchPeople(); renderAdmins();
   }
   function fillDeptSelect(){
     var sel = $('fDept'); sel.innerHTML = '';
@@ -1498,7 +1521,12 @@
       line.appendChild(b); box.appendChild(line);
     });
   }
-  $('fDept').addEventListener('change', renderTeamPreview);
+  function syncOfferBlock(){
+    var intern = isIntern($('fDept').value);
+    $('offerBlock').hidden = intern;
+    $('offerSkip').hidden = !intern;
+  }
+  $('fDept').addEventListener('change', function(){ renderTeamPreview(); syncOfferBlock(); });
   function suggestMail(){
     if($('fMail').dataset.touched === '1') return;
     $('fMail').value = mailFor($('fFirst').value.trim(), $('fLast').value.trim());
@@ -1549,9 +1577,13 @@
       var hadOffer = offerFilled(rec);
       $('newForm').reset(); $('fDept').selectedIndex = 0; $('fMail').dataset.touched = '';
       resetNewOffer();
-      renderTeamPreview(); refreshPeople();
-      if(hadOffer) showOffer(rec);       /* оффер заполнили — значит собираемся его слать */
-      showMail(rec, pass);
+      renderTeamPreview(); syncOfferBlock(); refreshPeople();
+      if(isIntern(rec.dept)){
+        showChat(rec, pass);             /* стажировка: вместо письма и оффера — чат */
+      } else {
+        if(hadOffer) showOffer(rec);     /* оффер заполнили — значит собираемся его слать */
+        showMail(rec, pass);
+      }
     }).catch(function(){ notify('Не удалось сохранить доступ', 'Проверь права на страницу и попробуй ещё раз.'); });
   });
   function copyText(text, btn, label){
@@ -1898,6 +1930,60 @@
   });
   $('offerClose').addEventListener('click', function(){ $('offerPanel').hidden = true; });
 
+  /* ——— сообщения для чата ———
+     Отделы со стажировкой оффер не получают: кандидату пишут в телеграм или
+     в чат hh.ru двумя сообщениями. Второе несёт доступы вместо письма. */
+  function isIntern(deptName){
+    var d = deptByName(deptName);
+    return !!(d && d.intern);
+  }
+  function buildChat(rec, pass){
+    var when = startText(rec) + (rec.startTime ? ' в ' + rec.startTime : '');
+    return {
+      first: rec.firstName + ', здравствуйте!\n\n' +
+        'Рады сообщить: по итогам собеседования мы приглашаем вас на стажировку.\n' +
+        'Готовы ли вы приступить?',
+      second: 'Мы рады вашему положительному ответу!\n' +
+        'Ждём вас ' + when + '.\n' +
+        'Если появятся вопросы, остаемся на связи.\n\n' +
+        'Мы собрали отдельную страницу: какие документы принести, с кем предстоит работать и к кому обратиться с вопросами.\n' +
+        linkFor(rec.code) + '\n\n' +
+        'Доступы к странице:\n' +
+        'Логин: ' + (rec.login || rec.code) + '\n' +
+        'Пароль: ' + pass
+    };
+  }
+  function showChat(rec, pass){
+    if(!pass){                       /* пароль известен только в момент выпуска */
+      var np = newPassword();
+      setPassword(rec, np).then(function(){ return state.store.saveEmployee(rec); }).then(function(){
+        refreshPeople(); showChat(rec, np);
+      });
+      return;
+    }
+    state.chatRec = rec;
+    var msg = buildChat(rec, pass);
+    $('chatPanel').hidden = false;
+    $('chatSub').textContent = 'Отправляются кандидату по одному: второе — после согласия на стажировку.';
+    $('chatMsg1').value = msg.first;
+    $('chatMsg2').value = msg.second;
+    $('chatSent').textContent = rec.sentAt
+      ? 'Отправлено ' + fmtShort.format(new Date(rec.sentAt))
+      : 'Отметить отправленным';
+    $('chatPanel').scrollIntoView({behavior:'smooth', block:'start'});
+  }
+  $('chatCopy1').addEventListener('click', function(){ copyText($('chatMsg1').value, $('chatCopy1')); });
+  $('chatCopy2').addEventListener('click', function(){ copyText($('chatMsg2').value, $('chatCopy2')); });
+  $('chatSent').addEventListener('click', function(){
+    var rec = state.chatRec; if(!rec) return;
+    rec.sentAt = new Date().toISOString();     /* тот же признак, что у письма */
+    state.store.saveEmployee(rec).then(function(){
+      $('chatSent').textContent = 'Отправлено ' + fmtShort.format(new Date(rec.sentAt));
+      refreshPeople();
+    });
+  });
+  $('chatClose').addEventListener('click', function(){ $('chatPanel').hidden = true; });
+
   function showMail(rec, pass){
     if(!pass){                       /* пароль известен только в момент выпуска */
       var np = newPassword();
@@ -2149,9 +2235,11 @@
     var rows = document.createElement('div'); rows.className = 'pc-rows';
     rows.appendChild(row('Логин', rec.login || rec.code));
     rows.appendChild(row('Рабочая почта', rec.email || 'не привязана', !rec.email));
-    rows.appendChild(row('Оффер', rec.offerSentAt
-      ? 'отправлен ' + fmtShort.format(new Date(rec.offerSentAt))
-      : (offerFilled(rec) ? 'заполнен, не отправлен' : 'не заполнен'), !rec.offerSentAt));
+    if(!isIntern(rec.dept)){
+      rows.appendChild(row('Оффер', rec.offerSentAt
+        ? 'отправлен ' + fmtShort.format(new Date(rec.offerSentAt))
+        : (offerFilled(rec) ? 'заполнен, не отправлен' : 'не заполнен'), !rec.offerSentAt));
+    }
     rows.appendChild(row('Приглашение', (rec.personalEmail || 'почта не указана') +
       (rec.sentAt ? ' · отправлено ' + fmtShort.format(new Date(rec.sentAt)) : ' · не отправлено'), !rec.sentAt));
     var day = dayStats(rec);
@@ -2181,8 +2269,14 @@
     editBtn.type = 'button'; editBtn.className = 'mini'; editBtn.textContent = 'Настроить';
     editBtn.addEventListener('click', function(){ openEdit(rec); });
     var offerBtn = document.createElement('button');
-    offerBtn.type = 'button'; offerBtn.className = 'mini'; offerBtn.textContent = 'Оффер';
-    offerBtn.addEventListener('click', function(){ showOffer(rec); });
+    offerBtn.type = 'button'; offerBtn.className = 'mini';
+    if(isIntern(rec.dept)){
+      offerBtn.textContent = 'Сообщения';
+      offerBtn.addEventListener('click', function(){ showChat(rec, rec.demoPass || null); });
+    } else {
+      offerBtn.textContent = 'Оффер';
+      offerBtn.addEventListener('click', function(){ showOffer(rec); });
+    }
     act.appendChild(mailBtn); act.appendChild(offerBtn); act.appendChild(linkBtn); act.appendChild(editBtn);
     card.appendChild(act);
     return card;
@@ -2337,12 +2431,20 @@
         input.addEventListener('input', function(){ state.depts[idx][f[0]] = input.value; });
         td.appendChild(input); tr.appendChild(td);
       });
+      var tdI = cell();
+      var cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.checked = !!d.intern;
+      cb.setAttribute('data-dept-intern', idx);
+      cb.style.cssText = 'width:18px; height:18px; accent-color:var(--blue-deep); cursor:pointer;';
+      cb.title = 'Вместо оффера — два сообщения для чата';
+      cb.addEventListener('change', function(){ state.depts[idx].intern = cb.checked; });
+      tdI.appendChild(cb); tr.appendChild(tdI);
       var td = cell(); var del = miniBtn('Удалить', 'danger');
       del.addEventListener('click', function(){ state.depts.splice(idx, 1); renderDeptRows(); });
       td.appendChild(del); tr.appendChild(td); tb.appendChild(tr);
     });
   }
-  $('addDept').addEventListener('click', function(){ state.depts.push({name:'', head:'', senior:'', chat:''}); renderDeptRows(); });
+  $('addDept').addEventListener('click', function(){ state.depts.push({name:'', head:'', senior:'', chat:'', intern:false}); renderDeptRows(); });
   $('saveDepts').addEventListener('click', function(){
     state.depts = state.depts.filter(function(d){ return (d.name || '').trim(); });
     state.store.saveDepartments(state.depts).then(function(){
