@@ -146,6 +146,27 @@ with sync_playwright() as p:
     assert back == base_c, 'исходные контакты не вернулись: ' + str(back)
     print('«Вернуть исходные» восстановил контакты')
 
+    # ——— статьи к прочтению: тот же список, что контакты ———
+    login(pg)
+    arts = pg.eval_on_selector_all('#aboutReads .contact',
+        'e => e.map(x => ({r: x.querySelector(".r").textContent, v: x.querySelector(".v").textContent,'
+        ' href: x.querySelector("a.go") ? x.querySelector("a.go").getAttribute("href") : "",'
+        ' tgt: x.querySelector("a.go") ? x.querySelector("a.go").target + " " + x.querySelector("a.go").rel : ""}))')
+    assert len(arts) == 5, 'статей не пять: %s' % len(arts)
+    assert all(a['href'].startswith('http') for a in arts), 'не у всех статей ссылка: %s' % arts
+    assert all(a['tgt'] == '_blank noopener' for a in arts), 'статьи открываются не в новой вкладке: %s' % arts
+    assert 'forbes.ru' in arts[0]['href'] and 'apostrophe' in arts[4]['href'], 'порядок статей не тот: %s' % [a['href'] for a in arts]
+    print('статьи:', ' | '.join(a['r'] + ' — ' + a['v'][:28] for a in arts))
+
+    pg.evaluate("location.hash='#admin'"); pg.wait_for_timeout(800)
+    pg.click('#tabPage'); pg.wait_for_timeout(400)
+    pg.fill('[data-read="v0"]', 'Forbes: как всё начиналось')
+    pg.click('#savePage'); pg.wait_for_timeout(700)
+    login(pg)
+    assert pg.eval_on_selector('#aboutReads .contact .v', 'e => e.textContent') == 'Forbes: как всё начиналось', \
+        'правка статьи не долетела до страницы'
+    print('HR правит название статьи')
+
     # ——— документы: правка не должна ронять отметки сотрудника ———
     login(pg)
     pg.click('#docList [data-key="passport"]'); pg.wait_for_timeout(700)
