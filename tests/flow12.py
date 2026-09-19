@@ -34,6 +34,14 @@ with sync_playwright() as p:
     assert not pg.is_visible('.topbar .nav'), 'на первом экране навигация дублируется в шапке'
     print('первый экран: навигация в герое')
 
+    # пункты в герое одинаковые и достаточно крупные, чтобы попасть пальцем
+    h = pg.eval_on_selector_all('.hero .nav a', 'els => els.map(e => e.getBoundingClientRect().height)')
+    assert min(h) >= 44, 'мишень для пальца мала: %s px' % min(h)
+    bg = pg.eval_on_selector_all('.hero .nav a',
+        'els => [...new Set(els.map(e => getComputedStyle(e).backgroundColor))]')
+    assert len(bg) == 1, 'пункты в герое выглядят по-разному: %s' % bg
+    print('пункты в герое: высота %.0f px, оформление одинаковое' % min(h))
+
     # ушли с первого экрана — навигация наверху
     pg.evaluate("window.scrollTo(0, window.scrollY + document.getElementById('hero').getBoundingClientRect().bottom)")
     pg.wait_for_timeout(500)

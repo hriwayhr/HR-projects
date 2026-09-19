@@ -147,9 +147,15 @@
      переключение не двигает вёрстку и не зацикливает наблюдатель. */
   .topbar .nav{visibility:hidden;}
   #viewEmployee.scrolled .topbar .nav{visibility:visible;}
-  .hero .nav{margin-top:34px; flex-wrap:wrap; gap:6px;}
-  .hero .nav a{color:var(--on-tint-2);}
-  .hero .nav a:hover{color:var(--on-tint);}
+  .hero .nav{margin-top:34px; flex-wrap:wrap; gap:8px;}
+  .hero .nav a{
+    padding:12px 16px; font-size:12px; color:var(--on-tint-2);
+    border:1.5px solid rgba(18,19,9,.22); background:transparent;
+  }
+  .hero .nav a:hover{color:var(--on-tint); border-color:var(--on-tint); background:rgba(18,19,9,.06);}
+  /* на первом экране ни один раздел ещё не читается — заливку активного не показываем,
+     иначе один пункт выглядит нажатой кнопкой без причины */
+  .hero .nav a[aria-current="true"]{color:var(--on-tint-2); background:transparent; border-color:rgba(18,19,9,.22);}
   #viewEmployee.scrolled .hero .nav{visibility:hidden;}
   .ready{
     display:flex; align-items:center; gap:9px; white-space:nowrap;
