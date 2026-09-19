@@ -529,7 +529,7 @@
   .mail-actions{margin-top:18px; display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
   .mail-steps{margin:18px 0 0; padding-left:20px; font-size:14px; line-height:1.7; color:var(--ink-2);}
   .mail-steps b{color:var(--ink);}
-  #mailPreview{margin-top:18px; width:100%; height:560px; border:1.5px solid var(--line-strong); border-radius:12px; background:#fff;}
+  #mailPreview,#offerPreview{margin-top:18px; width:100%; height:560px; border:1.5px solid var(--line-strong); border-radius:12px; background:#fff;}
 
   /* ——— блок команды на странице сотрудника ——— */
   .team-grid{margin-top:26px; display:grid; grid-template-columns:repeat(2,1fr); gap:1px; background:var(--line-strong); border:1px solid var(--line-strong); border-radius:12px; overflow:hidden;}
@@ -682,6 +682,9 @@
             </div>
             <div class="team-preview" id="teamPreview">Выбери отдел — здесь появится команда, которую увидит сотрудник.</div>
           </div>
+          <h3 class="pg-name" style="font-size:16px; margin-top:28px;">Оффер</h3>
+          <p class="hint" style="margin:6px 0 16px;">Можно заполнить сразу — письмо соберётся после создания доступа. Пустые поля в письмо не попадут, дозаполнить можно позже кнопкой «Оффер» в карточке.</p>
+          <div class="form-grid" id="offerNew"></div>
           <div class="actions" style="margin-top:20px;">
             <button class="btn" type="submit">Создать доступ</button>
           </div>
@@ -798,6 +801,23 @@
       </ol>
       <p class="hint">Пароль виден только сейчас: восстановить его нельзя, можно выпустить новый кнопкой «Письмо заново».</p>
       <iframe id="mailPreview" title="Предпросмотр письма" sandbox=""></iframe>
+    </div>
+
+    <div class="panel" id="offerPanel" hidden>
+      <h2>Оффер</h2>
+      <p class="sub" id="offerTo"></p>
+      <div class="form-grid" id="offerEdit" style="margin-top:18px;"></div>
+      <div class="mail-actions">
+        <button class="btn" type="button" id="offerCopyRich">Скопировать оффер</button>
+        <button class="mini" type="button" id="offerCopyAddr">Адрес</button>
+        <button class="mini" type="button" id="offerCopySubject">Тема</button>
+        <button class="mini" type="button" id="offerCopyHtml">HTML-код</button>
+        <button class="mini" type="button" id="offerCopyText">Текстом</button>
+        <button class="mini" type="button" id="offerSent">Отметить отправленным</button>
+        <button class="mini" type="button" id="offerClose">Закрыть</button>
+      </div>
+      <p class="hint">Правки сохраняются сразу и сразу видны в предпросмотре.</p>
+      <iframe id="offerPreview" title="Предпросмотр оффера" sandbox=""></iframe>
     </div>
   </div>
 </div>
@@ -1129,7 +1149,7 @@
   var fmtLong = new Intl.DateTimeFormat('ru-RU', {day:'numeric', month:'long'});
   var fmtShort = new Intl.DateTimeFormat('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'});
   var state = {store:null, mode:'local', canEditPage:false, depts:[], rec:null, me:null,
-               view:null, people:[], admins:[], gateKind:'emp', filter:'all', page:{}};
+               view:null, people:[], admins:[], gateKind:'emp', filter:'all', page:{}, newOffer:{}};
 
   function g(rec, male, female){ return (rec && rec.gender === 'm') ? male : female; }
   function plural(n, one, few, many){
@@ -1450,7 +1470,7 @@
       $('peopleSearch').addEventListener('input', renderPeople);
       state.searchBound = true;
     }
-    fillDeptSelect(); renderDeptRows(); renderPageRows(); refreshPeople(); watchPeople(); renderAdmins();
+    fillDeptSelect(); renderDeptRows(); renderPageRows(); resetNewOffer(); refreshPeople(); watchPeople(); renderAdmins();
   }
   function fillDeptSelect(){
     var sel = $('fDept'); sel.innerHTML = '';
@@ -1494,6 +1514,10 @@
            '\nПароль: ' + pass;
   }
 
+  function resetNewOffer(){
+    state.newOffer = {};
+    renderOfferFields($('offerNew'), {offer: state.newOffer});
+  }
   $('newForm').addEventListener('submit', function(e){
     e.preventDefault();
     var rec = {
@@ -1509,7 +1533,8 @@
       startDate: $('fDate').value || '',
       startTime: $('fTime').value || '',
       createdAt: new Date().toISOString(),
-      openedAt: '', progress: {}
+      openedAt: '', progress: {},
+      offer: state.newOffer
     };
     if(!rec.dept){ $('fDept').focus(); return; }
     rec.login = rec.code.toLowerCase();
@@ -1521,8 +1546,12 @@
       $('issuedCode').textContent = rec.code + ' · ' + pass;
       $('issuedLink').value = credsText(rec, pass).replace(/\n/g, '  |  ');
       $('issuedLink').dataset.full = credsText(rec, pass);
+      var hadOffer = offerFilled(rec);
       $('newForm').reset(); $('fDept').selectedIndex = 0; $('fMail').dataset.touched = '';
-      renderTeamPreview(); refreshPeople(); showMail(rec, pass);
+      resetNewOffer();
+      renderTeamPreview(); refreshPeople();
+      if(hadOffer) showOffer(rec);       /* оффер заполнили — значит собираемся его слать */
+      showMail(rec, pass);
     }).catch(function(){ notify('Не удалось сохранить доступ', 'Проверь права на страницу и попробуй ещё раз.'); });
   });
   function copyText(text, btn, label){
@@ -1536,6 +1565,7 @@
   /* ——— письмо-приглашение ——— */
   var HR_FROM = 'hr@iway.ru';
   var HR_TG = '@iwayHR', HR_TG_URL = 'https://t.me/iwayHR';
+  var MAIL_LOGO = '<img src="data:image/png;base64,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" width="88" height="38" alt="i’way" style="display:block;border:0;"';
   function esc(v){
     return String(v == null ? '' : v).replace(/[&<>"]/g, function(c){
       return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];
@@ -1579,7 +1609,7 @@
       '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF" style="width:100%;max-width:600px;background-color:#FFFFFF;border-radius:20px;">' +
 
       '<tr><td style="padding:36px 32px 0;">' +
-      '<img src="data:image/png;base64,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" width="88" height="38" alt="i’way" style="display:block;border:0;">' +
+      MAIL_LOGO +
       '</td></tr>' +
 
       /* 1. приветствие */
@@ -1675,6 +1705,205 @@
       html: body, full: full, text: text, to: rec.personalEmail || ''
     };
   }
+  /* ——— оффер ———
+     Собирается и отправляется тем же способом, что приглашение: HR копирует
+     письмо в свою почту и отмечает отправленным. Постоянный текст — в
+     константах ниже, переменная часть — в rec.offer. */
+  var OFFER_PLACE = 'ул. Депутатская, 46 (БЦ «Ситицентр»), офис № 3073';
+  var OFFER_GUARANTEES = [
+    'оплачиваемый отпуск в размере 28 календарных дней и оплачиваемый отпуск по нетрудоспособности (больничный лист)',
+    'белую заработную плату, которая выплачивается два раза в месяц на карту',
+    'обучение нашему продукту',
+    'работу в классном и дружном коллективе',
+    'профессиональный рост и развитие',
+    'корпоративную скидку на трансферы i’way'
+  ];
+  var OFFER_FIELDS = [
+    {k:'position', l:'Должность', t:'input', wide:true, ph:'Бухгалтер по расчётам с международными контрагентами'},
+    {k:'tasks', l:'Что предстоит делать', t:'textarea', rows:6, wide:true,
+     ph:'вести взаиморасчёты с иностранными контрагентами\nконсультировать коллег и партнёров',
+     hint:'Каждая строка станет отдельным пунктом списка.'},
+    {k:'probation', l:'Испытательный срок', t:'input', ph:'3 месяца'},
+    {k:'schedule', l:'Рабочий график', t:'input', ph:'5/2, 8-часовой рабочий день. Перерыв на обед 1 час.'},
+    {k:'hours', l:'Часы работы', t:'input', ph:'10:00 – 19:00'},
+    {k:'head', l:'Руководитель', t:'input', wide:true, ph:'Имя и должность'},
+    {k:'payProbation', l:'Зарплата на испытательном', t:'input', ph:'65 000 рублей на руки (после вычета НДФЛ)'},
+    {k:'payAfter', l:'Зарплата после испытательного', t:'input', ph:'70 000 рублей на руки (после вычета НДФЛ)'},
+    {k:'deadline', l:'Ответ на оффер до', t:'date'}
+  ];
+  function offerOf(rec){ return rec.offer || (rec.offer = {}); }
+  function offerFilled(rec){
+    var o = rec.offer || {};
+    return OFFER_FIELDS.some(function(f){ return (o[f.k] || '').trim(); });
+  }
+  function offerLines(v){
+    return String(v || '').split('\n').map(function(x){
+      return x.replace(/^[-–—•]\s*/, '').trim();
+    }).filter(Boolean);
+  }
+  function renderOfferFields(host, rec, onChange){
+    var o = offerOf(rec);
+    host.innerHTML = '';
+    OFFER_FIELDS.forEach(function(f){
+      var d = document.createElement('div'); d.className = 'field' + (f.wide ? ' span' : '');
+      var l = document.createElement('label'); l.textContent = f.l;
+      var input = document.createElement(f.t === 'textarea' ? 'textarea' : 'input');
+      if(f.t === 'textarea') input.rows = f.rows || 5;
+      else input.type = (f.t === 'date' ? 'date' : 'text');
+      input.value = o[f.k] || '';
+      if(f.ph) input.placeholder = f.ph;
+      input.setAttribute('data-offer', f.k);
+      input.addEventListener('input', function(){ o[f.k] = input.value; if(onChange) onChange(); });
+      d.appendChild(l); d.appendChild(input);
+      if(f.hint){ var h = document.createElement('p'); h.className = 'hint'; h.textContent = f.hint; d.appendChild(h); }
+      host.appendChild(d);
+    });
+  }
+  function buildOffer(rec){
+    var o = offerOf(rec);
+    var F = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+    var tasks = offerLines(o.tasks);
+    var deadline = o.deadline ? fmtShort.format(new Date(o.deadline + 'T00:00:00')) : '';
+    var facts = [['Должность', o.position], ['Испытательный срок', o.probation],
+                 ['Рабочий график', o.schedule], ['Часы работы', o.hours],
+                 ['Руководитель', o.head], ['Место работы', OFFER_PLACE]]
+                .filter(function(f){ return (f[1] || '').trim(); });
+
+    function bullets(list, color){
+      return list.map(function(t){
+        return '<tr><td width="18" valign="top" style="padding:5px 0;font-family:' + F +
+          ';font-size:15px;line-height:1.6;color:' + color + ';">•</td>' +
+          '<td style="padding:5px 0;font-family:' + F + ';font-size:15px;line-height:1.6;color:#5A6055;">' +
+          esc(t) + '</td></tr>';
+      }).join('');
+    }
+    var factRows = facts.map(function(f, i){
+      var line = i ? 'border-top:1px solid #DCEAE0;' : '';
+      return '<tr><td style="' + line + 'padding:11px 0;font-family:' + F + ';font-size:14px;color:#7E8C7F;" width="42%" valign="top">' +
+        esc(f[0]) + '</td><td style="' + line + 'padding:11px 0;font-family:' + F +
+        ';font-size:15px;color:#3A3F34;font-weight:600;" valign="top">' + esc(f[1]) + '</td></tr>';
+    }).join('');
+    var payRows = [['На испытательном сроке', o.payProbation], ['После испытательного срока', o.payAfter]]
+      .filter(function(f){ return (f[1] || '').trim(); })
+      .map(function(f, i){
+        var line = i ? 'border-top:1px solid #DCEAE0;' : '';
+        return '<tr><td style="' + line + 'padding:11px 0;font-family:' + F + ';font-size:14px;color:#7E8C7F;" width="42%" valign="top">' +
+          esc(f[0]) + '</td><td style="' + line + 'padding:11px 0;font-family:' + F +
+          ';font-size:15px;color:#3A3F34;font-weight:600;" valign="top">' + esc(f[1]) + '</td></tr>';
+      }).join('');
+
+    function card(inner){
+      return '<tr><td style="padding:22px 32px 0;">' +
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#EDF6EF" style="background-color:#EDF6EF;border-radius:16px;">' +
+        '<tr><td style="padding:14px 26px;font-family:' + F + ';">' +
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">' + inner + '</table>' +
+        '</td></tr></table></td></tr>';
+    }
+    function para(html, top){
+      return '<tr><td style="padding:' + (top || 20) + 'px 32px 0;font-family:' + F +
+        ';font-size:16px;line-height:1.65;color:#5A6055;">' + html + '</td></tr>';
+    }
+    function head(t){
+      return '<tr><td style="padding:26px 32px 0;font-family:' + F +
+        ';font-size:16px;font-weight:700;color:#3A3F34;">' + esc(t) + '</td></tr>';
+    }
+
+    var body =
+      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#F3F5F1" style="background-color:#F3F5F1;">' +
+      '<tr><td align="center" style="padding:28px 12px;">' +
+      '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" bgcolor="#FFFFFF" style="width:100%;max-width:600px;background-color:#FFFFFF;border-radius:20px;">' +
+      '<tr><td style="padding:36px 32px 0;">' + MAIL_LOGO + '</td></tr>' +
+      '<tr><td style="padding:26px 32px 0;font-family:' + F +
+      ';font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#009634;">Предложение о работе</td></tr>' +
+      '<tr><td style="padding:14px 32px 0;font-family:' + F +
+      ';font-size:28px;line-height:1.25;font-weight:700;color:#3A3F34;letter-spacing:-0.3px;">Здравствуйте, ' +
+      esc(rec.firstName) + '!</td></tr>' +
+      para('Если вы получили это письмо, значит мы были впечатлены вашим опытом и видим вас частью нашей сплочённой команды i’way! Нам кажется, вы именно тот человек, который готов менять представления о сервисе трансферов вместе с нами!') +
+      (o.position ? para('Мы рады сделать вам предложение о работе в должности «<b style="color:#3A3F34;">' + esc(o.position) + '</b>».') : '') +
+      (tasks.length ? head('Что предстоит делать') +
+        '<tr><td style="padding:10px 32px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">' +
+        bullets(tasks, '#009634') + '</table></td></tr>' : '') +
+      (factRows ? card(factRows) : '') +
+      para('В i’way предусмотрено официальное трудоустройство, согласно ТК РФ. Испытательный срок начинается с первого дня трудоустройства.') +
+      (payRows ? head('Заработная плата') + card(payRows) : '') +
+      head('Также мы гарантируем') +
+      '<tr><td style="padding:10px 32px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">' +
+      bullets(OFFER_GUARANTEES, '#009634') + '</table></td></tr>' +
+      (deadline ? para('Ответ на оффер необходимо дать до <b style="color:#3A3F34;">' + esc(deadline) + '</b> включительно.', 26) : '') +
+      para('В случае возникновения вопросов, мы открыты к диалогу и ждём обратную связь ответным письмом.') +
+      '<tr><td style="padding:26px 32px 36px;font-family:' + F +
+      ';font-size:16px;line-height:1.65;font-weight:700;color:#3A3F34;">Будем рады видеть вас частью нашей команды i’way!</td></tr>' +
+      '</table>' +
+      '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">' +
+      '<tr><td style="padding:18px 32px 6px;font-family:' + F + ';font-size:12px;color:#9AA096;">команда i’way · ' +
+      '<a href="' + HR_TG_URL + '" style="color:#9AA096;text-decoration:none;">' + HR_TG + '</a></td></tr></table>' +
+      '</td></tr></table>';
+
+    var full = '<!doctype html><html lang="ru"><head><meta charset="utf-8">' +
+      '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+      '<title>Предложение о работе в i’way</title></head><body style="margin:0;padding:0;background-color:#F3F5F1;">' +
+      '<div style="display:none;max-height:0;overflow:hidden;opacity:0;">Предложение о работе' +
+      (o.position ? ' — ' + o.position : '') + '</div>' + body + '</body></html>';
+
+    var text = 'Предложение о работе\n\nЗдравствуйте, ' + rec.firstName + '!\n\n' +
+      'Если вы получили это письмо, значит мы были впечатлены вашим опытом и видим вас частью нашей сплочённой команды i’way!\n\n' +
+      (o.position ? 'Мы рады сделать вам предложение о работе в должности «' + o.position + '».\n\n' : '') +
+      (tasks.length ? 'Что предстоит делать:\n' + tasks.map(function(t){ return '- ' + t; }).join('\n') + '\n\n' : '') +
+      facts.map(function(f){ return f[0] + ': ' + f[1]; }).join('\n') + '\n\n' +
+      'В i’way предусмотрено официальное трудоустройство, согласно ТК РФ.\n' +
+      'Испытательный срок начинается с первого дня трудоустройства.\n\n' +
+      (o.payProbation ? 'Заработная плата на испытательном сроке: ' + o.payProbation + '\n' : '') +
+      (o.payAfter ? 'После испытательного срока: ' + o.payAfter + '\n' : '') + '\n' +
+      'Также мы гарантируем:\n' + OFFER_GUARANTEES.map(function(t){ return '- ' + t; }).join('\n') + '\n\n' +
+      (deadline ? 'Ответ на оффер необходимо дать до ' + deadline + ' включительно.\n\n' : '') +
+      'В случае возникновения вопросов, мы открыты к диалогу и ждём обратную связь ответным письмом.\n\n' +
+      'Будем рады видеть вас частью нашей команды i’way!';
+
+    return {
+      subject: rec.firstName + ', предложение о работе в i’way' + (o.position ? ' — ' + o.position : ''),
+      html: body, full: full, text: text, to: rec.personalEmail || ''
+    };
+  }
+  var offerSaveTimer = null;
+  function saveOfferSoon(rec){
+    clearTimeout(offerSaveTimer);
+    offerSaveTimer = setTimeout(function(){
+      state.store.saveEmployee(rec).then(refreshPeople, function(){});
+    }, 600);
+  }
+  function refreshOffer(){
+    var rec = state.offerRec; if(!rec) return;
+    state.offer = buildOffer(rec);
+    $('offerPreview').srcdoc = state.offer.full;
+  }
+  function showOffer(rec){
+    state.offerRec = rec;
+    $('offerPanel').hidden = false;
+    $('offerTo').textContent = rec.personalEmail
+      ? 'Кому: ' + rec.personalEmail + '  ·  От кого: ' + HR_FROM
+      : 'Личная почта не указана — добавь её в карточке, чтобы отправить оффер.';
+    renderOfferFields($('offerEdit'), rec, function(){ refreshOffer(); saveOfferSoon(rec); });
+    refreshOffer();
+    $('offerSent').textContent = rec.offerSentAt
+      ? 'Отправлено ' + fmtShort.format(new Date(rec.offerSentAt))
+      : 'Отметить отправленным';
+    $('offerPanel').scrollIntoView({behavior:'smooth', block:'start'});
+  }
+  $('offerCopyRich').addEventListener('click', function(){ copyRich(state.offer.html, state.offer.text, $('offerCopyRich')); });
+  $('offerCopyAddr').addEventListener('click', function(){ copyText(state.offer.to, $('offerCopyAddr'), 'Адрес скопирован'); });
+  $('offerCopySubject').addEventListener('click', function(){ copyText(state.offer.subject, $('offerCopySubject'), 'Тема скопирована'); });
+  $('offerCopyHtml').addEventListener('click', function(){ copyText(state.offer.full, $('offerCopyHtml'), 'Код скопирован'); });
+  $('offerCopyText').addEventListener('click', function(){ copyText(state.offer.text, $('offerCopyText'), 'Текст скопирован'); });
+  $('offerSent').addEventListener('click', function(){
+    var rec = state.offerRec; if(!rec) return;
+    rec.offerSentAt = new Date().toISOString();
+    state.store.saveEmployee(rec).then(function(){
+      $('offerSent').textContent = 'Отправлено ' + fmtShort.format(new Date(rec.offerSentAt));
+      refreshPeople();
+    });
+  });
+  $('offerClose').addEventListener('click', function(){ $('offerPanel').hidden = true; });
+
   function showMail(rec, pass){
     if(!pass){                       /* пароль известен только в момент выпуска */
       var np = newPassword();
@@ -1926,6 +2155,9 @@
     var rows = document.createElement('div'); rows.className = 'pc-rows';
     rows.appendChild(row('Логин', rec.login || rec.code));
     rows.appendChild(row('Рабочая почта', rec.email || 'не привязана', !rec.email));
+    rows.appendChild(row('Оффер', rec.offerSentAt
+      ? 'отправлен ' + fmtShort.format(new Date(rec.offerSentAt))
+      : (offerFilled(rec) ? 'заполнен, не отправлен' : 'не заполнен'), !rec.offerSentAt));
     rows.appendChild(row('Приглашение', (rec.personalEmail || 'почта не указана') +
       (rec.sentAt ? ' · отправлено ' + fmtShort.format(new Date(rec.sentAt)) : ' · не отправлено'), !rec.sentAt));
     var day = dayStats(rec);
@@ -1954,7 +2186,10 @@
     var editBtn = document.createElement('button');
     editBtn.type = 'button'; editBtn.className = 'mini'; editBtn.textContent = 'Настроить';
     editBtn.addEventListener('click', function(){ openEdit(rec); });
-    act.appendChild(mailBtn); act.appendChild(linkBtn); act.appendChild(editBtn);
+    var offerBtn = document.createElement('button');
+    offerBtn.type = 'button'; offerBtn.className = 'mini'; offerBtn.textContent = 'Оффер';
+    offerBtn.addEventListener('click', function(){ showOffer(rec); });
+    act.appendChild(mailBtn); act.appendChild(offerBtn); act.appendChild(linkBtn); act.appendChild(editBtn);
     card.appendChild(act);
     return card;
   }
