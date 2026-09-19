@@ -142,6 +142,15 @@
   }
   .nav a:hover{color:var(--ink);}
   .nav a[aria-current="true"]{color:var(--blue-ink); background:var(--blue);}
+  /* первый экран — навигация в герое, дальше — в шапке.
+     visibility, а не display: высота шапки и героя не меняется, поэтому
+     переключение не двигает вёрстку и не зацикливает наблюдатель. */
+  .topbar .nav{visibility:hidden;}
+  #viewEmployee.scrolled .topbar .nav{visibility:visible;}
+  .hero .nav{margin-top:34px; flex-wrap:wrap; gap:6px;}
+  .hero .nav a{color:var(--on-tint-2);}
+  .hero .nav a:hover{color:var(--on-tint);}
+  #viewEmployee.scrolled .hero .nav{visibility:hidden;}
   .ready{
     display:flex; align-items:center; gap:9px; white-space:nowrap;
     font-family:var(--mono); font-size:11.5px; letter-spacing:.04em; color:var(--ink-2);
@@ -783,13 +792,20 @@
     <p class="hero-lead">Мы рады, что ты станешь частью команды. Здесь собрано всё, что нужно до первого рабочего дня: какие документы подготовить, как пройдёт первая неделя и к кому идти с вопросами.</p>
     <div class="actions">
       <a class="btn" href="https://forms.yandex.ru/cloud/6493df255d2a061c298dc678" target="_blank" rel="noopener">Заполнить анкету нового сотрудника</a>
-      <a class="btn ghost" href="#docs">Что взять с собой</a>
     </div>
     <div class="hero-meta">
-      <div>Рабочая почта<b id="mEmail">—</b></div>
       <div>Первый день<b id="mDate">—</b></div>
       <div>Отдел<b id="mDept">—</b></div>
     </div>
+    <nav class="nav" aria-label="Разделы страницы">
+      <a href="#about">Компания</a>
+      <a href="#docs">Документы</a>
+      <a href="#plan">Адаптация</a>
+      <a href="#culture">Жизнь</a>
+      <a href="#team">Команда</a>
+      <a href="#faq">Вопросы</a>
+      <a href="#contacts">Контакты</a>
+    </nav>
   </div>
 </header>
 
@@ -2066,7 +2082,6 @@
     $('heroName').textContent = rec.firstName + ', добро пожаловать';
     $('heroEyebrow').textContent = 'Пребординг · ' + (rec.dept || 'i’way');
     $('whoName').textContent = rec.firstName + ' ' + rec.lastName;
-    $('mEmail').textContent = rec.email || 'создаётся';
     $('mDept').textContent = rec.dept || '—';
     $('tDept').textContent = rec.dept || '—';
     $('tEmail').textContent = rec.email || 'Создаётся — выдадим в первый день';
@@ -2210,6 +2225,13 @@
       });
     }, {rootMargin:'-45% 0px -50% 0px'});
     sections.forEach(function(sec){ spy.observe(sec); });
+  }
+  var topbar = document.querySelector('.topbar');
+  if('IntersectionObserver' in window && topbar){
+    /* ponytail: порог 48px — высота шапки; поменяется её вёрстка, поправить здесь */
+    new IntersectionObserver(function(en){
+      $('viewEmployee').classList.toggle('scrolled', !en[0].isIntersecting);
+    }, {rootMargin:'-48px 0px 0px 0px'}).observe($('hero'));
   }
   if(!reduce && 'IntersectionObserver' in window){
     var counted = new IntersectionObserver(function(entries, obs){
