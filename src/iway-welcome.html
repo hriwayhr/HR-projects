@@ -1590,8 +1590,8 @@
     var detailRows = details.map(function(f, i){
       var line = i ? 'border-top:1px solid #DCEAE0;' : '';
       return '<tr>' +
-        '<td style="' + line + 'padding:11px 0;font-family:' + F + ';font-size:14px;color:#7E8C7F;" width="42%" valign="top">' + esc(f[0]) + '</td>' +
-        '<td style="' + line + 'padding:11px 0;font-family:' + F + ';font-size:15px;color:#3A3F34;font-weight:600;" valign="top">' + esc(f[1]) + '</td></tr>';
+        '<td style="' + line + 'padding:11px 0;font-family:' + F + ';font-size:13px;color:#7E8C7F;" width="42%" valign="top">' + esc(f[0]) + '</td>' +
+        '<td style="' + line + 'padding:11px 0;font-family:' + F + ';font-size:16px;color:#3A3F34;font-weight:600;" valign="top">' + esc(f[1]) + '</td></tr>';
     }).join('');
 
     var steps = [
@@ -1599,8 +1599,8 @@
       'Отметь документы на странице и нажми «Отправить список» — мы сразу увидим, что всё готово. Если что-то не ' + g(rec, 'успел', 'успела') + ' — напиши, решим заранее.'
     ].map(function(t, i){
       return '<tr>' +
-        '<td width="28" valign="top" style="padding:6px 0;font-family:' + F + ';font-size:15px;line-height:1.6;font-weight:700;color:#009634;">' + (i + 1) + '</td>' +
-        '<td style="padding:6px 0;font-family:' + F + ';font-size:15px;line-height:1.6;color:#5A6055;">' + t + '</td></tr>';
+        '<td width="28" valign="top" style="padding:6px 0;font-family:' + F + ';font-size:16px;line-height:1.65;font-weight:700;color:#009634;">' + (i + 1) + '</td>' +
+        '<td style="padding:6px 0;font-family:' + F + ';font-size:16px;line-height:1.65;color:#5A6055;">' + t + '</td></tr>';
     }).join('');
 
     var body =
@@ -1613,7 +1613,7 @@
       '</td></tr>' +
 
       /* 1. приветствие */
-      '<tr><td style="padding:30px 32px 0;font-family:' + F + ';font-size:28px;line-height:1.25;font-weight:700;color:#3A3F34;letter-spacing:-0.3px;">' +
+      '<tr><td style="padding:30px 32px 0;font-family:' + F + ';font-size:20px;line-height:1.35;font-weight:700;color:#3A3F34;letter-spacing:-0.2px;">' +
       esc(rec.firstName) + ', добро пожаловать в i’way!' +
       '</td></tr>' +
 
@@ -1654,12 +1654,12 @@
       '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>' +
       '<td width="50%" valign="top" style="font-family:' + F + ';">' +
       '<div style="font-size:13px;color:#8A8F84;">Логин</div>' +
-      '<div style="font-size:21px;font-weight:700;color:#3A3F34;padding-top:4px;letter-spacing:-0.2px;">' + esc(rec.login || rec.code) + '</div></td>' +
+      '<div style="font-size:20px;font-weight:700;color:#3A3F34;padding-top:4px;letter-spacing:-0.2px;">' + esc(rec.login || rec.code) + '</div></td>' +
       '<td width="50%" valign="top" style="font-family:' + F + ';">' +
       '<div style="font-size:13px;color:#8A8F84;">Пароль</div>' +
-      '<div style="font-size:21px;font-weight:700;color:#3A3F34;padding-top:4px;letter-spacing:-0.2px;">' + esc(pass) + '</div></td>' +
+      '<div style="font-size:20px;font-weight:700;color:#3A3F34;padding-top:4px;letter-spacing:-0.2px;">' + esc(pass) + '</div></td>' +
       '</tr></table>' +
-      (rec.email ? '<div style="margin-top:16px;font-size:13.5px;color:#8A8F84;line-height:1.55;">Когда заведём рабочую почту ' +
+      (rec.email ? '<div style="margin-top:16px;font-size:13px;color:#8A8F84;line-height:1.55;">Когда заведём рабочую почту ' +
         esc(rec.email) + ' — вход и по ней, пароль тот же.</div>' : '') +
       '</td></tr></table></td></tr>' +
 
@@ -1668,7 +1668,7 @@
       '<tr><td style="padding:12px 32px 0;">' +
       '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">' + steps + '</table></td></tr>' +
 
-      '<tr><td style="padding:28px 32px 36px;font-family:' + F + ';font-size:15px;line-height:1.65;color:#5A6055;">' +
+      '<tr><td style="padding:28px 32px 36px;font-family:' + F + ';font-size:16px;line-height:1.65;color:#5A6055;">' +
       'Любые вопросы можешь задать ответом на это письмо или в телеграме: ' +
       '<a href="' + HR_TG_URL + '" style="color:#009634;font-weight:600;text-decoration:none;">' + HR_TG + '</a>' +
       '<br><br>До встречи!<br>команда i’way</td></tr>' +
@@ -1676,7 +1676,7 @@
       '</table>' +
 
       '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;">' +
-      '<tr><td style="padding:18px 32px 6px;font-family:' + F + ';font-size:12px;color:#9AA096;">' +
+      '<tr><td style="padding:18px 32px 6px;font-family:' + F + ';font-size:13px;color:#9AA096;">' +
       'команда i’way · <a href="' + HR_TG_URL + '" style="color:#9AA096;text-decoration:none;">' + HR_TG + '</a>' +
       '</td></tr></table>' +
 
@@ -1852,7 +1852,8 @@
     var text = 'Предложение о работе\n\nЗдравствуйте, ' + rec.firstName + '!\n\n' + plain.join('\n\n');
 
     return {
-      subject: rec.firstName + ', предложение о работе в i’way' + (o.position ? ' — ' + o.position : ''),
+      subject: 'Оффер для ' + [rec.lastName, rec.firstName].filter(Boolean).join(' ') +
+               (o.position ? ' на позицию «' + o.position.trim() + '»' : '') + ', i’way',
       html: body, full: full, text: text, to: rec.personalEmail || ''
     };
   }
@@ -1867,6 +1868,7 @@
     var rec = state.offerRec; if(!rec) return;
     state.offer = buildOffer(rec);
     $('offerPreview').srcdoc = state.offer.full;
+    $('offerCopySubject').title = state.offer.subject;   /* видно при наведении, без лишнего блока */
   }
   function showOffer(rec){
     state.offerRec = rec;

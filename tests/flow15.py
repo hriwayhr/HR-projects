@@ -58,6 +58,12 @@ with sync_playwright() as p:
         assert pos[i] > pos[i-1], 'порядок нарушен: «%s» идёт раньше «%s»' % (order[i], order[i-1])
     print('порядок абзацев совпадает с исходным письмом')
 
+    # тема письма
+    subj = pg.get_attribute('#offerCopySubject', 'title')
+    want = 'Оффер для Иванова Анна на позицию «Бухгалтер по расчётам с международными контрагентами», i\u2019way'
+    assert subj == want, 'тема письма не та:\n  получено: ' + subj + '\n  ожидалось: ' + want
+    print('тема письма:', subj)
+
     # поля сохранились в записи
     saved = pg.evaluate("Object.values(window.__store).find(v => v.code)?.offer")
     assert saved and saved['position'].startswith('Бухгалтер'), 'оффер не сохранился в карточке: %s' % saved
