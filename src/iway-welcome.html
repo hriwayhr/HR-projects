@@ -207,23 +207,29 @@
   .btn:hover{transform:translateY(-2px);}
   .btn.ghost{background:transparent; color:var(--ink); border-color:var(--line-strong);}
   .btn.ghost:hover{background:var(--ink); color:var(--paper); border-color:var(--ink);}
-  /* ——— первый экран: плитки прогресса ——— */
-  .hero-prog{margin-top:32px; display:grid; grid-template-columns:repeat(3,1fr); gap:12px;}
-  @media (max-width:760px){ .hero-prog{grid-template-columns:1fr;} }
-  .hp{
-    display:block; padding:16px 18px 18px; border-radius:16px; text-decoration:none;
-    background:var(--paper); border:1.5px solid var(--band-3); color:var(--ink);
-    transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  /* ——— первый экран: полоса прогресса ———
+     Один контейнер с волосяными разделителями — тем же приёмом собраны блок
+     команды, цифры и ценности. Три отдельные карточки рассыпали первый экран.
+     Подпись прижата к низу (margin-top:auto), поэтому строки совпадают у всех
+     трёх ячеек, даже когда полосы прогресса в третьей нет. */
+  .hero-prog{
+    margin-top:34px; display:grid; grid-template-columns:repeat(3,1fr); gap:1px;
+    background:var(--band-3); border:1px solid var(--band-3); border-radius:12px; overflow:hidden;
   }
-  a.hp:hover{transform:translateY(-2px); border-color:var(--blue-deep); box-shadow:0 8px 20px rgba(0,112,38,.10);}
-  a.hp:focus-visible{outline:none; border-color:var(--blue-deep); box-shadow:0 0 0 3px rgba(0,112,38,.22);}
-  .hp-fact{background:transparent; border-style:dashed;}
-  .hp-r{display:block; font-family:var(--mono); font-size:11px; letter-spacing:.11em; text-transform:uppercase; color:var(--ink-3);}
-  .hp-v{display:block; margin-top:9px; font-family:var(--display); font-weight:600; font-size:20px; letter-spacing:-.01em;}
-  .hp-bar{display:block; margin-top:13px; height:6px; border-radius:99px; background:var(--line); overflow:hidden;}
+  @media (max-width:640px){ .hero-prog{grid-template-columns:1fr;} }
+  .hp{
+    display:flex; flex-direction:column; min-height:116px; padding:15px 18px 16px;
+    background:var(--paper); color:var(--ink); text-decoration:none; transition:background .16s ease;
+  }
+  /* только там, где есть курсор: на тачскрине подсветка залипает после нажатия */
+  @media (hover:hover){ a.hp:hover{background:var(--band-2);} }
+  a.hp:focus-visible{outline:2px solid var(--blue-deep); outline-offset:-2px;}
+  .hp-r{font-family:var(--mono); font-size:10.5px; letter-spacing:.11em; text-transform:uppercase; color:var(--ink-3);}
+  .hp-v{margin-top:7px; font-family:var(--display); font-weight:600; font-size:19px; letter-spacing:-.01em; white-space:nowrap;}
+  .hp-bar{margin-top:11px; height:5px; border-radius:99px; background:var(--line); overflow:hidden;}
   .hp-bar b{display:block; height:100%; width:0; background:var(--blue); transition:width .35s ease;}
-  .hp-s{display:block; margin-top:11px; font-size:13px; color:var(--ink-2);}
-  a.hp .hp-s::after{content:' →'; color:var(--blue-deep); font-weight:600;}
+  .hp-s{margin-top:auto; padding-top:10px; font-size:12.5px; color:var(--ink-2);}
+  a.hp .hp-s::after{content:' →'; color:var(--blue-deep);}
 
   /* ——— мягкое появление блоков при прокрутке ———
      Класс js-reveal ставит сам скрипт: без него и при prefers-reduced-motion
@@ -3077,7 +3083,7 @@
     else { $('tChat').hidden = true; }
 
     var start = rec.startDate ? new Date(rec.startDate + 'T00:00:00') : null;
-    $('mDate').textContent = startText(rec, true);
+    $('mDate').textContent = startText(rec);
     $('sdValue').textContent = start
       ? fmtShort.format(start) + (rec.startTime ? ', ' + rec.startTime : '')
       : 'уточняется';
@@ -3087,9 +3093,9 @@
       $('cdNum').textContent = diff > 0 ? diff : (diff === 0 ? 'Сегодня' : 'В команде');
       $('cdCap').textContent = diff > 0 ? plural(diff, 'день до выхода', 'дня до выхода', 'дней до выхода')
         : (diff === 0 ? 'твой первый день' : plural(-diff, 'день в i’way', 'дня в i’way', 'дней в i’way'));
-      $('hpLeft').textContent = diff > 0
-        ? 'через ' + diff + ' ' + plural(diff, 'день', 'дня', 'дней')
-        : (diff === 0 ? 'сегодня твой первый день' : 'ты уже в команде');
+      var left = diff > 0 ? 'через ' + diff + ' ' + plural(diff, 'день', 'дня', 'дней')
+        : (diff === 0 ? 'уже сегодня' : 'ты уже в команде');
+      $('hpLeft').textContent = (rec.startTime ? rec.startTime + ' · ' : '') + left;
       document.querySelectorAll('.h-date').forEach(function(el){
         var off = parseInt(el.getAttribute('data-offset'), 10);
         el.textContent = (off === 90 ? 'по ' : '') + fmtLong.format(new Date(start.getTime() + off * 86400000));
