@@ -29,10 +29,10 @@ with sync_playwright() as p:
     # плитки считают то же, что блоки ниже
     assert pg.inner_text('#hpDocs') == pg.inner_text('#docCount'), \
         'плитка документов и блок расходятся: %s / %s' % (pg.inner_text('#hpDocs'), pg.inner_text('#docCount'))
-    assert pg.inner_text('#hpDay') == pg.inner_text('#dayCount'), \
-        'плитка первого дня и блок расходятся: %s / %s' % (pg.inner_text('#hpDay'), pg.inner_text('#dayCount'))
     assert pg.inner_text('#hpDocs') == '2 из 4', 'в плитке не те отметки: ' + pg.inner_text('#hpDocs')
-    print('плитки: документы %s, первый день %s' % (pg.inner_text('#hpDocs'), pg.inner_text('#hpDay')))
+    assert pg.inner_text('#mDept') == 'Операционный отдел', 'в плитке не тот отдел: ' + pg.inner_text('#mDept')
+    assert 'М. Соколова' in pg.inner_text('#mHead'), 'в плитке нет руководителя: ' + pg.inner_text('#mHead')
+    print('плитки: документы %s, отдел %s' % (pg.inner_text('#hpDocs'), pg.inner_text('#mDept')))
 
     # дата выхода и сколько осталось
     assert pg.inner_text('#mDate').startswith('30 сентября'), 'в плитке не та дата: ' + pg.inner_text('#mDate')
@@ -57,7 +57,7 @@ with sync_playwright() as p:
 
     # плитки ведут в свои разделы
     hrefs = pg.eval_on_selector_all('.hero-prog a.hp', 'els => els.map(e => e.getAttribute("href"))')
-    assert hrefs == ['#docs', '#plan'], 'плитки ведут не туда: %s' % hrefs
+    assert hrefs == ['#docs'], 'плитки ведут не туда: %s' % hrefs
     pg.click('.hero-prog a.hp[href="#docs"]'); pg.wait_for_timeout(900)
     top = pg.evaluate("document.getElementById('docs').getBoundingClientRect().top")
     assert abs(top) < 120, 'плитка не прокрутила к документам: top=%s' % top

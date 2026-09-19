@@ -49,7 +49,7 @@ with sync_playwright() as p:
     assert pg.inner_text('#docs h2') == 'Документы к первому дню', 'заголовок не подменён: ' + pg.inner_text('#docs h2')
     assert 'Короткий список' in pg.inner_text('#docs .lead'), 'подзаголовок не подменён'
     assert not pg.is_visible('#culture'), 'скрытый раздел всё равно виден'
-    assert pg.get_attribute('.hero .nav a[href="#culture"]', 'hidden') is not None, 'ссылка на скрытый раздел осталась в навигации'
+    assert not pg.is_visible('#culture'), 'скрытый раздел остался виден карточкой'
     assert pg.is_visible('#team'), 'нетронутый раздел пропал'
     print('у сотрудника: текст подменён, «Жизнь» скрыта, навигация без неё')
 

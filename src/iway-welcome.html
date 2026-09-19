@@ -138,27 +138,6 @@
   .logo.lg{width:104px; height:45px;}
   .logo.sm{width:62px; height:27px;}
   .wordmark i{font-style:normal; color:var(--blue);}
-  .nav{display:flex; gap:4px; overflow-x:auto; scrollbar-width:none; flex:1;}
-  .nav::-webkit-scrollbar{display:none;}
-  .nav a{
-    font-family:var(--mono); font-size:11.5px; letter-spacing:.04em; text-transform:uppercase;
-    color:var(--ink-3); text-decoration:none; padding:7px 9px; border-radius:999px; white-space:nowrap;
-  }
-  .nav a:hover{color:var(--ink);}
-  .nav a[aria-current="true"]{color:var(--blue-deep); background:var(--band-2);}
-  /* первый экран — навигация в герое, дальше — в шапке.
-     visibility, а не display: высота шапки и героя не меняется, поэтому
-     переключение не двигает вёрстку и не зацикливает наблюдатель. */
-  .topbar .nav{visibility:hidden;}
-  #viewEmployee.scrolled .topbar .nav{visibility:visible;}
-  .hero .nav{margin-top:24px; flex-wrap:wrap; gap:2px; margin-left:-10px;}
-  /* в герое навигация — ряд ссылок, а не гроздь кнопок: единственная кнопка
-     на первом экране должна остаться одна. Отбивка 13px держит мишень 45px. */
-  .hero .nav a{padding:13px 10px; font-size:12px; color:var(--on-tint-2);}
-  .hero .nav a:hover{color:var(--blue-deep); background:var(--paper);}
-  /* на первом экране ни один раздел ещё не читается — активный не выделяем */
-  .hero .nav a[aria-current="true"]{color:var(--on-tint-2); background:transparent;}
-  #viewEmployee.scrolled .hero .nav{visibility:hidden;}
   .ready{
     display:flex; align-items:center; gap:9px; white-space:nowrap;
     font-family:var(--mono); font-size:11.5px; letter-spacing:.04em; color:var(--ink-2);
@@ -207,6 +186,74 @@
   .btn:hover{transform:translateY(-2px);}
   .btn.ghost{background:transparent; color:var(--ink); border-color:var(--line-strong);}
   .btn.ghost:hover{background:var(--ink); color:var(--paper); border-color:var(--ink);}
+  /* ——— макет кабинета: слева этапы, справа карточки шагов ——— */
+  .stage-wrap{
+    max-width:1160px; margin:0 auto; padding:26px 20px 64px;
+    display:grid; grid-template-columns:238px minmax(0,1fr); gap:24px; align-items:start;
+  }
+  .stages{position:sticky; top:62px;}
+  .st-cap{font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-3); font-weight:600; padding:0 2px 9px;}
+  .st-list{display:flex; flex-direction:column; gap:1px; background:var(--line); border:1px solid var(--line); border-radius:12px; overflow:hidden;}
+  .st{
+    display:block; width:100%; text-align:left; padding:12px 14px; min-height:46px;
+    background:var(--surface); border:0; font:inherit; color:var(--ink); cursor:pointer;
+    transition:background .16s ease;
+  }
+  @media (hover:hover){ .st:not([aria-disabled="true"]):hover{background:var(--band-2);} }
+  .st[aria-current="true"]{background:var(--avo); color:var(--on-tint);}
+  .st[aria-disabled="true"]{cursor:default; color:var(--ink-3);}
+  .st-t{display:block; font-weight:600; font-size:14px; line-height:1.3;}
+  .st[aria-disabled="true"] .st-t{font-weight:400;}
+  .st-s{display:block; margin-top:3px; font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3);}
+  .st[aria-current="true"] .st-s{color:var(--on-tint-blue);}
+  .st-note{margin-top:10px; padding:0 2px; font-size:12px; color:var(--ink-3); line-height:1.45;}
+  @media (max-width:980px){
+    /* minmax(0,1fr) и min-width:0 — иначе колонка растягивается по ширине
+       горизонтального списка этапов и страница едет вбок */
+    .stage-wrap{grid-template-columns:minmax(0,1fr); gap:14px; padding-top:18px;}
+    .stages{position:static; min-width:0;}
+    .st-list{flex-direction:row; overflow-x:auto; scrollbar-width:none;}
+    .st-list::-webkit-scrollbar{display:none;}
+    .st{min-width:158px;}
+    .st-note{display:none;}
+  }
+
+  /* шаги: карточки в одной колонке, а не экраны во всю ширину */
+  .stage{display:flex; flex-direction:column; gap:14px;}
+  .stage > section,.stage > header{
+    padding-block:0; background:var(--surface); border:1px solid var(--line); border-radius:16px;
+  }
+  .stage > section > .wrap,.stage > header > .wrap{max-width:none; margin:0; padding:24px 26px;}
+  .stage .hero{background:var(--avo); border-color:var(--band-3);}
+  .stage .hero h1{font-size:clamp(28px,3.6vw,40px);}
+  .stage .hero-lead{margin-top:16px; font-size:16.5px; max-width:60ch;}
+  .stage h2{font-size:clamp(21px,2.4vw,26px);}
+  .stage .lead{margin-top:12px; font-size:15.5px;}
+  .stage .eyebrow{font-size:10.5px;}
+  .stage .culture,.stage .values,.stage .team-grid,.stage .figures,.stage .faq,.stage .contacts{margin-top:20px;}
+  .stage .hero-prog{margin-top:24px;}
+  .stage .doc-group{margin-top:20px;}
+  .stage > section.band{background:var(--band); border-color:var(--band-line);}
+  /* карточки дресс-кода живут вне зелёной плашки — им нужен светлый вариант */
+  #dress .culture{background:var(--line-strong); border-color:var(--line-strong);}
+  #dress .cult{background:var(--surface);}
+  #dress .cult .d{color:var(--ink-2);}
+  #dress .cult.mark{background:var(--avo); color:var(--on-tint);}
+  #dress .cult.mark .d{color:var(--on-tint-2);}
+  /* номер шага: считает CSS, поэтому скрытый HR блок не оставляет дырку в нумерации */
+  .stage > section{position:relative;}
+  .s-num{
+    position:absolute; top:20px; right:22px;
+    display:inline-flex; align-items:center; justify-content:center; min-width:30px; height:26px;
+    padding:0 9px; border-radius:99px; background:var(--band-2); color:var(--on-tint-blue);
+    font-family:var(--mono); font-size:12px; font-weight:600; letter-spacing:.04em;
+  }
+  .stage > section[data-step] > .wrap > h2{padding-right:46px;}
+  .s-num:empty{display:none;}
+  .soon .wrap{opacity:.85;}
+  .soon-when{margin-top:18px; font-family:var(--mono); font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--blue-deep); font-weight:600;}
+  .tb-stage{margin-right:auto; font-family:var(--display); font-weight:600; font-size:15px; letter-spacing:-.01em; white-space:nowrap;}
+
   /* ——— первый экран: полоса прогресса ———
      Один контейнер с волосяными разделителями — тем же приёмом собраны блок
      команды, цифры и ценности. Три отдельные карточки рассыпали первый экран.
@@ -226,6 +273,7 @@
   a.hp:focus-visible{outline:2px solid var(--blue-deep); outline-offset:-2px;}
   .hp-r{font-family:var(--mono); font-size:10.5px; letter-spacing:.11em; text-transform:uppercase; color:var(--ink-3);}
   .hp-v{margin-top:7px; font-family:var(--display); font-weight:600; font-size:19px; letter-spacing:-.01em; white-space:nowrap;}
+  .hp-v.soft{white-space:normal;}
   .hp-bar{margin-top:11px; height:5px; border-radius:99px; background:var(--line); overflow:hidden;}
   .hp-bar b{display:block; height:100%; width:0; background:var(--blue); transition:width .35s ease;}
   .hp-s{margin-top:auto; padding-top:10px; font-size:12.5px; color:var(--ink-2);}
@@ -389,7 +437,7 @@
   #viewEmployee footer .fl{display:flex; gap:20px; flex-wrap:wrap;}
 
   /* служебные подписи: Fedra Demi вместо прежнего моношрифта */
-  .eyebrow,.nav a,.ready,.val .v-i,.h-num,.h-date,.meter,
+  .eyebrow,.st-s,.ready,.val .v-i,.h-num,.h-date,.meter,
   .startdate label,.countdown .c,.contact .r,.gallery,.greet label,.hp-r,.wm-tag{
     font-weight:600; font-variant-numeric:lining-nums tabular-nums;
   }
@@ -892,15 +940,7 @@
 <div class="topbar">
   <div class="topbar-in">
     <a class="wordmark" href="#hero"><span class="logo" role="img" aria-label="i'way"></span></a>
-    <nav class="nav" aria-label="Разделы страницы">
-      <a href="#about">Компания</a>
-      <a href="#docs">Документы</a>
-      <a href="#plan">Адаптация</a>
-      <a href="#culture">Жизнь</a>
-      <a href="#team">Команда</a>
-      <a href="#faq">Вопросы</a>
-      <a href="#contacts">Контакты</a>
-    </nav>
+    <span class="tb-stage" id="tbStage">До выхода</span>
     <div class="ready" title="Отмеченные пункты в чек-листах">
       <span>Готовность</span>
       <span class="ready-bar"><b id="readyFill"></b></span>
@@ -911,64 +951,74 @@
   </div>
 </div>
 
+<div class="stage-wrap">
+  <aside class="stages" aria-label="Этапы">
+    <p class="st-cap">Этапы</p>
+    <div class="st-list">
+      <button class="st" type="button" data-stage="pre" aria-current="true">
+        <span class="st-t">До выхода</span>
+        <span class="st-s" data-st-note="pre">—</span>
+      </button>
+      <button class="st" type="button" data-stage="day" aria-current="false">
+        <span class="st-t">1-й день</span>
+        <span class="st-s" data-st-note="day">—</span>
+      </button>
+      <button class="st" type="button" data-stage="week" aria-current="false">
+        <span class="st-t">Первая неделя</span>
+        <span class="st-s" data-st-note="week">—</span>
+      </button>
+      <button class="st" type="button" data-stage="month" aria-current="false">
+        <span class="st-t">Первый месяц</span>
+        <span class="st-s" data-st-note="month">—</span>
+      </button>
+      <button class="st" type="button" data-stage="prob" aria-current="false">
+        <span class="st-t">Окончание испытательного срока</span>
+        <span class="st-s" data-st-note="prob">—</span>
+      </button>
+    </div>
+    <p class="st-note">Этапы открываются по мере наступления срока.</p>
+  </aside>
+
+  <div class="stage-body">
+    <div class="stage" id="stagePre">
 <header class="hero" id="hero">
   <div class="wrap">
     <p class="eyebrow" id="heroEyebrow">Пребординг · до первого рабочего дня</p>
     <h1><span id="heroName">Добро пожаловать</span><br>в i<i>'</i>way</h1>
-    <p class="hero-lead">Мы рады, что ты станешь частью команды. Здесь собрано всё, что нужно до первого рабочего дня: какие документы подготовить, как пройдёт первая неделя и к кому идти с вопросами.</p>
-    <div class="actions">
-      <a class="btn" href="https://forms.yandex.ru/cloud/6493df255d2a061c298dc678" target="_blank" rel="noopener">Заполнить анкету нового сотрудника</a>
-    </div>
-    <!-- живой прогресс вместо статичной строки: те же цифры, что в блоках ниже -->
+    <p class="hero-lead">Мы рады, что ты станешь частью команды. Пройди шаги ниже по порядку: заполни анкету, познакомься с компанией и командой, собери документы и посмотри, что надеть. Тогда первый день пройдёт спокойно.</p>
     <div class="hero-prog">
-      <a class="hp" href="#docs">
-        <span class="hp-r">Документы</span>
-        <span class="hp-v" id="hpDocs">—</span>
-        <span class="hp-bar"><b id="hpDocsFill"></b></span>
-        <span class="hp-s" id="hpDocsNote">Отметь, что уже готово</span>
-      </a>
-      <a class="hp" href="#plan">
-        <span class="hp-r">Первый день</span>
-        <span class="hp-v" id="hpDay">—</span>
-        <span class="hp-bar"><b id="hpDayFill"></b></span>
-        <span class="hp-s" id="hpDayNote">План по шагам</span>
-      </a>
       <div class="hp hp-fact">
         <span class="hp-r">Выход</span>
         <span class="hp-v" id="mDate">—</span>
         <span class="hp-s" id="hpLeft">дату сообщит HR</span>
       </div>
+      <div class="hp hp-fact">
+        <span class="hp-r">Отдел</span>
+        <span class="hp-v soft" id="mDept">—</span>
+        <span class="hp-s" id="mHead">руководителя уточняем</span>
+      </div>
+      <a class="hp" href="#docs">
+        <span class="hp-r">Документы</span>
+        <span class="hp-v" id="hpDocs">—</span>
+        <span class="hp-bar"><b id="hpDocsFill"></b></span>
+        <span class="hp-s" id="hpDocsNote">отметь, что уже готово</span>
+      </a>
     </div>
-    <nav class="nav" aria-label="Разделы страницы">
-      <a href="#about">Компания</a>
-      <a href="#docs">Документы</a>
-      <a href="#plan">Адаптация</a>
-      <a href="#culture">Жизнь</a>
-      <a href="#team">Команда</a>
-      <a href="#faq">Вопросы</a>
-      <a href="#contacts">Контакты</a>
-    </nav>
   </div>
 </header>
-
-
-<section id="team" class="shell">
-  <div class="wrap">
-    <p class="eyebrow">Твоя команда</p>
-    <h2>С кем ты будешь работать</h2>
-    <p class="lead">Эти люди ждут тебя в первый день — с ними можно познакомиться заранее.</p>
-    <div class="team-grid">
-      <div class="team-card"><div class="t-r">Отдел</div><div class="t-v" id="tDept">—</div><div class="t-s" id="tDeptNote"></div></div>
-      <div class="team-card"><div class="t-r">Руководитель</div><div class="t-v" id="tHead">—</div><div class="t-s">Ставит задачи и цели на 30 / 60 / 90 дней</div></div>
-      <div class="team-card"><div class="t-r">Старший в команде</div><div class="t-v" id="tSenior">—</div><div class="t-s">Помогает освоиться в процессах и инструментах</div></div>
-      <div class="team-card mark"><div class="t-r">Твоя рабочая почта</div><div class="t-v" id="tEmail">—</div><div class="t-s">Пароль выдадут в первый день вместе с доступами</div></div>
+<section id="form" data-step>
+  <div class="wrap"><div class="s-num" aria-hidden="true"></div>
+    <p class="eyebrow">Анкета</p>
+    <h2>Заполни анкету нового сотрудника</h2>
+    <p class="lead">С неё начинается оформление: по анкете HR готовит документы к твоему выходу. Займёт около десяти минут, данные видит только HR.</p>
+    <div class="actions">
+      <a class="btn" href="https://forms.yandex.ru/cloud/6493df255d2a061c298dc678" target="_blank" rel="noopener">Открыть анкету</a>
     </div>
-    <p class="team-note" id="tChat" hidden></p>
+    <p class="hint" style="margin-top:14px;">Если какой-то пункт непонятен — напиши HR, заполним вместе.</p>
   </div>
 </section>
-
-<section id="about">
-  <div class="wrap">
+<section id="about" data-step>
+  <div class="wrap"><div class="s-num" aria-hidden="true"></div>
     <p class="eyebrow">О компании</p>
     <h2>Трансферы, которые работают одинаково в любой точке мира</h2>
     <div class="figures">
@@ -1009,12 +1059,38 @@
     </div>
   </div>
 </section>
-
-<section id="docs" class="shell">
+<section id="culture" class="band">
   <div class="wrap">
+    <p class="eyebrow">Жизнь в i'way</p>
+    <h2>Работа — это ещё не всё</h2>
+    <p class="lead">Стабильная и растущая компания, где мнение каждого имеет значение. Мы держим баланс работы и отдыха, поддерживаем инициативы сотрудников и бережём атмосферу, в которой хочется работать.</p>
+    <div class="culture" id="cultureCards">
+      <div class="cult mark"><div class="k">Внутренние мероприятия</div><div class="d">Квизы, хакатоны, дни рождения команды и большие корпоративы</div></div>
+      <div class="cult"><div class="k">Спорт и ЗОЖ</div><div class="d">Забеги, турниры и инициативы для тех, кто любит движение</div></div>
+      <div class="cult"><div class="k">Благотворительность</div><div class="d">Волонтёрские проекты, к которым может присоединиться каждый</div></div>
+      <div class="cult"><div class="k">Мерч i'way</div><div class="d">Футболки, худи и стикеры — с первых недель в команде</div></div>
+    </div>
+    <p class="gallery">Здесь появится галерея с фото последних событий</p>
+  </div>
+</section>
+<section id="team" class="shell" data-step>
+  <div class="wrap"><div class="s-num" aria-hidden="true"></div>
+    <p class="eyebrow">Твоя команда</p>
+    <h2>С кем ты будешь работать</h2>
+    <p class="lead">Руководитель и наставник закреплены за твоим отделом — с ними можно познакомиться заранее. С остальной командой познакомимся в первый день.</p>
+    <div class="team-grid">
+      <div class="team-card"><div class="t-r">Руководитель</div><div class="t-v" id="tHead">—</div><div class="t-s">Ставит задачи и цели на 30 / 60 / 90 дней</div></div>
+      <div class="team-card"><div class="t-r">Наставник</div><div class="t-v" id="tSenior">—</div><div class="t-s">Помогает освоиться в процессах и инструментах</div></div>
+      <div class="team-card"><div class="t-r">Команда отдела</div><div class="t-v">Знакомство в первый день</div><div class="t-s" id="tChat">Ссылку на чат команды дадим вместе с доступами</div></div>
+      <div class="team-card mark"><div class="t-r">Твоя рабочая почта</div><div class="t-v" id="tEmail">—</div><div class="t-s">Пароль выдадут в первый день вместе с доступами</div></div>
+    </div>
+  </div>
+</section>
+<section id="docs" class="shell" data-step>
+  <div class="wrap"><div class="s-num" aria-hidden="true"></div>
     <p class="eyebrow">Документы</p>
-    <h2>Что подготовить до выхода</h2>
-    <p class="lead">Отмечай пункты по мере готовности. Когда обязательные будут собраны — отправь список в HR одной кнопкой.</p>
+    <h2>Что взять с собой в первый день</h2>
+    <p class="lead">Оригиналы понадобятся в первый день. Отмечай пункты по мере готовности — когда обязательные будут собраны, отправь список в HR одной кнопкой.</p>
 
     <div class="doc-group">
       <div class="dg-head"><span class="dg-title">Обязательно — оригиналы</span></div>
@@ -1057,7 +1133,92 @@
     </div>
   </div>
 </section>
+<section id="dress" data-step>
+  <div class="wrap"><div class="s-num" aria-hidden="true"></div>
+    <p class="eyebrow">Дресс-код</p>
+    <h2>Смарт кэжуал: опрятно и без формальностей</h2>
+    <p class="lead">В офисе у нас смарт кэжуал — деловой стиль без строгости. Ориентир простой: в этом можно спокойно пойти на встречу с партнёром, и при этом тебе удобно весь день.</p>
+    <div class="culture" id="dressCards">
+      <div class="cult mark"><div class="k">Что подойдёт</div><div class="d">Рубашка, поло, джемпер или свитер, аккуратные джинсы и чинос, платье, юбка, блейзер. Обувь закрытая.</div></div>
+      <div class="cult"><div class="k">Чего лучше не надо</div><div class="d">Спортивные костюмы, шорты, майки, пляжная обувь, крупные принты и глубокие вырезы.</div></div>
+      <div class="cult"><div class="k">В первый день</div><div class="d">Будет знакомство с командой и фото на пропуск — выбери то, в чём чувствуешь себя уверенно.</div></div>
+      <div class="cult"><div class="k">Если сомневаешься</div><div class="d">Спроси HR или наставника: подскажем, как принято в твоём отделе. Жёстких требований нет — есть уважение к коллегам и клиентам.</div></div>
+    </div>
+  </div>
+</section>
+<section id="faq" class="shell">
+  <div class="wrap">
+    <p class="eyebrow">Частые вопросы</p>
+    <h2>Что обычно спрашивают перед стартом</h2>
+    <!-- ЧЕРНОВИК: ответы ниже — правдоподобные заглушки, заменить на реальные формулировки HR -->
+    <div class="faq">
+      <details>
+        <summary>Когда и во сколько приходить в первый день?</summary>
+        <p class="a">Точное время и адрес пришлёт твой HR-партнёр за день до старта. Как правило, начинаем не раньше 10:00, чтобы никуда не спешить.</p>
+      </details>
+      <details>
+        <summary>Что взять с собой?</summary>
+        <p class="a">Документы из списка выше — там, где указано «оригинал», нужен именно оригинал. Копии сделаем на месте.</p>
+      </details>
+      <details>
+        <summary>Как оформить пропуск в офис?</summary>
+        <p class="a">Пропуск оформляет HR в день встречи. Заранее делать ничего не нужно — достаточно паспорта.</p>
+      </details>
+      <details>
+        <summary>Где найти регламенты и инструкции?</summary>
+        <p class="a">Всё собрано в базе знаний. Ссылку и доступ выдадим в первый день вместе с остальными учётными записями.</p>
+      </details>
+      <details>
+        <summary>К кому идти с техническими вопросами?</summary>
+        <p class="a">В общий чат поддержки: там дежурят коллеги и отвечают быстро. Доступ к чату появится вместе с рабочей почтой.</p>
+      </details>
+      <details>
+        <summary>Как оформляются отпуск и больничный?</summary>
+        <p class="a">Порядок описан в базе знаний, раздел «Кадры». Первый раз можно пройти шаги вместе с HR-партнёром.</p>
+      </details>
+      <details>
+        <summary>Есть ли ДМС, компенсация питания и обучение?</summary>
+        <p class="a">Состав пакета зависит от позиции и подразделения — HR разберёт его на встрече в первый день. Обучение есть у всех: вводный курс, учебный центр и профильный тренинг после полугода.</p>
+      </details>
+    </div>
+    <div class="actions" style="margin-top:26px;">
+      <a class="btn ghost" href="mailto:hr@iway.ru?subject=Вопрос%20перед%20выходом%20на%20работу">Задать свой вопрос</a>
+    </div>
+  </div>
+</section>
+<section id="contacts" data-step>
+  <div class="wrap"><div class="s-num" aria-hidden="true"></div>
+    <p class="eyebrow">Контакты</p>
+    <h2>Мы на связи до первого дня и после</h2>
+    <p class="lead">Если что-то непонятно или нужна помощь — пиши. Отвечаем в рабочие часы, срочные вопросы разбираем быстрее.</p>
+    <div class="contacts">
+      <div class="contact">
+        <div><div class="r">HR-отдел</div><div class="v">hr@iway.ru</div></div>
+        <a class="go" href="mailto:hr@iway.ru">Написать →</a>
+      </div>
+      <!-- ЗАГЛУШКА: подставить реальный телефон/мессенджер для срочных вопросов -->
+      <div class="contact">
+        <div><div class="r">Срочный вопрос</div><div class="v">Телефон или мессенджер</div></div>
+        <span class="go" style="margin-left:auto; font-weight:600; font-size:14px; color:var(--ink-3);">Уточняется</span>
+      </div>
+      <div class="contact">
+        <div><div class="r">Анкета нового сотрудника</div><div class="v">Yandex Forms</div></div>
+        <a class="go" href="https://forms.yandex.ru/cloud/6493df255d2a061c298dc678" target="_blank" rel="noopener">Открыть →</a>
+      </div>
+    </div>
+    <!-- ЗАГЛУШКА: подставить ссылку на форму опроса об адаптации -->
+    <div class="survey">
+      <div>
+        <h3>Помоги сделать адаптацию лучше</h3>
+        <p>Пара минут: что было полезно на этой странице, а чего не хватило.</p>
+      </div>
+      <a class="btn" href="#contacts">Пройти короткий опрос</a>
+    </div>
+  </div>
+</section>
+    </div>
 
+    <div class="stage" id="stageDay" hidden>
 <section id="plan">
   <div class="wrap">
     <p class="eyebrow">Адаптация</p>
@@ -1124,93 +1285,42 @@
     </div>
   </div>
 </section>
-
-<section id="culture" class="band">
-  <div class="wrap">
-    <p class="eyebrow">Жизнь в i'way</p>
-    <h2>Работа — это ещё не всё</h2>
-    <p class="lead">Стабильная и растущая компания, где мнение каждого имеет значение. Мы держим баланс работы и отдыха, поддерживаем инициативы сотрудников и бережём атмосферу, в которой хочется работать.</p>
-    <div class="culture" id="cultureCards">
-      <div class="cult mark"><div class="k">Внутренние мероприятия</div><div class="d">Квизы, хакатоны, дни рождения команды и большие корпоративы</div></div>
-      <div class="cult"><div class="k">Спорт и ЗОЖ</div><div class="d">Забеги, турниры и инициативы для тех, кто любит движение</div></div>
-      <div class="cult"><div class="k">Благотворительность</div><div class="d">Волонтёрские проекты, к которым может присоединиться каждый</div></div>
-      <div class="cult"><div class="k">Мерч i'way</div><div class="d">Футболки, худи и стикеры — с первых недель в команде</div></div>
     </div>
-    <p class="gallery">Здесь появится галерея с фото последних событий</p>
+
+    <div class="stage" id="stageWeek" hidden>
+<section id="soonWeek" class="soon">
+  <div class="wrap">
+    <p class="eyebrow">Первая неделя</p>
+    <h2>План первой недели появится здесь</h2>
+    <p class="lead">Вводное обучение о компании и продукте, регламенты своего направления и цели на 30, 60 и 90 дней.</p>
+    <p class="soon-when" data-when="week">Откроется по сроку</p>
   </div>
 </section>
+    </div>
 
-<section id="faq" class="shell">
+    <div class="stage" id="stageMonth" hidden>
+<section id="soonMonth" class="soon">
   <div class="wrap">
-    <p class="eyebrow">Частые вопросы</p>
-    <h2>Что обычно спрашивают перед стартом</h2>
-    <!-- ЧЕРНОВИК: ответы ниже — правдоподобные заглушки, заменить на реальные формулировки HR -->
-    <div class="faq">
-      <details>
-        <summary>Когда и во сколько приходить в первый день?</summary>
-        <p class="a">Точное время и адрес пришлёт твой HR-партнёр за день до старта. Как правило, начинаем не раньше 10:00, чтобы никуда не спешить.</p>
-      </details>
-      <details>
-        <summary>Что взять с собой?</summary>
-        <p class="a">Документы из списка выше — там, где указано «оригинал», нужен именно оригинал. Копии сделаем на месте.</p>
-      </details>
-      <details>
-        <summary>Как оформить пропуск в офис?</summary>
-        <p class="a">Пропуск оформляет HR в день встречи. Заранее делать ничего не нужно — достаточно паспорта.</p>
-      </details>
-      <details>
-        <summary>Где найти регламенты и инструкции?</summary>
-        <p class="a">Всё собрано в базе знаний. Ссылку и доступ выдадим в первый день вместе с остальными учётными записями.</p>
-      </details>
-      <details>
-        <summary>К кому идти с техническими вопросами?</summary>
-        <p class="a">В общий чат поддержки: там дежурят коллеги и отвечают быстро. Доступ к чату появится вместе с рабочей почтой.</p>
-      </details>
-      <details>
-        <summary>Как оформляются отпуск и больничный?</summary>
-        <p class="a">Порядок описан в базе знаний, раздел «Кадры». Первый раз можно пройти шаги вместе с HR-партнёром.</p>
-      </details>
-      <details>
-        <summary>Есть ли ДМС, компенсация питания и обучение?</summary>
-        <p class="a">Состав пакета зависит от позиции и подразделения — HR разберёт его на встрече в первый день. Обучение есть у всех: вводный курс, учебный центр и профильный тренинг после полугода.</p>
-      </details>
-    </div>
-    <div class="actions" style="margin-top:26px;">
-      <a class="btn ghost" href="mailto:hr@iway.ru?subject=Вопрос%20перед%20выходом%20на%20работу">Задать свой вопрос</a>
-    </div>
+    <p class="eyebrow">Первый месяц</p>
+    <h2>Итоги первого месяца появятся здесь</h2>
+    <p class="lead">Первые результаты, сверка целей с руководителем и обратная связь от наставника.</p>
+    <p class="soon-when" data-when="month">Откроется по сроку</p>
   </div>
 </section>
+    </div>
 
-<section id="contacts">
+    <div class="stage" id="stageProb" hidden>
+<section id="soonProb" class="soon">
   <div class="wrap">
-    <p class="eyebrow">Контакты</p>
-    <h2>Мы на связи до первого дня и после</h2>
-    <p class="lead">Если что-то непонятно или нужна помощь — пиши. Отвечаем в рабочие часы, срочные вопросы разбираем быстрее.</p>
-    <div class="contacts">
-      <div class="contact">
-        <div><div class="r">HR-отдел</div><div class="v">hr@iway.ru</div></div>
-        <a class="go" href="mailto:hr@iway.ru">Написать →</a>
-      </div>
-      <!-- ЗАГЛУШКА: подставить реальный телефон/мессенджер для срочных вопросов -->
-      <div class="contact">
-        <div><div class="r">Срочный вопрос</div><div class="v">Телефон или мессенджер</div></div>
-        <span class="go" style="margin-left:auto; font-weight:600; font-size:14px; color:var(--ink-3);">Уточняется</span>
-      </div>
-      <div class="contact">
-        <div><div class="r">Анкета нового сотрудника</div><div class="v">Yandex Forms</div></div>
-        <a class="go" href="https://forms.yandex.ru/cloud/6493df255d2a061c298dc678" target="_blank" rel="noopener">Открыть →</a>
-      </div>
-    </div>
-    <!-- ЗАГЛУШКА: подставить ссылку на форму опроса об адаптации -->
-    <div class="survey">
-      <div>
-        <h3>Помоги сделать адаптацию лучше</h3>
-        <p>Пара минут: что было полезно на этой странице, а чего не хватило.</p>
-      </div>
-      <a class="btn" href="#contacts">Пройти короткий опрос</a>
-    </div>
+    <p class="eyebrow">Испытательный срок</p>
+    <h2>Итоги испытательного срока появятся здесь</h2>
+    <p class="lead">Итоги испытательного срока: что получилось, что дальше и какие цели на следующий период.</p>
+    <p class="soon-when" data-when="prob">Откроется по сроку</p>
   </div>
 </section>
+    </div>
+  </div>
+</div>
 
 <footer>
   <div class="wide">
@@ -1229,7 +1339,8 @@
   var fmtLong = new Intl.DateTimeFormat('ru-RU', {day:'numeric', month:'long'});
   var fmtShort = new Intl.DateTimeFormat('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'});
   var state = {store:null, mode:'local', canEditPage:false, depts:[], rec:null, me:null,
-               view:null, people:[], admins:[], gateKind:'emp', filter:'all', page:{}, newOffer:{}};
+               view:null, people:[], admins:[], gateKind:'emp', filter:'all', page:{}, newOffer:{},
+               stage:null};
 
   function g(rec, male, female){ return (rec && rec.gender === 'm') ? male : female; }
   function plural(n, one, few, many){
@@ -2619,17 +2730,20 @@
     }).catch(function(){ notify('Не удалось сохранить справочник', 'Попробуй ещё раз.'); });
   });
   /* ——— блоки страницы сотрудника: правит HR, настройки общие для всех ——— */
+  /* Порядок — как на странице сотрудника, чтобы правки искались там же, где видны */
   var PAGE_SECTIONS = [
-    {key:'hero',     name:'Первый экран', fixed:true},
-    {key:'team',     name:'Твоя команда'},
-    {key:'about',    name:'О компании'},
-    {key:'docs',     name:'Документы',
-     note:'Если скрыть — сотрудник не увидит чек-лист документов и не сможет отправить список в HR.'},
-    {key:'plan',     name:'Адаптация',
-     note:'Если скрыть — пропадёт план первого дня и обратный отсчёт.'},
+    {key:'hero',     name:'Приветствие', fixed:true},
+    {key:'form',     name:'Шаг 01 · Анкета'},
+    {key:'about',    name:'Шаг 02 · О компании'},
     {key:'culture',  name:'Жизнь в i’way'},
-    {key:'faq',      name:'Вопросы'},
-    {key:'contacts', name:'Контакты'}
+    {key:'team',     name:'Шаг 03 · Команда'},
+    {key:'docs',     name:'Шаг 04 · Что взять с собой',
+     note:'Если скрыть — сотрудник не увидит чек-лист документов и не сможет отправить список в HR.'},
+    {key:'dress',    name:'Шаг 05 · Дресс-код'},
+    {key:'faq',      name:'Частые вопросы'},
+    {key:'contacts', name:'Шаг 06 · Контакты'},
+    {key:'plan',     name:'Этап «1-й день»',
+     note:'Открывается сотруднику в день выхода. Если скрыть — пропадёт план первого дня и обратный отсчёт.'}
   ];
   var pageDefaults = null;
   function pageParts(key){
@@ -2774,6 +2888,10 @@
             fields:[['t','Пункт','input']], add:'+ Добавить пункт', del:'Удалить пункт'},
            {cfg:'months', attr:'month', label:'30 · 60 · 90 дней', sel:'#planMonths', kind:'plain',
             fields:[['t','Пункт','input']], add:'+ Добавить пункт', del:'Удалить пункт'}],
+    dress: [{cfg:'items', attr:'dress', label:'Карточки дресс-кода', sel:'#dressCards', kind:'cards',
+            fields:[['k','Заголовок','input'], ['d','Описание','textarea']],
+            add:'+ Добавить карточку', del:'Удалить карточку',
+            note:'Первая карточка выделяется цветом.'}],
     culture: [{cfg:'items', attr:'cult', label:'Карточки', sel:'#cultureCards', kind:'cards',
             fields:[['k','Заголовок','input'], ['d','Описание','textarea']],
             add:'+ Добавить карточку', del:'Удалить карточку',
@@ -2822,10 +2940,18 @@
       var cfg = state.page[sec.key] || {}, def = pageDefaults[sec.key];
       var off = !sec.fixed && cfg.hidden === true;
       p.el.hidden = off;
-      document.querySelectorAll('#viewEmployee .nav a[href="#' + sec.key + '"]').forEach(function(a){ a.hidden = off; });
       if(p.title) p.title.textContent = cfg.title || def.title;
       if(p.lead)  p.lead.textContent  = cfg.lead  || def.lead;
       writeLists(sec.key, cfg);
+    });
+    renumberSteps();
+  }
+  /* Номера шагов считаем сами: скрытый HR шаг не должен оставлять дырку */
+  function renumberSteps(){
+    var n = 0;
+    document.querySelectorAll('#stagePre section[data-step]').forEach(function(sec){
+      var badge = sec.querySelector('.s-num'); if(!badge) return;
+      badge.textContent = sec.hidden ? '' : (++n < 10 ? '0' + n : '' + n);
     });
   }
   function renderListEditor(host, cfg, secKey, spec){
@@ -3046,6 +3172,87 @@
       saveChain = saveChain.then(function(){ return state.store.saveEmployee(state.rec); }).catch(function(){});
     }, 400);
   }
+  /* ——— этапы кабинета ———
+     Этап открывается, когда наступил его срок: «1-й день» — дата выхода,
+     неделя и месяц — смещения от неё, последний — конец испытательного срока
+     из оффера («3 месяца»). Срок не указан — считаем стандартные три месяца. */
+  var STAGES = [
+    {key:'pre',   pane:'stagePre',   title:'До выхода'},
+    {key:'day',   pane:'stageDay',   title:'1-й день', days:0},
+    {key:'week',  pane:'stageWeek',  title:'Первая неделя', days:7, soon:true},
+    {key:'month', pane:'stageMonth', title:'Первый месяц', days:30, soon:true},
+    {key:'prob',  pane:'stageProb',  title:'Окончание испытательного срока', probation:true, soon:true}
+  ];
+  function stageByKey(key){
+    for(var i = 0; i < STAGES.length; i++) if(STAGES[i].key === key) return STAGES[i];
+    return null;
+  }
+  function probMonths(rec){
+    var m = /(\d+)\s*мес/i.exec((rec.offer && rec.offer.probation) || '');
+    var n = m ? parseInt(m[1], 10) : 0;
+    return (n >= 1 && n <= 12) ? n : 3;
+  }
+  function stageDate(rec, st){
+    if(!rec || !rec.startDate || st.key === 'pre') return null;
+    var d = new Date(rec.startDate + 'T00:00:00');
+    if(st.probation) d.setMonth(d.getMonth() + probMonths(rec));
+    else d.setDate(d.getDate() + st.days);
+    return d;
+  }
+  function stageOpen(rec, st){
+    if(st.key === 'pre') return true;
+    var d = stageDate(rec, st); if(!d) return false;
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    return d.getTime() <= today.getTime();
+  }
+  function renderStages(){
+    var rec = state.rec, last = 'pre';
+    STAGES.forEach(function(st){
+      var open = stageOpen(rec, st), d = stageDate(rec, st);
+      var btn = document.querySelector('.st[data-stage="' + st.key + '"]');
+      if(btn){
+        btn.setAttribute('aria-disabled', open ? 'false' : 'true');
+        btn.querySelector('.st-s').textContent = open
+          ? (st.key === 'pre' ? 'открыт' : 'открыт ' + fmtLong.format(d))
+          : (d ? 'с ' + fmtLong.format(d) : 'после выхода');
+      }
+      /* ponytail: содержание пока есть только у «до выхода» и «1-го дня» —
+         на этап-заглушку сами не переключаемся, даже если срок наступил */
+      if(open && !st.soon) last = st.key;
+    });
+    document.querySelectorAll('.soon-when').forEach(function(el){
+      var st = stageByKey(el.getAttribute('data-when'));
+      var d = st ? stageDate(rec, st) : null;
+      el.textContent = !d ? 'Откроется, когда HR назначит дату выхода'
+        : (stageOpen(rec, st) ? 'Этап открыт с ' + fmtLong.format(d) + ' · содержание добавим'
+                              : 'Откроется ' + fmtLong.format(d));
+    });
+    /* открываем последний доступный: у новичка это «до выхода», у вышедшего — его этап */
+    switchStage(state.stage && stageOpen(rec, stageByKey(state.stage)) ? state.stage : last);
+  }
+  function switchStage(key){
+    var st = stageByKey(key); if(!st || !stageOpen(state.rec, st)) return;
+    state.stage = key;
+    STAGES.forEach(function(x){
+      var on = x.key === key;
+      if($(x.pane)) $(x.pane).hidden = !on;
+      var btn = document.querySelector('.st[data-stage="' + x.key + '"]');
+      if(btn) btn.setAttribute('aria-current', on ? 'true' : 'false');
+    });
+    $('tbStage').textContent = st.title;
+  }
+  document.querySelectorAll('.st').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var key = btn.getAttribute('data-stage');
+      if(key === state.stage) return;
+      switchStage(key);
+      window.scrollTo({top:0, behavior: reduce ? 'auto' : 'smooth'});
+    });
+  });
+  document.querySelector('#viewEmployee .wordmark').addEventListener('click', function(e){
+    e.preventDefault(); switchStage('pre'); window.scrollTo(0, 0);
+  });
+
   /* Появление блоков при прокрутке. Наблюдаем контейнеры, а не отдельные
      строки: сетки ценностей и карточек склеены в один блок, и разъезжаться им
      нельзя. Включаем только когда страница уже показана — у скрытой ничего не
@@ -3073,14 +3280,16 @@
   function renderEmployee(){
     var rec = state.rec, d = deptByName(rec.dept);
     $('heroName').textContent = rec.firstName + ', добро пожаловать';
-    $('heroEyebrow').textContent = 'Пребординг · ' + (rec.dept || 'i’way');
+    $('heroEyebrow').textContent = 'Пребординг · до первого рабочего дня';
     $('whoName').textContent = rec.firstName + ' ' + rec.lastName;
-    $('tDept').textContent = rec.dept || '—';
+    $('mDept').textContent = rec.dept || 'уточняется';
+    $('mHead').textContent = (d && d.head) ? 'Руководитель: ' + d.head : 'руководителя уточняем';
     $('tEmail').textContent = rec.email || 'Создаётся — выдадим в первый день';
     $('tHead').textContent = (d && d.head) || 'Уточняется';
     $('tSenior').textContent = (d && d.senior) || 'Уточняется';
-    if(d && d.chat){ $('tChat').hidden = false; $('tChat').textContent = 'Чат команды: ' + d.chat; }
-    else { $('tChat').hidden = true; }
+    $('tChat').textContent = (d && d.chat)
+      ? 'Чат команды: ' + d.chat
+      : 'Ссылку на чат команды дадим вместе с доступами';
 
     var start = rec.startDate ? new Date(rec.startDate + 'T00:00:00') : null;
     $('mDate').textContent = startText(rec);
@@ -3090,7 +3299,8 @@
     if(start){
       var today = new Date(); today.setHours(0, 0, 0, 0);
       var diff = Math.round((start - today) / 86400000);
-      $('cdNum').textContent = diff > 0 ? diff : (diff === 0 ? 'Сегодня' : 'В команде');
+      /* вышел — считаем дни в команде: иначе в счётчике оставалось «В команде» без числа */
+      $('cdNum').textContent = diff > 0 ? diff : (diff === 0 ? 'Сегодня' : -diff);
       $('cdCap').textContent = diff > 0 ? plural(diff, 'день до выхода', 'дня до выхода', 'дней до выхода')
         : (diff === 0 ? 'твой первый день' : plural(-diff, 'день в i’way', 'дня в i’way', 'дней в i’way'));
       var left = diff > 0 ? 'через ' + diff + ' ' + plural(diff, 'день', 'дня', 'дней')
@@ -3107,6 +3317,7 @@
     }
     applyPage();
     initChecks();
+    renderStages();
     armReveal();
   }
 
@@ -3202,9 +3413,6 @@
     $('hpDocsFill').style.width = (ds.total ? ds.done / ds.total * 100 : 0) + '%';
     $('hpDocsNote').textContent = ds.sentAt ? 'список отправлен в HR'
       : (ds.ready ? 'собрано — можно отправлять' : 'отметь, что уже готово');
-    $('hpDay').textContent = dayDone + ' из ' + dayItems.length;
-    $('hpDayFill').style.width = (dayItems.length ? dayDone / dayItems.length * 100 : 0) + '%';
-    $('hpDayNote').textContent = dayDone ? 'продолжить план' : 'план по шагам';
 
     var total = ds.total + dayItems.length, done = ds.done + dayDone;
     var pct = total ? Math.round(done / total * 100) : 0;
@@ -3224,24 +3432,6 @@
   window.addEventListener('resize', updateRail);
   updateRail();
 
-  var links = Array.prototype.slice.call(document.querySelectorAll('.nav a'));
-  var sections = links.map(function(a){ return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
-  if('IntersectionObserver' in window && sections.length){
-    var spy = new IntersectionObserver(function(entries){
-      entries.forEach(function(en){
-        if(!en.isIntersecting) return;
-        links.forEach(function(a){ a.setAttribute('aria-current', a.getAttribute('href') === '#' + en.target.id ? 'true' : 'false'); });
-      });
-    }, {rootMargin:'-45% 0px -50% 0px'});
-    sections.forEach(function(sec){ spy.observe(sec); });
-  }
-  var topbar = document.querySelector('.topbar');
-  if('IntersectionObserver' in window && topbar){
-    /* ponytail: порог 48px — высота шапки; поменяется её вёрстка, поправить здесь */
-    new IntersectionObserver(function(en){
-      $('viewEmployee').classList.toggle('scrolled', !en[0].isIntersecting);
-    }, {rootMargin:'-48px 0px 0px 0px'}).observe($('hero'));
-  }
   if(!reduce && 'IntersectionObserver' in window){
     var counted = new IntersectionObserver(function(entries, obs){
       entries.forEach(function(en){

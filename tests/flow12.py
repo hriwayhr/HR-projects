@@ -39,37 +39,39 @@ with sync_playwright() as p:
     assert pos['afterReady'] >= 0, 'имя стоит левее счётчика готовности: %s' % pos
     print('шапка: имя и «Выйти» в правом верхнем углу')
 
-    # первый экран — навигация в герое, в шапке скрыта
-    pg.evaluate('window.scrollTo(0,0)'); pg.wait_for_timeout(400)
-    assert pg.is_visible('.hero .nav'), 'на первом экране нет навигации в герое'
-    assert not pg.is_visible('.topbar .nav'), 'на первом экране навигация дублируется в шапке'
-    print('первый экран: навигация в герое')
+    # панель этапов вместо навигации по разделам
+    assert pg.query_selector('.topbar .nav') is None, 'в шапке осталась старая навигация'
+    assert pg.query_selector('.hero .nav') is None, 'в герое осталась старая навигация'
+    assert pg.inner_text('#tbStage') == 'До выхода', 'в шапке не тот этап: ' + pg.inner_text('#tbStage')
+    names = pg.eval_on_selector_all('.st .st-t', 'els => els.map(e => e.textContent)')
+    assert names == ['До выхода', '1-й день', 'Первая неделя', 'Первый месяц', 'Окончание испытательного срока'], \
+        'этапы не те: %s' % names
+    print('панель этапов:', ' · '.join(names))
 
-    # пункты в герое одинаковые и достаточно крупные, чтобы попасть пальцем
-    h = pg.eval_on_selector_all('.hero .nav a', 'els => els.map(e => e.getBoundingClientRect().height)')
+    # кнопки этапов достаточно крупные, чтобы попасть пальцем
+    h = pg.eval_on_selector_all('.st', 'els => els.map(e => e.getBoundingClientRect().height)')
     assert min(h) >= 44, 'мишень для пальца мала: %s px' % min(h)
-    bg = pg.eval_on_selector_all('.hero .nav a',
-        'els => [...new Set(els.map(e => getComputedStyle(e).backgroundColor))]')
-    assert len(bg) == 1, 'пункты в герое выглядят по-разному: %s' % bg
-    print('пункты в герое: высота %.0f px, оформление одинаковое' % min(h))
+    print('кнопка этапа: высота %.0f px' % min(h))
 
-    # ушли с первого экрана — навигация наверху
-    pg.evaluate("window.scrollTo(0, window.scrollY + document.getElementById('hero').getBoundingClientRect().bottom)")
-    pg.wait_for_timeout(500)
-    assert pg.is_visible('.topbar .nav'), 'после первого экрана навигация не появилась в шапке'
-    assert not pg.is_visible('.hero .nav'), 'навигация в герое осталась видимой'
-    print('после первого экрана: навигация в шапке')
+    # шаги идут карточками в одной колонке и пронумерованы по порядку
+    nums = pg.eval_on_selector_all('#stagePre section[data-step] .s-num', 'els => els.map(e => e.textContent)')
+    assert nums == ['01', '02', '03', '04', '05', '06'], 'нумерация шагов поехала: %s' % nums
+    print('шаги:', ' · '.join(nums))
 
-    # шапка держит высоту — переключение не двигает вёрстку
-    pg.evaluate('window.scrollTo(0,0)'); pg.wait_for_timeout(500)
-    assert pg.is_visible('.hero .nav'), 'возврат наверх не вернул навигацию в герой'
-    assert not pg.is_visible('.topbar .nav'), 'возврат наверх не убрал навигацию из шапки'
-    print('возврат наверх: навигация снова в герое')
+    # на телефоне панель этапов становится лентой и страница не едет вбок
+    pg.set_viewport_size({'width':430, 'height':900}); pg.wait_for_timeout(400)
+    over = pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
+    assert over <= 0, 'на телефоне страница едет вбок на %s px' % over
+    assert pg.eval_on_selector('.st-list', 'e => getComputedStyle(e).flexDirection') == 'row', \
+        'на телефоне этапы не стали лентой'
+    print('телефон: этапы лентой, страница не едет вбок')
+    pg.set_viewport_size({'width':1280, 'height':1000}); pg.wait_for_timeout(400)
 
-    # ссылки работают из героя
-    pg.click('.hero .nav a[href="#team"]'); pg.wait_for_timeout(600)
-    assert pg.evaluate('window.scrollY') > 0, 'ссылка из героя не прокрутила страницу'
-    print('ссылка из героя прокручивает к разделу')
+    ids = pg.eval_on_selector_all('#stagePre > section, #stagePre > header', 'els => els.map(e => e.id)')
+    assert ids == ['hero', 'form', 'about', 'culture', 'team', 'docs', 'dress', 'faq', 'contacts'], \
+        'порядок блоков не тот: %s' % ids
+    print('порядок блоков:', ' → '.join(ids))
+
     b.close()
 assert not errs, errs
 print('ОШИБКИ:', errs or 'нет')
