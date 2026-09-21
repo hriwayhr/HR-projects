@@ -210,6 +210,7 @@
   .st-s{display:block; margin-top:3px; font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3);}
   .st[aria-current="true"] .st-s{color:var(--on-tint-blue);}
   .st-note{margin-top:10px; padding:0 2px; font-size:12px; color:var(--ink-3); line-height:1.45;}
+  .st-group + .st-group{margin-top:20px;}
   @media (max-width:980px){
     /* minmax(0,1fr) и min-width:0 — иначе колонка растягивается по ширине
        горизонтального списка этапов и страница едет вбок */
@@ -219,6 +220,7 @@
     .st-list::-webkit-scrollbar{display:none;}
     .st{min-width:158px;}
     .st-note{display:none;}
+    .st-group + .st-group{margin-top:12px;}
   }
 
   /* шаги: карточки в одной колонке, а не экраны во всю ширину */
@@ -235,7 +237,6 @@
   .stage .eyebrow{font-size:10.5px;}
   .stage .culture,.stage .values,.stage .team-grid,.stage .figures,.stage .faq,.stage .contacts{margin-top:20px;}
   .stage .startdate,.stage .checklist{margin-top:20px;}
-  .st-aside{border-top:1px solid var(--line-strong);}
   .stage .hero-prog{margin-top:24px;}
   .stage .doc-group{margin-top:20px;}
   .stage > section.band{background:var(--band); border-color:var(--band-line);}
@@ -962,7 +963,8 @@
 </div>
 
 <div class="stage-wrap">
-  <aside class="stages" aria-label="Этапы">
+  <aside class="stages">
+    <div class="st-group" aria-label="Этапы" role="group">
     <p class="st-cap">Этапы</p>
     <div class="st-list">
       <button class="st" type="button" data-stage="pre" aria-current="true">
@@ -985,12 +987,18 @@
         <span class="st-t">Окончание испытательного срока</span>
         <span class="st-s" data-st-note="prob">—</span>
       </button>
-      <button class="st st-aside" type="button" data-stage="help" aria-current="false">
-        <span class="st-t">Контакты</span>
-        <span class="st-s" data-st-note="help">—</span>
-      </button>
     </div>
     <p class="st-note">Этапы открываются по мере наступления срока.</p>
+    </div>
+
+    <div class="st-group" aria-label="Полезная информация" role="group">
+    <p class="st-cap">Полезная информация</p>
+    <div class="st-list">
+      <button class="st" type="button" data-stage="help" aria-current="false">
+        <span class="st-t">Контакты</span>
+      </button>
+    </div>
+    </div>
   </aside>
 
   <div class="stage-body">
@@ -2989,6 +2997,8 @@
     /* копию наблюдатель появления уже не увидит — снимаем его классы, иначе
        непроявленный блок остался бы прозрачным навсегда */
     copy.querySelectorAll('.reveal').forEach(function(el){ el.classList.remove('reveal', 'in'); });
+    var survey = copy.querySelector('.survey');     /* опрос о странице — только в шаге 06 */
+    if(survey) survey.parentNode.removeChild(survey);
     dst.appendChild(copy);
   }
   /* Номера шагов считаем сами: скрытый HR шаг не должен оставлять дырку */
@@ -3264,8 +3274,10 @@
       var btn = document.querySelector('.st[data-stage="' + st.key + '"]');
       if(btn){
         btn.setAttribute('aria-disabled', open ? 'false' : 'true');
-        btn.querySelector('.st-s').textContent = st.always ? 'всегда открыт'
-          : open ? (st.key === 'pre' ? 'открыт' : 'открыт ' + fmtLong.format(d))
+        /* подпись со сроком есть только у этапов пути: в «полезной информации» нечего датировать */
+        var note = btn.querySelector('.st-s');
+        if(note) note.textContent = open
+          ? (st.key === 'pre' ? 'открыт' : 'открыт ' + fmtLong.format(d))
           : (d ? 'с ' + fmtLong.format(d) : 'после выхода');
       }
       if(open && !st.aside) last = st.key;

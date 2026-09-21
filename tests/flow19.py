@@ -31,7 +31,8 @@ def open_page(b, seed):
     return pg
 
 def notes(pg):
-    return pg.eval_on_selector_all('.st', 'els => els.map(e => e.querySelector(".st-s").textContent)')
+    # сроки есть только у этапов пути — первый блок панели
+    return pg.eval_on_selector_all('.st-group:first-child .st .st-s', 'els => els.map(e => e.textContent)')
 
 with sync_playwright() as p:
     b=p.chromium.launch(executable_path='/opt/pw-browsers/chromium')
@@ -42,7 +43,7 @@ with sync_playwright() as p:
     assert not pg.is_visible('#stageDay'), 'закрытый этап показан'
     dis = pg.eval_on_selector_all('.st', 'els => els.map(e => e.getAttribute("aria-disabled"))')
     assert dis == ['false','true','true','true','true','false'], 'не те этапы закрыты: %s' % dis
-    assert notes(pg) == ['открыт', 'с 5 октября', 'с 12 октября', 'с 4 ноября', 'с 5 декабря', 'всегда открыт'], \
+    assert notes(pg) == ['открыт', 'с 5 октября', 'с 12 октября', 'с 4 ноября', 'с 5 декабря'], \
         'сроки этапов посчитаны не так: %s' % notes(pg)
     print('новичок:', ' | '.join(notes(pg)))
 
@@ -122,8 +123,14 @@ with sync_playwright() as p:
     # ——— контакты: открыты всегда, копия шага 06, не становятся этапом по умолчанию
     assert pg.eval_on_selector('.st[data-stage="help"]', 'e => e.getAttribute("aria-disabled")') == 'false', \
         'вкладка контактов закрыта'
-    assert pg.eval_on_selector('.st[data-stage="help"] .st-s', 'e => e.textContent') == 'всегда открыт', \
-        'у контактов не та подпись'
+    groups = pg.evaluate("""() => [...document.querySelectorAll('.st-group')].map(g => ({
+      cap: g.querySelector('.st-cap').textContent,
+      tabs: [...g.querySelectorAll('.st-t')].map(t => t.textContent)
+    }))""")
+    assert groups[0]['cap'] == 'Этапы' and 'Контакты' not in groups[0]['tabs'], \
+        'в блоке этапов не только этапы: %s' % groups[0]
+    assert groups[1]['cap'] == 'Полезная информация' and groups[1]['tabs'] == ['Контакты'], \
+        'блок «Полезная информация» собран не так: %s' % groups[1]
     assert pg.inner_text('#tbStage') != 'Контакты', 'контакты стали этапом по умолчанию'
     pg.click('.st[data-stage="help"]'); pg.wait_for_timeout(700)
     assert pg.inner_text('#tbStage') == 'Контакты', 'вкладка контактов не открылась'
@@ -131,6 +138,8 @@ with sync_playwright() as p:
     copy = pg.eval_on_selector_all('#helpContacts .contact .v', 'e => e.map(x => x.textContent)')
     assert copy == src and copy, 'копия контактов расходится с шагом 06: %s / %s' % (copy, src)
     assert pg.eval_on_selector_all('#helpContacts .s-num', 'e => e.length') == 0, 'в справке остался номер шага'
+    assert pg.eval_on_selector_all('#helpContacts .survey', 'e => e.length') == 0, 'опрос остался во вкладке контактов'
+    assert pg.eval_on_selector_all('#contacts .survey', 'e => e.length') == 1, 'опрос пропал из шага 06'
     pg.wait_for_timeout(900)
     op = pg.eval_on_selector('#helpContacts h2', 'e => getComputedStyle(e).opacity')
     assert float(op) > .95, 'копия контактов осталась прозрачной: opacity=%s' % op
