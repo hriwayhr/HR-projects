@@ -234,7 +234,8 @@
   .stage .lead{margin-top:12px; font-size:15.5px;}
   .stage .eyebrow{font-size:10.5px;}
   .stage .culture,.stage .values,.stage .team-grid,.stage .figures,.stage .faq,.stage .contacts{margin-top:20px;}
-  .stage .startdate,.stage .checklist,.stage .plain{margin-top:20px;}
+  .stage .startdate,.stage .checklist{margin-top:20px;}
+  .st-aside{border-top:1px solid var(--line-strong);}
   .stage .hero-prog{margin-top:24px;}
   .stage .doc-group{margin-top:20px;}
   .stage > section.band{background:var(--band); border-color:var(--band-line);}
@@ -378,9 +379,6 @@
   .h-num{font-family:var(--mono); font-size:12px; letter-spacing:.1em; color:var(--blue-deep); font-weight:600;}
   .h-title{font-family:var(--display); font-weight:600; font-size:21.5px; letter-spacing:-.012em;}
   .h-date{margin-left:auto; font-family:var(--mono); font-size:12px; color:var(--ink-3); letter-spacing:.03em;}
-  .plain{list-style:none; margin:0; padding:0;}
-  .plain li{display:flex; gap:13px; padding:14px 0; border-bottom:1px solid var(--line); font-size:15.5px; line-height:1.5;}
-  .plain li::before{content:""; width:7px; height:7px; border-radius:50%; background:var(--blue); flex:none; margin-top:9px;}
 
   /* ——— культура: инверсная полоса ——— */
   .band{background:var(--band); color:var(--band-ink);}
@@ -987,6 +985,10 @@
         <span class="st-t">Окончание испытательного срока</span>
         <span class="st-s" data-st-note="prob">—</span>
       </button>
+      <button class="st st-aside" type="button" data-stage="help" aria-current="false">
+        <span class="st-t">Контакты</span>
+        <span class="st-s" data-st-note="help">—</span>
+      </button>
     </div>
     <p class="st-note">Этапы открываются по мере наступления срока.</p>
   </aside>
@@ -1290,11 +1292,12 @@
     <h2>Погружение в продукт и процессы</h2>
     <p class="lead">Неделя на то, чтобы понять, как устроены продукт и твоё направление, и договориться о целях.</p>
     <p class="stage-when">Этап с <span class="h-date" data-offset="7">—</span></p>
-    <ul class="plain" id="planWeek">
-      <li>Пройти вводное обучение о компании и продукте</li>
-      <li>Изучить регламенты и процессы своего направления</li>
-      <li>Поставить с руководителем цели на 30, 60 и 90 дней</li>
-    </ul>
+    <div class="checklist" id="planWeek">
+      <button class="check" type="button" data-key="week0" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Пройти вводное обучение о компании и продукте</span></button>
+      <button class="check" type="button" data-key="week1" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Изучить регламенты и процессы своего направления</span></button>
+      <button class="check" type="button" data-key="week2" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Поставить с руководителем цели на 30, 60 и 90 дней</span></button>
+    </div>
+    <p class="meter"><span id="weekCount">0 из 3</span><span class="meter-bar"><b id="weekFill"></b></span></p>
   </div>
 </section>
     </div>
@@ -1306,13 +1309,18 @@
     <h2>Первые результаты и сверка целей</h2>
     <p class="lead">К концу месяца видно первые результаты — их сверяем с целями, которые поставили в первую неделю.</p>
     <p class="stage-when">Этап с <span class="h-date" data-offset="30">—</span></p>
-    <ul class="plain" id="planMonths">
-      <li>Обязательный вводный курс о компании и продукте — его проходят все новые сотрудники</li>
-      <li>Регулярные встречи 1:1 с руководителем</li>
-      <li>Сверка целей на отметке 30 дней</li>
-    </ul>
+    <div class="checklist" id="planMonths">
+      <button class="check" type="button" data-key="mon0" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Пройти обязательный вводный курс о компании и продукте</span></button>
+      <button class="check" type="button" data-key="mon1" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Встречи 1:1 с руководителем</span></button>
+      <button class="check" type="button" data-key="mon2" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Сверка целей на отметке 30 дней</span></button>
+    </div>
+    <p class="meter"><span id="monthCount">0 из 3</span><span class="meter-bar"><b id="monthFill"></b></span></p>
   </div>
 </section>
+    </div>
+
+    <div class="stage" id="stageHelp" hidden>
+<section id="helpContacts"></section>
     </div>
 
     <div class="stage" id="stageProb" hidden>
@@ -1322,11 +1330,12 @@
     <h2>60 и 90 дней: итоги испытательного срока</h2>
     <p class="lead">Что получилось, что дальше и какие цели на следующий период. Обучение на этом не заканчивается.</p>
     <p class="stage-when">Итоги — по <span class="h-date" data-offset="prob">—</span></p>
-    <ul class="plain" id="planProb">
-      <li>Сверка целей на отметках 60 и 90 дней</li>
-      <li>Учебный центр i’way: программы профессионального и личностного роста на постоянной основе</li>
-      <li>После полугода в компании — профильный тренинг или семинар за счёт i’way</li>
-    </ul>
+    <div class="checklist" id="planProb">
+      <button class="check" type="button" data-key="prob0" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Сверка целей на отметках 60 и 90 дней</span></button>
+      <button class="check" type="button" data-key="prob1" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Выбрать программу в учебном центре i’way</span></button>
+      <button class="check" type="button" data-key="prob2" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Запланировать профильный тренинг после полугода в компании</span></button>
+    </div>
+    <p class="meter"><span id="probCount">0 из 3</span><span class="meter-bar"><b id="probFill"></b></span></p>
   </div>
 </section>
     </div>
@@ -2811,7 +2820,6 @@
     check: function(box){ return nodes(box, '.check[data-key]').map(function(el){
       return {key: el.getAttribute('data-key'), t: txt(el.querySelector('.c-t')),
               mil: el.getAttribute('data-doc') === 'mil'}; }); },
-    plain: function(box){ return nodes(box, 'li').map(function(li){ return {t: txt(li)}; }); },
     values: function(box){ return nodes(box, '.val').map(function(v){
       return {t: txt(v.querySelector('.v-t')), d: txt(v.querySelector('.v-d'))}; }); },
     cards: function(box){ return nodes(box, '.cult').map(function(c){
@@ -2862,11 +2870,6 @@
         b.appendChild(mark); b.appendChild(t); box.appendChild(b);
       });
     },
-    plain: function(box, items){
-      items.forEach(function(it){
-        var li = document.createElement('li'); li.textContent = it.t; box.appendChild(li);
-      });
-    },
     values: function(box, items){
       items.forEach(function(it, i){
         var d = document.createElement('div'); d.className = 'val';
@@ -2906,11 +2909,11 @@
             add:'+ Добавить документ', del:'Удалить документ'}],
     plan: [{cfg:'items', attr:'day', label:'План первого дня', sel:'#dayList', kind:'check',
             fields:[['t','Пункт','input']], add:'+ Добавить пункт', del:'Удалить пункт'}],
-    week: [{cfg:'items', attr:'week', label:'Пункты первой недели', sel:'#planWeek', kind:'plain',
+    week: [{cfg:'items', attr:'week', label:'Пункты первой недели', sel:'#planWeek', kind:'check',
             fields:[['t','Пункт','input']], add:'+ Добавить пункт', del:'Удалить пункт'}],
-    month: [{cfg:'items', attr:'month', label:'Пункты первого месяца', sel:'#planMonths', kind:'plain',
+    month: [{cfg:'items', attr:'month', label:'Пункты первого месяца', sel:'#planMonths', kind:'check',
             fields:[['t','Пункт','input']], add:'+ Добавить пункт', del:'Удалить пункт'}],
-    prob: [{cfg:'items', attr:'prob', label:'Пункты 60 и 90 дней', sel:'#planProb', kind:'plain',
+    prob: [{cfg:'items', attr:'prob', label:'Пункты 60 и 90 дней', sel:'#planProb', kind:'check',
             fields:[['t','Пункт','input']], add:'+ Добавить пункт', del:'Удалить пункт'}],
     dress: [{cfg:'items', attr:'dress', label:'Карточки дресс-кода', sel:'#dressCards', kind:'cards',
             fields:[['k','Заголовок','input'], ['d','Описание','textarea']],
@@ -2969,6 +2972,24 @@
       writeLists(sec.key, cfg);
     });
     renumberSteps();
+    mirrorContacts();
+  }
+  /* Контакты доступны на любом этапе, а править их HR должен в одном месте:
+     карточку этапа собираем копией шага 06. cloneNode, а не innerHTML —
+     в копию не может попасть ничего, кроме уже собранных узлов. */
+  function mirrorContacts(){
+    var src = $('contacts'), dst = $('helpContacts');
+    if(!src || !dst) return;
+    var wrap = src.querySelector('.wrap');
+    dst.innerHTML = '';
+    if(!wrap) return;
+    var copy = wrap.cloneNode(true);
+    var num = copy.querySelector('.s-num');
+    if(num) num.parentNode.removeChild(num);       /* номер шага в справке не нужен */
+    /* копию наблюдатель появления уже не увидит — снимаем его классы, иначе
+       непроявленный блок остался бы прозрачным навсегда */
+    copy.querySelectorAll('.reveal').forEach(function(el){ el.classList.remove('reveal', 'in'); });
+    dst.appendChild(copy);
   }
   /* Номера шагов считаем сами: скрытый HR шаг не должен оставлять дырку */
   function renumberSteps(){
@@ -3209,7 +3230,10 @@
     {key:'day',   pane:'stageDay',   title:'1-й день', days:0},
     {key:'week',  pane:'stageWeek',  title:'Первая неделя', days:7},
     {key:'month', pane:'stageMonth', title:'Первый месяц', days:30},
-    {key:'prob',  pane:'stageProb',  title:'Окончание испытательного срока', probation:true}
+    {key:'prob',  pane:'stageProb',  title:'Окончание испытательного срока', probation:true},
+    /* контакты нужны на любом этапе, поэтому открыты всегда; но этапом по
+       умолчанию не становятся — это справка, а не шаг пути */
+    {key:'help',  pane:'stageHelp',  title:'Контакты', always:true, aside:true}
   ];
   function stageByKey(key){
     for(var i = 0; i < STAGES.length; i++) if(STAGES[i].key === key) return STAGES[i];
@@ -3221,14 +3245,14 @@
     return (n >= 1 && n <= 12) ? n : 3;
   }
   function stageDate(rec, st){
-    if(!rec || !rec.startDate || st.key === 'pre') return null;
+    if(!rec || !rec.startDate || st.key === 'pre' || st.always) return null;
     var d = new Date(rec.startDate + 'T00:00:00');
     if(st.probation) d.setMonth(d.getMonth() + probMonths(rec));
     else d.setDate(d.getDate() + st.days);
     return d;
   }
   function stageOpen(rec, st){
-    if(st.key === 'pre') return true;
+    if(st.key === 'pre' || st.always) return true;
     var d = stageDate(rec, st); if(!d) return false;
     var today = new Date(); today.setHours(0, 0, 0, 0);
     return d.getTime() <= today.getTime();
@@ -3240,11 +3264,11 @@
       var btn = document.querySelector('.st[data-stage="' + st.key + '"]');
       if(btn){
         btn.setAttribute('aria-disabled', open ? 'false' : 'true');
-        btn.querySelector('.st-s').textContent = open
-          ? (st.key === 'pre' ? 'открыт' : 'открыт ' + fmtLong.format(d))
+        btn.querySelector('.st-s').textContent = st.always ? 'всегда открыт'
+          : open ? (st.key === 'pre' ? 'открыт' : 'открыт ' + fmtLong.format(d))
           : (d ? 'с ' + fmtLong.format(d) : 'после выхода');
       }
-      if(open) last = st.key;
+      if(open && !st.aside) last = st.key;
     });
     /* открываем последний доступный: у новичка это «до выхода», у вышедшего — его этап */
     switchStage(state.stage && stageOpen(rec, stageByKey(state.stage)) ? state.stage : last);
@@ -3371,8 +3395,7 @@
     applyGender(state.rec);
     /* списки может пересобрать HR, поэтому обработчик вешаем на сам узел, а не
        один раз на всю страницу: иначе новые пункты остались бы немыми */
-    Array.prototype.slice.call(document.querySelectorAll(
-      '#docList [data-key], #docExtra [data-key], #dayList .check[data-key]')).forEach(function(el){
+    Array.prototype.slice.call(document.querySelectorAll('.checklist [data-key]')).forEach(function(el){
       var key = el.getAttribute('data-key');
       el.setAttribute('aria-pressed', progress[key] ? 'true' : 'false');
       if(!el.__bound){
@@ -3434,6 +3457,17 @@
     $('hpDocsFill').style.width = (ds.total ? ds.done / ds.total * 100 : 0) + '%';
     $('hpDocsNote').textContent = ds.sentAt ? 'список отправлен в HR'
       : (ds.ready ? 'собрано — можно отправлять' : 'отметь, что уже готово');
+
+    /* у каждого этапа свой счётчик; в готовность в шапке они не входят —
+       иначе процент у вышедших сотрудников поехал бы задним числом */
+    [['planWeek', 'weekCount', 'weekFill'], ['planMonths', 'monthCount', 'monthFill'],
+     ['planProb', 'probCount', 'probFill']].forEach(function(x){
+      var box = $(x[0]); if(!box) return;
+      var n = box.querySelectorAll('.check[data-key]').length;
+      var k = box.querySelectorAll('.check[aria-pressed="true"]').length;
+      $(x[1]).textContent = k + ' из ' + n;
+      $(x[2]).style.width = (n ? k / n * 100 : 0) + '%';
+    });
 
     var total = ds.total + dayItems.length, done = ds.done + dayDone;
     var pct = total ? Math.round(done / total * 100) : 0;

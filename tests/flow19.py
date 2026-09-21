@@ -41,8 +41,8 @@ with sync_playwright() as p:
     assert pg.inner_text('#tbStage') == 'До выхода', 'открылся не тот этап: ' + pg.inner_text('#tbStage')
     assert not pg.is_visible('#stageDay'), 'закрытый этап показан'
     dis = pg.eval_on_selector_all('.st', 'els => els.map(e => e.getAttribute("aria-disabled"))')
-    assert dis == ['false','true','true','true','true'], 'не те этапы закрыты: %s' % dis
-    assert notes(pg) == ['открыт', 'с 5 октября', 'с 12 октября', 'с 4 ноября', 'с 5 декабря'], \
+    assert dis == ['false','true','true','true','true','false'], 'не те этапы закрыты: %s' % dis
+    assert notes(pg) == ['открыт', 'с 5 октября', 'с 12 октября', 'с 4 ноября', 'с 5 декабря', 'всегда открыт'], \
         'сроки этапов посчитаны не так: %s' % notes(pg)
     print('новичок:', ' | '.join(notes(pg)))
 
@@ -84,7 +84,7 @@ with sync_playwright() as p:
     parts = pg.evaluate("""() => {
       const at = id => {
         const box = document.querySelector(id);
-        return box ? {n: box.querySelectorAll('li').length, stage: box.closest('.stage').id} : null;
+        return box ? {n: box.querySelectorAll('.check[data-key]').length, stage: box.closest('.stage').id} : null;
       };
       return {week: at('#planWeek'), month: at('#planMonths'), prob: at('#planProb')};
     }""")
@@ -95,6 +95,46 @@ with sync_playwright() as p:
         assert got['n'], 'список «%s» пуст' % key
     print('списки по этапам: неделя %s · месяц %s · 60–90 %s'
           % (parts['week']['n'], parts['month']['n'], parts['prob']['n']))
+    pg.close()
+
+    # ——— отметки на этапах: свой счётчик, та же запись в прогресс
+    pg = open_page(b, emp('2026-06-01', '3 месяца'))
+    for stage, box, count, key in [('week', '#planWeek', '#weekCount', 'week0'),
+                                   ('month', '#planMonths', '#monthCount', 'mon0'),
+                                   ('prob', '#planProb', '#probCount', 'prob0')]:
+        pg.click('.st[data-stage="%s"]' % stage); pg.wait_for_timeout(500)
+        assert pg.inner_text(count) == '0 из 3', 'счётчик этапа %s не с нуля: %s' % (stage, pg.inner_text(count))
+        pg.click('%s .check[data-key="%s"]' % (box, key)); pg.wait_for_timeout(700)
+        assert pg.inner_text(count) == '1 из 3', 'счётчик этапа %s не изменился: %s' % (stage, pg.inner_text(count))
+        assert pg.evaluate("window.__store['employees/IW-S'].progress['%s']" % key) is True, \
+            'отметка %s не сохранилась' % key
+        w = pg.evaluate("getComputedStyle(document.querySelector('%s')).width" % count.replace('Count', 'Fill'))
+        assert w != '0px', 'полоса этапа %s осталась пустой' % stage
+    print('чек-листы этапов: отметки считаются и сохраняются')
+
+    # готовность в шапке считает по-прежнему только документы и первый день
+    pct = pg.inner_text('#readyPct')
+    pg.click('.st[data-stage="week"]'); pg.wait_for_timeout(400)
+    pg.click('#planWeek .check[data-key="week1"]'); pg.wait_for_timeout(700)
+    assert pg.inner_text('#readyPct') == pct, 'отметка этапа поехала в готовность: %s → %s' % (pct, pg.inner_text('#readyPct'))
+    print('готовность в шапке не изменилась:', pct)
+
+    # ——— контакты: открыты всегда, копия шага 06, не становятся этапом по умолчанию
+    assert pg.eval_on_selector('.st[data-stage="help"]', 'e => e.getAttribute("aria-disabled")') == 'false', \
+        'вкладка контактов закрыта'
+    assert pg.eval_on_selector('.st[data-stage="help"] .st-s', 'e => e.textContent') == 'всегда открыт', \
+        'у контактов не та подпись'
+    assert pg.inner_text('#tbStage') != 'Контакты', 'контакты стали этапом по умолчанию'
+    pg.click('.st[data-stage="help"]'); pg.wait_for_timeout(700)
+    assert pg.inner_text('#tbStage') == 'Контакты', 'вкладка контактов не открылась'
+    src = pg.eval_on_selector_all('#contacts .contact .v', 'e => e.map(x => x.textContent)')
+    copy = pg.eval_on_selector_all('#helpContacts .contact .v', 'e => e.map(x => x.textContent)')
+    assert copy == src and copy, 'копия контактов расходится с шагом 06: %s / %s' % (copy, src)
+    assert pg.eval_on_selector_all('#helpContacts .s-num', 'e => e.length') == 0, 'в справке остался номер шага'
+    pg.wait_for_timeout(900)
+    op = pg.eval_on_selector('#helpContacts h2', 'e => getComputedStyle(e).opacity')
+    assert float(op) > .95, 'копия контактов осталась прозрачной: opacity=%s' % op
+    print('контакты всегда открыты, строк в копии:', len(copy))
     pg.close()
 
     # ——— срок не указан — считаем стандартные три месяца

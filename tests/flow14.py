@@ -209,9 +209,9 @@ with sync_playwright() as p:
     assert 'Встреча с HR и оформление' in pg.inner_text('#dayList .check:first-child .c-t'), 'план первого дня не обновился'
     # эти списки лежат в этапах, закрытых до срока: читаем текст, а не отрисовку
     lists = pg.evaluate("""() => ({
-      week: document.querySelector('#planWeek li').textContent,
-      month: document.querySelector('#planMonths li').textContent,
-      prob: document.querySelector('#planProb li').textContent
+      week: document.querySelector('#planWeek .check .c-t').textContent,
+      month: document.querySelector('#planMonths .check .c-t').textContent,
+      prob: document.querySelector('#planProb .check .c-t').textContent
     })""")
     assert 'вводный курс' in lists['week'], 'список первой недели не обновился: %s' % lists
     assert 'на 30 днях' in lists['month'], 'список первого месяца не обновился: %s' % lists

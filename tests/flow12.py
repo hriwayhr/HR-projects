@@ -44,8 +44,8 @@ with sync_playwright() as p:
     assert pg.query_selector('.hero .nav') is None, 'в герое осталась старая навигация'
     assert pg.inner_text('#tbStage') == 'До выхода', 'в шапке не тот этап: ' + pg.inner_text('#tbStage')
     names = pg.eval_on_selector_all('.st .st-t', 'els => els.map(e => e.textContent)')
-    assert names == ['До выхода', '1-й день', 'Первая неделя', 'Первый месяц', 'Окончание испытательного срока'], \
-        'этапы не те: %s' % names
+    assert names == ['До выхода', '1-й день', 'Первая неделя', 'Первый месяц',
+                     'Окончание испытательного срока', 'Контакты'], 'этапы не те: %s' % names
     print('панель этапов:', ' · '.join(names))
 
     # кнопки этапов достаточно крупные, чтобы попасть пальцем
