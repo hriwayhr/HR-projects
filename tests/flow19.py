@@ -32,7 +32,7 @@ def open_page(b, seed):
 
 def notes(pg):
     # сроки есть только у этапов пути — первый блок панели
-    return pg.eval_on_selector_all('.st-group:first-child .st .st-s', 'els => els.map(e => e.textContent)')
+    return pg.eval_on_selector_all('#viewEmployee .st-group:first-child .st .st-s', 'els => els.map(e => e.textContent)')
 
 with sync_playwright() as p:
     b=p.chromium.launch(executable_path='/opt/pw-browsers/chromium')
@@ -41,7 +41,7 @@ with sync_playwright() as p:
     pg = open_page(b, emp('2026-10-05', '2 месяца'))     # сегодня 19.09.2026
     assert pg.inner_text('#tbStage') == 'До выхода', 'открылся не тот этап: ' + pg.inner_text('#tbStage')
     assert not pg.is_visible('#stageDay'), 'закрытый этап показан'
-    dis = pg.eval_on_selector_all('.st', 'els => els.map(e => e.getAttribute("aria-disabled"))')
+    dis = pg.eval_on_selector_all('#viewEmployee .st', 'els => els.map(e => e.getAttribute("aria-disabled"))')
     assert dis == ['false','true','true','true','true','false'], 'не те этапы закрыты: %s' % dis
     assert notes(pg) == ['открыт', 'с 5 октября', 'с 12 октября', 'с 4 ноября', 'с 5 декабря'], \
         'сроки этапов посчитаны не так: %s' % notes(pg)
@@ -123,7 +123,7 @@ with sync_playwright() as p:
     # ——— контакты: открыты всегда, копия шага 06, не становятся этапом по умолчанию
     assert pg.eval_on_selector('.st[data-stage="help"]', 'e => e.getAttribute("aria-disabled")') == 'false', \
         'вкладка контактов закрыта'
-    groups = pg.evaluate("""() => [...document.querySelectorAll('.st-group')].map(g => ({
+    groups = pg.evaluate("""() => [...document.querySelectorAll('#viewEmployee .st-group')].map(g => ({
       cap: g.querySelector('.st-cap').textContent,
       tabs: [...g.querySelectorAll('.st-t')].map(t => t.textContent)
     }))""")
@@ -134,11 +134,11 @@ with sync_playwright() as p:
 
     # заголовок блока не должен читаться вровень со сноской под списком
     look = pg.evaluate("""() => {
-      const cap = document.querySelector('.st-group + .st-group .st-cap');
-      const grp = document.querySelector('.st-group + .st-group');
+      const cap = document.querySelector('#viewEmployee .st-group + .st-group .st-cap');
+      const grp = document.querySelector('#viewEmployee .st-group + .st-group');
       return {
         cap: getComputedStyle(cap).color,
-        note: getComputedStyle(document.querySelector('.st-note')).color,
+        note: getComputedStyle(document.querySelector('#viewEmployee .st-note')).color,
         dash: getComputedStyle(cap, '::before').width,
         border: getComputedStyle(grp).borderTopWidth
       };

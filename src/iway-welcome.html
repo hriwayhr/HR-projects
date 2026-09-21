@@ -291,6 +291,16 @@
   .hp-s{margin-top:auto; padding-top:10px; font-size:12.5px; color:var(--ink-2);}
   a.hp .hp-s::after{content:' →'; color:var(--blue-deep);}
 
+  /* вкладка «Страница сотрудника»: та же раскладка, что в кабинете сотрудника */
+  .pg-wrap{margin-top:22px; display:grid; grid-template-columns:216px minmax(0,1fr); gap:22px; align-items:start;}
+  .pg-stages{position:static;}
+  @media (max-width:860px){
+    .pg-wrap{grid-template-columns:minmax(0,1fr); gap:14px;}
+    .pg-stages .st-list{flex-direction:row; overflow-x:auto; scrollbar-width:none;}
+    .pg-stages .st{min-width:150px;}
+    .pg-stages .st-note{display:none;}
+  }
+
   /* ——— мягкое появление блоков при прокрутке ———
      Класс js-reveal ставит сам скрипт: без него и при prefers-reduced-motion
      всё видно сразу, поэтому страница не может «залипнуть» невидимой. */
@@ -843,8 +853,17 @@
     <div id="panePage" hidden>
       <div class="panel">
         <h2>Блоки страницы сотрудника</h2>
-        <p class="sub">Заголовок и подзаголовок можно переписать, лишние разделы — скрыть. Настройки общие для всех сотрудников. Если очистить поле, вернётся исходный текст из вёрстки.</p>
-        <div id="pageRows"></div>
+        <p class="sub">Блоки разложены по этапам кабинета — выбери этап слева. Заголовок и подзаголовок можно переписать, лишние блоки — скрыть. Настройки общие для всех сотрудников. Если очистить поле, вернётся исходный текст из вёрстки.</p>
+        <div class="pg-wrap">
+          <aside class="stages pg-stages">
+            <div class="st-group">
+              <p class="st-cap">Этапы</p>
+              <div class="st-list" id="pageStages"></div>
+              <p class="st-note">Сохранение общее: кнопка ниже сохраняет правки всех этапов сразу.</p>
+            </div>
+          </aside>
+          <div id="pageRows"></div>
+        </div>
         <div class="actions" style="margin-top:20px;">
           <button class="btn" type="button" id="savePage">Сохранить страницу</button>
         </div>
@@ -1375,7 +1394,7 @@
   var fmtShort = new Intl.DateTimeFormat('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'});
   var state = {store:null, mode:'local', canEditPage:false, depts:[], rec:null, me:null,
                view:null, people:[], admins:[], gateKind:'emp', filter:'all', page:{}, newOffer:{},
-               stage:null};
+               stage:null, pageStage:null};
 
   function g(rec, male, female){ return (rec && rec.gender === 'm') ? male : female; }
   function plural(n, one, few, many){
@@ -2768,23 +2787,24 @@
     }).catch(function(){ notify('Не удалось сохранить справочник', 'Попробуй ещё раз.'); });
   });
   /* ——— блоки страницы сотрудника: правит HR, настройки общие для всех ——— */
-  /* Порядок — как на странице сотрудника, чтобы правки искались там же, где видны */
+  /* Порядок и поле stage — как в кабинете, чтобы правки искались там же, где видны */
   var PAGE_SECTIONS = [
-    {key:'hero',     name:'Приветствие', fixed:true},
-    {key:'form',     name:'Шаг 01 · Анкета'},
-    {key:'about',    name:'Шаг 02 · О компании'},
-    {key:'culture',  name:'Жизнь в i’way'},
-    {key:'team',     name:'Шаг 03 · Команда'},
-    {key:'docs',     name:'Шаг 04 · Что взять с собой',
+    {key:'hero',     stage:'pre',   name:'Приветствие', fixed:true},
+    {key:'form',     stage:'pre',   name:'Шаг 01 · Анкета'},
+    {key:'about',    stage:'pre',   name:'Шаг 02 · О компании'},
+    {key:'culture',  stage:'pre',   name:'Жизнь в i’way'},
+    {key:'team',     stage:'pre',   name:'Шаг 03 · Команда'},
+    {key:'docs',     stage:'pre',   name:'Шаг 04 · Что взять с собой',
      note:'Если скрыть — сотрудник не увидит чек-лист документов и не сможет отправить список в HR.'},
-    {key:'dress',    name:'Шаг 05 · Дресс-код'},
-    {key:'faq',      name:'Частые вопросы'},
-    {key:'contacts', name:'Шаг 06 · Контакты'},
-    {key:'plan',     name:'Этап «1-й день»',
-     note:'Открывается сотруднику в день выхода. Если скрыть — пропадёт план первого дня и обратный отсчёт.'},
-    {key:'week',     name:'Этап «Первая неделя»'},
-    {key:'month',    name:'Этап «Первый месяц»'},
-    {key:'prob',     name:'Этап «Окончание испытательного срока»'}
+    {key:'dress',    stage:'pre',   name:'Шаг 05 · Дресс-код'},
+    {key:'faq',      stage:'pre',   name:'Частые вопросы'},
+    {key:'contacts', stage:'pre',   name:'Шаг 06 · Контакты',
+     note:'Этот же блок сотрудник видит во вкладке «Контакты» на любом этапе — правится здесь.'},
+    {key:'plan',     stage:'day',   name:'План первого дня',
+     note:'Если скрыть — пропадёт план первого дня и обратный отсчёт.'},
+    {key:'week',     stage:'week',  name:'Первая неделя'},
+    {key:'month',    stage:'month', name:'Первый месяц'},
+    {key:'prob',     stage:'prob',  name:'Окончание испытательного срока'}
   ];
   var pageDefaults = null;
   function pageParts(key){
@@ -3095,10 +3115,38 @@
     host.appendChild(wrap);
   }
 
+  /* Блоки разложены по этапам кабинета: HR правит один этап за раз и не ищет
+     нужный блок в общей простыне. Этапы берём из STAGES — кроме справочных. */
+  function pageStages(){ return STAGES.filter(function(st){ return !st.aside; }); }
   function renderPageRows(){
     capturePageDefaults();
+    var stages = pageStages();
+    if(!stages.some(function(st){ return st.key === state.pageStage; })) state.pageStage = stages[0].key;
+
+    var rail = $('pageStages'); rail.innerHTML = '';
+    stages.forEach(function(st){
+      var n = PAGE_SECTIONS.filter(function(sec){
+        return sec.stage === st.key && pageParts(sec.key);
+      }).length;
+      var btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'st';
+      btn.setAttribute('data-page-stage', st.key);
+      btn.setAttribute('aria-current', st.key === state.pageStage ? 'true' : 'false');
+      var t = document.createElement('span'); t.className = 'st-t'; t.textContent = st.title;
+      var c = document.createElement('span'); c.className = 'st-s';
+      c.textContent = n + ' ' + plural(n, 'блок', 'блока', 'блоков');
+      btn.appendChild(t); btn.appendChild(c);
+      btn.addEventListener('click', function(){
+        if(state.pageStage === st.key) return;
+        state.pageStage = st.key;
+        renderPageRows();          /* правки уже лежат в state.page, пересбор их не теряет */
+      });
+      rail.appendChild(btn);
+    });
+
     var box = $('pageRows'); box.innerHTML = '';
     PAGE_SECTIONS.forEach(function(sec){
+      if(sec.stage !== state.pageStage) return;
       var p = pageParts(sec.key); if(!p) return;
       var cfg = state.page[sec.key] || (state.page[sec.key] = {});
       var row = document.createElement('div');
@@ -3124,7 +3172,7 @@
         var d = document.createElement('div'); d.className = 'field';
         var l = document.createElement('label'); l.textContent = f[1];
         var input = document.createElement(f[0] === 'lead' ? 'textarea' : 'input');
-        if(f[0] === 'lead') input.rows = 2;
+        if(f[0] === 'lead') input.rows = 3;      /* подзаголовки длинные: две строки их режут */
         /* в поле сразу текущий текст, как во вкладке «Шаблоны»: править с места,
            а не набирать заново поверх подсказки */
         input.value = cfg[f[0]] || pageDefaults[sec.key][f[0]] || '';

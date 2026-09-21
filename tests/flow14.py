@@ -40,6 +40,23 @@ with sync_playwright() as p:
     assert pg.input_value('[data-field="docs.lead"]'), 'в поле нет текущего подзаголовка'
     print('текст в поле:', default_title)
 
+    # блоки разложены по этапам: на экране только выбранный этап
+    stages = pg.eval_on_selector_all('#pageStages .st', 'e => e.map(x => x.getAttribute("data-page-stage"))')
+    assert stages == ['pre', 'day', 'week', 'month', 'prob'], 'этапы в редакторе не те: %s' % stages
+    assert pg.eval_on_selector_all('#pageRows .pg-row', 'e => e.length') == 9, 'на «до выхода» не девять блоков'
+    pg.click('#pageStages .st[data-page-stage="day"]'); pg.wait_for_timeout(300)
+    assert pg.eval_on_selector_all('#pageRows .pg-row', 'e => e.length') == 1, 'на «1-м дне» не один блок'
+    assert pg.query_selector('[data-field="docs.title"]') is None, 'блок другого этапа остался на экране'
+    print('этапы в редакторе:', ' · '.join(stages))
+
+    # несохранённая правка не теряется при переключении этапа
+    pg.click('#pageStages .st[data-page-stage="pre"]'); pg.wait_for_timeout(300)
+    pg.fill('[data-field="docs.title"]', 'Черновик')
+    pg.click('#pageStages .st[data-page-stage="prob"]'); pg.wait_for_timeout(300)
+    pg.click('#pageStages .st[data-page-stage="pre"]'); pg.wait_for_timeout(300)
+    assert pg.input_value('[data-field="docs.title"]') == 'Черновик', 'правка потерялась при смене этапа'
+    print('несохранённая правка переживает смену этапа')
+
     # правим текст и скрываем «Жизнь»
     pg.fill('[data-field="docs.title"]', 'Документы к первому дню')
     pg.fill('[data-field="docs.lead"]', 'Короткий список — остальное разберём на месте.')
@@ -197,12 +214,14 @@ with sync_playwright() as p:
     # ——— план, ценности, карточки «Жизни» ———
     pg.evaluate("location.hash='#admin'"); pg.wait_for_timeout(800)
     pg.click('#tabPage'); pg.wait_for_timeout(400)
-    pg.fill('[data-day="t0"]', 'Встреча с HR и оформление')
-    pg.fill('[data-week="t0"]', 'Пройти вводный курс о компании')
-    pg.fill('[data-month="t0"]', 'Сверка целей на 30 днях')
-    pg.fill('[data-prob="t0"]', 'Сверка целей на 60 и 90 днях')
     pg.fill('[data-val="t0"]', 'Лидерство')
     pg.fill('[data-cult="k0"]', 'Внутренние события')
+    for key, sel, val in [('day', '[data-day="t0"]', 'Встреча с HR и оформление'),
+                          ('week', '[data-week="t0"]', 'Пройти вводный курс о компании'),
+                          ('month', '[data-month="t0"]', 'Сверка целей на 30 днях'),
+                          ('prob', '[data-prob="t0"]', 'Сверка целей на 60 и 90 днях')]:
+        pg.click('#pageStages .st[data-page-stage="%s"]' % key); pg.wait_for_timeout(300)
+        pg.fill(sel, val)
     pg.click('#savePage'); pg.wait_for_timeout(700)
 
     login(pg)

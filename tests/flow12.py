@@ -43,13 +43,13 @@ with sync_playwright() as p:
     assert pg.query_selector('.topbar .nav') is None, 'в шапке осталась старая навигация'
     assert pg.query_selector('.hero .nav') is None, 'в герое осталась старая навигация'
     assert pg.inner_text('#tbStage') == 'До выхода', 'в шапке не тот этап: ' + pg.inner_text('#tbStage')
-    names = pg.eval_on_selector_all('.st .st-t', 'els => els.map(e => e.textContent)')
+    names = pg.eval_on_selector_all('#viewEmployee .st .st-t', 'els => els.map(e => e.textContent)')
     assert names == ['До выхода', '1-й день', 'Первая неделя', 'Первый месяц',
                      'Окончание испытательного срока', 'Контакты'], 'этапы не те: %s' % names
     print('панель этапов:', ' · '.join(names))
 
     # кнопки этапов достаточно крупные, чтобы попасть пальцем
-    h = pg.eval_on_selector_all('.st', 'els => els.map(e => e.getBoundingClientRect().height)')
+    h = pg.eval_on_selector_all('#viewEmployee .st', 'els => els.map(e => e.getBoundingClientRect().height)')
     assert min(h) >= 44, 'мишень для пальца мала: %s px' % min(h)
     print('кнопка этапа: высота %.0f px' % min(h))
 
@@ -62,7 +62,7 @@ with sync_playwright() as p:
     pg.set_viewport_size({'width':430, 'height':900}); pg.wait_for_timeout(400)
     over = pg.evaluate('document.documentElement.scrollWidth - document.documentElement.clientWidth')
     assert over <= 0, 'на телефоне страница едет вбок на %s px' % over
-    assert pg.eval_on_selector('.st-list', 'e => getComputedStyle(e).flexDirection') == 'row', \
+    assert pg.eval_on_selector('#viewEmployee .st-list', 'e => getComputedStyle(e).flexDirection') == 'row', \
         'на телефоне этапы не стали лентой'
     print('телефон: этапы лентой, страница не едет вбок')
     pg.set_viewport_size({'width':1280, 'height':1000}); pg.wait_for_timeout(400)
