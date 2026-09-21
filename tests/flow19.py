@@ -52,27 +52,49 @@ with sync_playwright() as p:
     assert pg.is_visible('#stagePre'), 'этап «до выхода» пропал'
     print('клик по закрытому этапу ничего не меняет')
 
-    # в закрытом этапе лежит план первого дня — он не виден, но отметки считаются
+    # содержание закрытых этапов лежит в DOM, но не видно; отметки считаются
     assert pg.inner_text('#hpDocs') == '0 из 4', 'плитка документов сбилась: ' + pg.inner_text('#hpDocs')
     assert pg.eval_on_selector_all('#dayList .check', 'els => els.length') == 5, 'план первого дня потерялся'
-    print('план первого дня на месте, но скрыт до срока')
+    for sec in ['plan', 'week', 'month', 'prob']:
+        assert not pg.is_visible('#' + sec), 'этап «%s» виден до срока' % sec
+    print('этапы до срока скрыты, план первого дня на месте')
     pg.close()
 
     # ——— вышел месяц назад: открыты «1-й день» и «неделя», срок ИС — 2 месяца
     pg = open_page(b, emp('2026-09-01', '2 месяца'))
-    assert pg.inner_text('#tbStage') == '1-й день', 'по умолчанию открылся не «1-й день»: ' + pg.inner_text('#tbStage')
-    assert pg.is_visible('#plan'), 'план первого дня не показан на своём этапе'
     n = notes(pg)
     assert n[1].startswith('открыт') and n[2].startswith('открыт'), 'этапы не открылись по сроку: %s' % n
-    assert n[4] == 'с 1 ноября', 'испытательный срок 2 месяца посчитан не так: %s' % n[4]
+    assert n[3] == 'с 1 октября' and n[4] == 'с 1 ноября', 'сроки месяца и ИС посчитаны не так: %s' % n
     print('вышел месяц назад:', ' | '.join(n))
 
-    pg.click('.st[data-stage="week"]'); pg.wait_for_timeout(700)
-    assert pg.inner_text('#tbStage') == 'Первая неделя', 'этап не переключился'
-    assert pg.is_visible('#soonWeek') and not pg.is_visible('#plan'), 'панели этапов не переключились'
-    when = pg.eval_on_selector('#soonWeek .soon-when', 'e => e.textContent')
-    assert 'Этап открыт' in when, 'у открытого этапа подпись про будущее: ' + when
+    # по умолчанию — последний доступный этап
+    assert pg.inner_text('#tbStage') == 'Первая неделя', 'открылся не последний доступный этап: ' + pg.inner_text('#tbStage')
+    assert pg.is_visible('#week') and not pg.is_visible('#plan'), 'показан не тот этап'
+    assert pg.eval_on_selector('#week .stage-when', 'e => e.textContent') == 'Этап с 8 сентября', \
+        'срок первой недели в карточке не тот: ' + pg.eval_on_selector('#week .stage-when', 'e => e.textContent')
+    print('по умолчанию открыт последний доступный этап, срок в карточке на месте')
+
+    pg.click('.st[data-stage="day"]'); pg.wait_for_timeout(700)
+    assert pg.inner_text('#tbStage') == '1-й день', 'этап не переключился'
+    assert pg.is_visible('#plan') and not pg.is_visible('#week'), 'панели этапов не переключились'
+    assert pg.eval_on_selector_all('#dayList .check', 'els => els.length') == 5, 'план первого дня потерялся'
     print('переключение этапов работает')
+
+    # содержание разнесено по этапам: неделя, месяц, 60–90
+    parts = pg.evaluate("""() => {
+      const at = id => {
+        const box = document.querySelector(id);
+        return box ? {n: box.querySelectorAll('li').length, stage: box.closest('.stage').id} : null;
+      };
+      return {week: at('#planWeek'), month: at('#planMonths'), prob: at('#planProb')};
+    }""")
+    for key, stage in [('week', 'stageWeek'), ('month', 'stageMonth'), ('prob', 'stageProb')]:
+        got = parts[key]
+        assert got, 'список «%s» пропал со страницы' % key
+        assert got['stage'] == stage, 'список «%s» лежит в этапе %s, а не %s' % (key, got['stage'], stage)
+        assert got['n'], 'список «%s» пуст' % key
+    print('списки по этапам: неделя %s · месяц %s · 60–90 %s'
+          % (parts['week']['n'], parts['month']['n'], parts['prob']['n']))
     pg.close()
 
     # ——— срок не указан — считаем стандартные три месяца

@@ -186,8 +186,11 @@
   .btn:hover{transform:translateY(-2px);}
   .btn.ghost{background:transparent; color:var(--ink); border-color:var(--line-strong);}
   .btn.ghost:hover{background:var(--ink); color:var(--paper); border-color:var(--ink);}
-  /* ——— макет кабинета: слева этапы, справа карточки шагов ——— */
-  .stage-wrap{
+  /* ——— макет кабинета: слева этапы, справа карточки шагов ———
+     Колонка на всю высоту окна, чтобы на коротком этапе подвал не висел
+     посреди экрана. */
+  #viewEmployee{min-height:100vh; display:flex; flex-direction:column;}
+  .stage-wrap{flex:1 0 auto;
     max-width:1160px; margin:0 auto; padding:26px 20px 64px;
     display:grid; grid-template-columns:238px minmax(0,1fr); gap:24px; align-items:start;
   }
@@ -231,6 +234,7 @@
   .stage .lead{margin-top:12px; font-size:15.5px;}
   .stage .eyebrow{font-size:10.5px;}
   .stage .culture,.stage .values,.stage .team-grid,.stage .figures,.stage .faq,.stage .contacts{margin-top:20px;}
+  .stage .startdate,.stage .checklist,.stage .plain{margin-top:20px;}
   .stage .hero-prog{margin-top:24px;}
   .stage .doc-group{margin-top:20px;}
   .stage > section.band{background:var(--band); border-color:var(--band-line);}
@@ -250,8 +254,7 @@
   }
   .stage > section[data-step] > .wrap > h2{padding-right:46px;}
   .s-num:empty{display:none;}
-  .soon .wrap{opacity:.85;}
-  .soon-when{margin-top:18px; font-family:var(--mono); font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--blue-deep); font-weight:600;}
+  .stage-when{margin-top:14px; font-family:var(--mono); font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--blue-deep); font-weight:600;}
   .tb-stage{margin-right:auto; font-family:var(--display); font-weight:600; font-size:15px; letter-spacing:-.01em; white-space:nowrap;}
 
   /* ——— первый экран: полоса прогресса ———
@@ -441,7 +444,7 @@
   #viewEmployee footer .fl{display:flex; gap:20px; flex-wrap:wrap;}
 
   /* служебные подписи: Fedra Demi вместо прежнего моношрифта */
-  .eyebrow,.st-s,.ready,.val .v-i,.h-num,.h-date,.meter,
+  .eyebrow,.st-s,.stage-when,.ready,.val .v-i,.h-num,.h-date,.meter,
   .startdate label,.countdown .c,.contact .r,.gallery,.greet label,.hp-r,.wm-tag{
     font-weight:600; font-variant-numeric:lining-nums tabular-nums;
   }
@@ -1253,9 +1256,9 @@
     <div class="stage" id="stageDay" hidden>
 <section id="plan">
   <div class="wrap">
-    <p class="eyebrow">Адаптация</p>
-    <h2>Путь первых трёх месяцев</h2>
-    <p class="lead">План привязан к твоей дате выхода — даты горизонтов посчитаны автоматически.</p>
+    <p class="eyebrow">Первый день</p>
+    <h2>Как пройдёт первый день</h2>
+    <p class="lead">Отмечай пункты по ходу дня — HR видит, что уже сделано.</p>
 
     <div class="startdate">
       <div>
@@ -1268,86 +1271,62 @@
       </div>
     </div>
 
-    <div class="horizon">
-      <div class="h-head">
-        <span class="h-num">ГОРИЗОНТ 1</span>
-        <span class="h-title">День 1</span>
-        <span class="h-date" data-offset="0">—</span>
-      </div>
-      <div class="checklist" id="dayList">
-        <button class="check" type="button" data-key="day0" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Встреча с HR: оформление и вводный разговор</span></button>
-        <button class="check" type="button" data-key="day1" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Знакомство с командой и руководителем</span></button>
-        <button class="check" type="button" data-key="day2" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Рабочее место и доступы к системам</span></button>
-        <button class="check" type="button" data-key="day3" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Обзор основных инструментов: как устроен день команды</span></button>
-        <button class="check" type="button" data-key="day4" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Знакомство с базой знаний</span></button>
-      </div>
-      <p class="meter"><span id="dayCount">0 из 5</span><span class="meter-bar"><b id="dayFill"></b></span></p>
+    <div class="checklist" id="dayList">
+      <button class="check" type="button" data-key="day0" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Встреча с HR: оформление и вводный разговор</span></button>
+      <button class="check" type="button" data-key="day1" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Знакомство с командой и руководителем</span></button>
+      <button class="check" type="button" data-key="day2" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Рабочее место и доступы к системам</span></button>
+      <button class="check" type="button" data-key="day3" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Обзор основных инструментов: как устроен день команды</span></button>
+      <button class="check" type="button" data-key="day4" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Знакомство с базой знаний</span></button>
     </div>
-
-    <div class="horizon">
-      <div class="h-head">
-        <span class="h-num">ГОРИЗОНТ 2</span>
-        <span class="h-title">Первая неделя</span>
-        <span class="h-date" data-offset="7">—</span>
-      </div>
-      <ul class="plain" id="planWeek">
-        <li>Пройти вводное обучение о компании и продукте</li>
-        <li>Изучить регламенты и процессы своего направления</li>
-        <li>Поставить с руководителем цели на 30, 60 и 90 дней</li>
-      </ul>
-    </div>
-
-    <div class="horizon">
-      <div class="h-head">
-        <span class="h-num">ГОРИЗОНТ 3</span>
-        <span class="h-title">30 · 60 · 90 дней</span>
-        <span class="h-date" data-offset="90">—</span>
-      </div>
-      <ul class="plain" id="planMonths">
-        <li>Обязательный вводный курс о компании и продукте — его проходят все новые сотрудники</li>
-        <li>Регулярные встречи 1:1 с руководителем</li>
-        <li>Сверка целей на отметках 30, 60 и 90 дней</li>
-        <li>Учебный центр i'way: программы профессионального и личностного роста на постоянной основе</li>
-        <li>После полугода в компании — профильный тренинг или семинар за счёт i'way</li>
-      </ul>
-      <div class="actions" style="margin-top:24px;">
-        <a class="btn ghost" href="#faq">База знаний</a>
-        <a class="btn ghost" href="#contacts">Записаться на обучение</a>
-      </div>
-    </div>
+    <p class="meter"><span id="dayCount">0 из 5</span><span class="meter-bar"><b id="dayFill"></b></span></p>
   </div>
 </section>
     </div>
 
     <div class="stage" id="stageWeek" hidden>
-<section id="soonWeek" class="soon">
+<section id="week">
   <div class="wrap">
     <p class="eyebrow">Первая неделя</p>
-    <h2>План первой недели появится здесь</h2>
-    <p class="lead">Вводное обучение о компании и продукте, регламенты своего направления и цели на 30, 60 и 90 дней.</p>
-    <p class="soon-when" data-when="week">Откроется по сроку</p>
+    <h2>Погружение в продукт и процессы</h2>
+    <p class="lead">Неделя на то, чтобы понять, как устроены продукт и твоё направление, и договориться о целях.</p>
+    <p class="stage-when">Этап с <span class="h-date" data-offset="7">—</span></p>
+    <ul class="plain" id="planWeek">
+      <li>Пройти вводное обучение о компании и продукте</li>
+      <li>Изучить регламенты и процессы своего направления</li>
+      <li>Поставить с руководителем цели на 30, 60 и 90 дней</li>
+    </ul>
   </div>
 </section>
     </div>
 
     <div class="stage" id="stageMonth" hidden>
-<section id="soonMonth" class="soon">
+<section id="month">
   <div class="wrap">
     <p class="eyebrow">Первый месяц</p>
-    <h2>Итоги первого месяца появятся здесь</h2>
-    <p class="lead">Первые результаты, сверка целей с руководителем и обратная связь от наставника.</p>
-    <p class="soon-when" data-when="month">Откроется по сроку</p>
+    <h2>Первые результаты и сверка целей</h2>
+    <p class="lead">К концу месяца видно первые результаты — их сверяем с целями, которые поставили в первую неделю.</p>
+    <p class="stage-when">Этап с <span class="h-date" data-offset="30">—</span></p>
+    <ul class="plain" id="planMonths">
+      <li>Обязательный вводный курс о компании и продукте — его проходят все новые сотрудники</li>
+      <li>Регулярные встречи 1:1 с руководителем</li>
+      <li>Сверка целей на отметке 30 дней</li>
+    </ul>
   </div>
 </section>
     </div>
 
     <div class="stage" id="stageProb" hidden>
-<section id="soonProb" class="soon">
+<section id="prob">
   <div class="wrap">
     <p class="eyebrow">Испытательный срок</p>
-    <h2>Итоги испытательного срока появятся здесь</h2>
-    <p class="lead">Итоги испытательного срока: что получилось, что дальше и какие цели на следующий период.</p>
-    <p class="soon-when" data-when="prob">Откроется по сроку</p>
+    <h2>60 и 90 дней: итоги испытательного срока</h2>
+    <p class="lead">Что получилось, что дальше и какие цели на следующий период. Обучение на этом не заканчивается.</p>
+    <p class="stage-when">Итоги — по <span class="h-date" data-offset="prob">—</span></p>
+    <ul class="plain" id="planProb">
+      <li>Сверка целей на отметках 60 и 90 дней</li>
+      <li>Учебный центр i’way: программы профессионального и личностного роста на постоянной основе</li>
+      <li>После полугода в компании — профильный тренинг или семинар за счёт i’way</li>
+    </ul>
   </div>
 </section>
     </div>
@@ -2778,7 +2757,10 @@
     {key:'faq',      name:'Частые вопросы'},
     {key:'contacts', name:'Шаг 06 · Контакты'},
     {key:'plan',     name:'Этап «1-й день»',
-     note:'Открывается сотруднику в день выхода. Если скрыть — пропадёт план первого дня и обратный отсчёт.'}
+     note:'Открывается сотруднику в день выхода. Если скрыть — пропадёт план первого дня и обратный отсчёт.'},
+    {key:'week',     name:'Этап «Первая неделя»'},
+    {key:'month',    name:'Этап «Первый месяц»'},
+    {key:'prob',     name:'Этап «Окончание испытательного срока»'}
   ];
   var pageDefaults = null;
   function pageParts(key){
@@ -2923,10 +2905,12 @@
             fields:[['t','Документ','input']],
             add:'+ Добавить документ', del:'Удалить документ'}],
     plan: [{cfg:'items', attr:'day', label:'План первого дня', sel:'#dayList', kind:'check',
-            fields:[['t','Пункт','input']], add:'+ Добавить пункт', del:'Удалить пункт'},
-           {cfg:'week', attr:'week', label:'Первая неделя', sel:'#planWeek', kind:'plain',
-            fields:[['t','Пункт','input']], add:'+ Добавить пункт', del:'Удалить пункт'},
-           {cfg:'months', attr:'month', label:'30 · 60 · 90 дней', sel:'#planMonths', kind:'plain',
+            fields:[['t','Пункт','input']], add:'+ Добавить пункт', del:'Удалить пункт'}],
+    week: [{cfg:'items', attr:'week', label:'Пункты первой недели', sel:'#planWeek', kind:'plain',
+            fields:[['t','Пункт','input']], add:'+ Добавить пункт', del:'Удалить пункт'}],
+    month: [{cfg:'items', attr:'month', label:'Пункты первого месяца', sel:'#planMonths', kind:'plain',
+            fields:[['t','Пункт','input']], add:'+ Добавить пункт', del:'Удалить пункт'}],
+    prob: [{cfg:'items', attr:'prob', label:'Пункты 60 и 90 дней', sel:'#planProb', kind:'plain',
             fields:[['t','Пункт','input']], add:'+ Добавить пункт', del:'Удалить пункт'}],
     dress: [{cfg:'items', attr:'dress', label:'Карточки дресс-кода', sel:'#dressCards', kind:'cards',
             fields:[['k','Заголовок','input'], ['d','Описание','textarea']],
@@ -3223,9 +3207,9 @@
   var STAGES = [
     {key:'pre',   pane:'stagePre',   title:'До выхода'},
     {key:'day',   pane:'stageDay',   title:'1-й день', days:0},
-    {key:'week',  pane:'stageWeek',  title:'Первая неделя', days:7, soon:true},
-    {key:'month', pane:'stageMonth', title:'Первый месяц', days:30, soon:true},
-    {key:'prob',  pane:'stageProb',  title:'Окончание испытательного срока', probation:true, soon:true}
+    {key:'week',  pane:'stageWeek',  title:'Первая неделя', days:7},
+    {key:'month', pane:'stageMonth', title:'Первый месяц', days:30},
+    {key:'prob',  pane:'stageProb',  title:'Окончание испытательного срока', probation:true}
   ];
   function stageByKey(key){
     for(var i = 0; i < STAGES.length; i++) if(STAGES[i].key === key) return STAGES[i];
@@ -3260,16 +3244,7 @@
           ? (st.key === 'pre' ? 'открыт' : 'открыт ' + fmtLong.format(d))
           : (d ? 'с ' + fmtLong.format(d) : 'после выхода');
       }
-      /* ponytail: содержание пока есть только у «до выхода» и «1-го дня» —
-         на этап-заглушку сами не переключаемся, даже если срок наступил */
-      if(open && !st.soon) last = st.key;
-    });
-    document.querySelectorAll('.soon-when').forEach(function(el){
-      var st = stageByKey(el.getAttribute('data-when'));
-      var d = st ? stageDate(rec, st) : null;
-      el.textContent = !d ? 'Откроется, когда HR назначит дату выхода'
-        : (stageOpen(rec, st) ? 'Этап открыт с ' + fmtLong.format(d) + ' · содержание добавим'
-                              : 'Откроется ' + fmtLong.format(d));
+      if(open) last = st.key;
     });
     /* открываем последний доступный: у новичка это «до выхода», у вышедшего — его этап */
     switchStage(state.stage && stageOpen(rec, stageByKey(state.stage)) ? state.stage : last);
@@ -3351,8 +3326,10 @@
         : (diff === 0 ? 'уже сегодня' : 'ты уже в команде');
       $('hpLeft').textContent = (rec.startTime ? rec.startTime + ' · ' : '') + left;
       document.querySelectorAll('.h-date').forEach(function(el){
-        var off = parseInt(el.getAttribute('data-offset'), 10);
-        el.textContent = (off === 90 ? 'по ' : '') + fmtLong.format(new Date(start.getTime() + off * 86400000));
+        var off = el.getAttribute('data-offset');
+        var d = off === 'prob' ? stageDate(rec, stageByKey('prob'))
+                               : new Date(start.getTime() + parseInt(off, 10) * 86400000);
+        el.textContent = d ? fmtLong.format(d) : '—';
       });
     } else {
       $('cdNum').textContent = '—'; $('cdCap').textContent = 'дату сообщит HR';

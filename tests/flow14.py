@@ -200,14 +200,22 @@ with sync_playwright() as p:
     pg.fill('[data-day="t0"]', 'Встреча с HR и оформление')
     pg.fill('[data-week="t0"]', 'Пройти вводный курс о компании')
     pg.fill('[data-month="t0"]', 'Сверка целей на 30 днях')
+    pg.fill('[data-prob="t0"]', 'Сверка целей на 60 и 90 днях')
     pg.fill('[data-val="t0"]', 'Лидерство')
     pg.fill('[data-cult="k0"]', 'Внутренние события')
     pg.click('#savePage'); pg.wait_for_timeout(700)
 
     login(pg)
     assert 'Встреча с HR и оформление' in pg.inner_text('#dayList .check:first-child .c-t'), 'план первого дня не обновился'
-    assert 'вводный курс' in pg.inner_text('#planWeek li:first-child'), 'список первой недели не обновился'
-    assert 'Сверка целей' in pg.inner_text('#planMonths li:first-child'), 'список 30/60/90 не обновился'
+    # эти списки лежат в этапах, закрытых до срока: читаем текст, а не отрисовку
+    lists = pg.evaluate("""() => ({
+      week: document.querySelector('#planWeek li').textContent,
+      month: document.querySelector('#planMonths li').textContent,
+      prob: document.querySelector('#planProb li').textContent
+    })""")
+    assert 'вводный курс' in lists['week'], 'список первой недели не обновился: %s' % lists
+    assert 'на 30 днях' in lists['month'], 'список первого месяца не обновился: %s' % lists
+    assert 'на 60 и 90 днях' in lists['prob'], 'список 60–90 не обновился: %s' % lists
     assert pg.inner_text('#aboutValues .val:first-child .v-t') == 'Лидерство', 'ценность не обновилась'
     assert pg.inner_text('#aboutValues .val:first-child .v-i') == 'Ценность 01', 'нумерация ценностей сбилась'
     assert pg.inner_text('#cultureCards .cult:first-child .k') == 'Внутренние события', 'карточка «Жизни» не обновилась'
