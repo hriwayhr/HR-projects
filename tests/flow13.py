@@ -65,9 +65,19 @@ with sync_playwright() as p:
     print('письмо собрано после создания:', pg.inner_text('#issuedCode'))
 
     # пароль одноразовый: смена вкладки не должна его терять
+    pass1 = pg.inner_text('#issuedCode')
     pg.click('#tabPeople'); pg.wait_for_timeout(400)
     assert pg.is_visible('#mailPanel'), 'смена вкладки спрятала письмо с одноразовым паролем'
     print('письмо уцелело при переходе на другую вкладку')
+
+    # на справочниках письма нет, но оно не потеряно: возврат его возвращает
+    for tab in ['tabAdmins', 'tabDepts', 'tabTpl', 'tabPage']:
+        pg.click('#' + tab); pg.wait_for_timeout(300)
+        assert not pg.is_visible('#mailPanel'), 'письмо висит на вкладке ' + tab
+    pg.click('#tabPeople'); pg.wait_for_timeout(400)
+    assert pg.is_visible('#mailPanel'), 'письмо не вернулось на вкладку с доступами'
+    assert pg.inner_text('#issuedCode') == pass1, 'пароль в письме подменился: %s / %s' % (pg.inner_text('#issuedCode'), pass1)
+    print('на справочниках письма нет, пароль цел:', pass1)
 
     # закрытие неотправленного письма спрашивает подтверждение
     pg.click('#mailClose'); pg.wait_for_timeout(400)

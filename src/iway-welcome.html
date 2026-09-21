@@ -874,9 +874,13 @@
       </div>
     </div>
 
-    <!-- Панель письма общая для обеих вкладок: её открывают и после создания
-         доступа, и кнопкой «Письмо» из карточки в списке. Внутри вкладки она
-         была бы невидима при вызове из другой. -->
+    <!-- Письмо, оффер и сообщения общие для вкладок «Новый доступ» и «Выданные
+         доступы»: их открывают и после создания доступа, и кнопкой из карточки
+         в списке. Внутри одной вкладки панель была бы невидима при вызове из
+         другой, поэтому она лежит рядом с ними — но на вкладках справочников
+         её скрывает switchTab. Состояние при этом цело: одноразовый пароль не
+         теряется, при возврате письмо на месте. -->
+    <div id="issuePanels">
     <div class="panel" id="mailPanel" hidden>
       <h2>Письмо-приглашение</h2>
       <p class="sub" id="mailTo"></p>
@@ -934,6 +938,7 @@
         </div>
       </div>
       <p class="hint" style="margin-top:14px;">Пароль виден только сейчас: восстановить его нельзя, при повторном открытии сообщений выпускается новый.</p>
+    </div>
     </div>
   </div>
 </div>
@@ -2208,6 +2213,7 @@
   function showOffer(rec){
     state.offerRec = rec;
     $('offerPanel').hidden = false;
+    $('issuePanels').hidden = false;
     $('offerTo').textContent = rec.personalEmail
       ? 'Кому: ' + rec.personalEmail + '  ·  От кого: ' + HR_FROM
       : 'Личная почта не указана — добавь её в карточке, чтобы отправить оффер.';
@@ -2267,6 +2273,7 @@
     state.chatRec = rec;
     var msg = buildChat(rec, pass);
     $('chatPanel').hidden = false;
+    $('issuePanels').hidden = false;
     $('chatSub').textContent = 'Отправляются кандидату по одному: второе — после согласия на стажировку.';
     $('chatMsg1').value = msg.first;
     $('chatMsg2').value = msg.second;
@@ -2299,6 +2306,7 @@
     state.mail = mail; state.mailRec = rec;
     $('mailSent').textContent = 'Отметить отправленным';
     $('mailPanel').hidden = false;
+    $('issuePanels').hidden = false;
     $('mailTo').textContent = mail.to
       ? 'Кому: ' + mail.to + '  ·  От кого: ' + HR_FROM
       : 'Личная почта не указана — добавь её в карточке сотрудника, чтобы отправить письмо.';
@@ -3190,6 +3198,8 @@
       $(x[1]).setAttribute('aria-selected', x[0] === t);
       $(x[2]).hidden = x[0] !== t;
     });
+    /* письмо, оффер и сообщения относятся только к выдаче доступов */
+    $('issuePanels').hidden = !(t === 'new' || t === 'people');
   }
   $('tabPeople').addEventListener('click', function(){ switchTab('people'); });
   $('tabNew').addEventListener('click', function(){ switchTab('new'); });
