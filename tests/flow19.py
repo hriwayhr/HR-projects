@@ -131,6 +131,22 @@ with sync_playwright() as p:
         'в блоке этапов не только этапы: %s' % groups[0]
     assert groups[1]['cap'] == 'Полезная информация' and groups[1]['tabs'] == ['Контакты'], \
         'блок «Полезная информация» собран не так: %s' % groups[1]
+
+    # заголовок блока не должен читаться вровень со сноской под списком
+    look = pg.evaluate("""() => {
+      const cap = document.querySelector('.st-group + .st-group .st-cap');
+      const grp = document.querySelector('.st-group + .st-group');
+      return {
+        cap: getComputedStyle(cap).color,
+        note: getComputedStyle(document.querySelector('.st-note')).color,
+        dash: getComputedStyle(cap, '::before').width,
+        border: getComputedStyle(grp).borderTopWidth
+      };
+    }""")
+    assert look['cap'] != look['note'], 'заголовок блока цветом не отличается от сноски: %s' % look
+    assert look['dash'] != '0px' and look['dash'] != 'auto', 'у заголовка блока нет черты: %s' % look
+    assert look['border'] != '0px', 'блоки в панели не разделены линией: %s' % look
+    print('заголовки блоков выделены:', look['cap'], '· сноска', look['note'])
     assert pg.inner_text('#tbStage') != 'Контакты', 'контакты стали этапом по умолчанию'
     pg.click('.st[data-stage="help"]'); pg.wait_for_timeout(700)
     assert pg.inner_text('#tbStage') == 'Контакты', 'вкладка контактов не открылась'
