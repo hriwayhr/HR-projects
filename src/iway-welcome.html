@@ -874,8 +874,17 @@
     <div id="paneTpl" hidden>
       <div class="panel">
         <h2>Шаблоны писем</h2>
-        <p class="sub">Текст оффера и сообщений о стажировке. В фигурных скобках — подстановки: они заполняются из карточки сотрудника. Абзацы разделяются пустой строкой, строка с «- » становится пунктом списка. Если подстановка пустая, строка не попадёт в письмо; кусок в квадратных скобках необязателен — он исчезнет, а строка останется. Если очистить поле, вернётся исходный текст.</p>
-        <div id="tplRows"></div>
+        <p class="sub">Шаблоны разложены по категориям — выбери категорию слева. В фигурных скобках — подстановки: они заполняются из карточки сотрудника. Абзацы разделяются пустой строкой, строка с «- » становится пунктом списка. Если подстановка пустая, строка не попадёт в письмо; кусок в квадратных скобках необязателен — он исчезнет, а строка останется. Если очистить поле, вернётся исходный текст.</p>
+        <div class="pg-wrap">
+          <aside class="stages pg-stages">
+            <div class="st-group">
+              <p class="st-cap">Шаблоны</p>
+              <div class="st-list" id="tplStages"></div>
+              <p class="st-note">Сохранение общее: кнопка ниже сохраняет правки всех шаблонов сразу.</p>
+            </div>
+          </aside>
+          <div id="tplRows"></div>
+        </div>
         <div class="actions" style="margin-top:20px;">
           <button class="btn" type="button" id="saveTpl">Сохранить шаблоны</button>
           <button class="mini" type="button" id="resetTpl">Вернуть исходные</button>
@@ -1394,7 +1403,7 @@
   var fmtShort = new Intl.DateTimeFormat('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'});
   var state = {store:null, mode:'local', canEditPage:false, depts:[], rec:null, me:null,
                view:null, people:[], admins:[], gateKind:'emp', filter:'all', page:{}, newOffer:{},
-               stage:null, pageStage:null};
+               stage:null, pageStage:null, tplStage:null};
 
   function g(rec, male, female){ return (rec && rec.gender === 'm') ? male : female; }
   function plural(n, one, few, many){
@@ -3211,9 +3220,30 @@
               ['second', 'Сообщение 2 — детали и доступы', 'textarea', 14]]}
   ];
   function renderTplRows(){
-    var box = $('tplRows'); box.innerHTML = '';
     if(!state.templates) state.templates = {};
+    if(!TPL_SECTIONS.some(function(sec){ return sec.key === state.tplStage; })) state.tplStage = TPL_SECTIONS[0].key;
+
+    var rail = $('tplStages'); rail.innerHTML = '';
     TPL_SECTIONS.forEach(function(sec){
+      var btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'st';
+      btn.setAttribute('data-tpl-stage', sec.key);
+      btn.setAttribute('aria-current', sec.key === state.tplStage ? 'true' : 'false');
+      var t = document.createElement('span'); t.className = 'st-t'; t.textContent = sec.name;
+      var c = document.createElement('span'); c.className = 'st-s';
+      c.textContent = sec.fields.length + ' ' + plural(sec.fields.length, 'поле', 'поля', 'полей');
+      btn.appendChild(t); btn.appendChild(c);
+      btn.addEventListener('click', function(){
+        if(state.tplStage === sec.key) return;
+        state.tplStage = sec.key;
+        renderTplRows();          /* правки уже в state.templates, пересбор их не теряет */
+      });
+      rail.appendChild(btn);
+    });
+
+    var box = $('tplRows'); box.innerHTML = '';
+    TPL_SECTIONS.forEach(function(sec){
+      if(sec.key !== state.tplStage) return;
       var cfg = state.templates[sec.key] || (state.templates[sec.key] = {});
       var row = document.createElement('div'); row.className = 'pg-row';
       var top = document.createElement('div'); top.className = 'pg-top';

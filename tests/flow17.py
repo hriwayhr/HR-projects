@@ -31,14 +31,22 @@ with sync_playwright() as p:
     pg.click('#tabTpl'); pg.wait_for_timeout(300)
     assert pg.is_visible('#paneTpl'), 'вкладка «Шаблоны» не открылась'
     assert not pg.is_visible('#panePage'), 'вкладка страницы осталась видимой'
+
+    # шаблоны разложены по категориям: на экране только выбранная
+    cats = pg.eval_on_selector_all('#tplStages .st', 'e => e.map(x => x.getAttribute("data-tpl-stage"))')
+    assert cats == ['offer', 'intern'], 'категории шаблонов не те: %s' % cats
+    assert pg.query_selector('[data-tpl="intern.first"]') is None, 'поля другой категории на экране'
+    print('категории шаблонов:', ' · '.join(cats))
     # текущий текст лежит в самом поле — его правят с места, а не набирают заново
     cur = pg.input_value('[data-tpl="offer.body"]')
     assert 'Здравствуйте, {имя}!' in cur and 'Также мы гарантируем:' in cur, \
         'в поле нет текущего текста оффера:\n' + cur
-    assert pg.input_value('[data-tpl="intern.second"]').startswith('Мы рады вашему положительному ответу!'), \
-        'в поле нет текущего текста второго сообщения'
     assert pg.input_value('[data-tpl="offer.subject"]').startswith('Оффер для {фамилия}'), \
         'в поле нет текущей темы письма'
+    pg.click('#tplStages .st[data-tpl-stage="intern"]'); pg.wait_for_timeout(300)
+    assert pg.input_value('[data-tpl="intern.second"]').startswith('Мы рады вашему положительному ответу!'), \
+        'в поле нет текущего текста второго сообщения'
+    pg.click('#tplStages .st[data-tpl-stage="offer"]'); pg.wait_for_timeout(300)
     print('вкладка «Шаблоны»: в полях текущий текст, готовый к правке')
 
     # правим шаблон оффера
@@ -52,6 +60,10 @@ with sync_playwright() as p:
     pg.fill('[data-tpl="offer.subject"]', 'Оффер {фамилия}[ — {должность}]')
     pg.fill('[data-tpl="offer.title"]', 'Наше предложение')
     pg.fill('[data-tpl="offer.body"]', body)
+    pg.click('#tplStages .st[data-tpl-stage="intern"]'); pg.wait_for_timeout(300)
+    pg.click('#tplStages .st[data-tpl-stage="offer"]'); pg.wait_for_timeout(300)
+    assert pg.input_value('[data-tpl="offer.title"]') == 'Наше предложение', \
+        'правка потерялась при переключении категории'
     pg.click('#saveTpl'); pg.wait_for_timeout(500)
     assert pg.is_visible('#tplSaved'), 'нет отметки о сохранении'
     saved = pg.evaluate("window.__store['config/templates'].tpl")
@@ -83,6 +95,7 @@ with sync_playwright() as p:
 
     # необязательный кусок исчезает, а строка остаётся
     pg.click('#tabTpl'); pg.wait_for_timeout(300)
+    pg.click('#tplStages .st[data-tpl-stage="offer"]'); pg.wait_for_timeout(300)
     pg.fill('[data-tpl="offer.body"]', 'Должность: {должность}[, руководитель {руководитель}].')
     pg.fill('[data-tpl="offer.subject"]', 'Оффер {фамилия}[ — {несуществующее}]')
     pg.click('#saveTpl'); pg.wait_for_timeout(600)
@@ -97,6 +110,7 @@ with sync_playwright() as p:
 
     # шаблон стажировки
     pg.click('#tabTpl'); pg.wait_for_timeout(300)
+    pg.click('#tplStages .st[data-tpl-stage="intern"]'); pg.wait_for_timeout(300)
     pg.fill('[data-tpl="intern.first"]', '{имя}, добрый день! Приглашаем на стажировку.')
     pg.fill('[data-tpl="intern.second"]', 'Ждём вас {дата выхода}[ в {время выхода}].\nЛогин: {логин}\nПароль: {пароль}')
     pg.click('#saveTpl'); pg.wait_for_timeout(500)
@@ -116,6 +130,7 @@ with sync_playwright() as p:
     pg.click('#tabTpl'); pg.wait_for_timeout(300)
     pg.click('#resetTpl'); pg.wait_for_timeout(400)
     pg.click('#dlgOk'); pg.wait_for_timeout(900)
+    pg.click('#tplStages .st[data-tpl-stage="offer"]'); pg.wait_for_timeout(300)
     assert 'Также мы гарантируем:' in pg.input_value('[data-tpl="offer.body"]'), 'в поле не вернулся исходный текст'
     assert not (pg.evaluate("window.__store['config/templates'].tpl.offer") or {}).get('body'), 'шаблон не сброшен в базе'
     pg.click('#tabPeople'); pg.wait_for_timeout(400)
