@@ -294,6 +294,9 @@
   /* вкладка «Страница сотрудника»: та же раскладка, что в кабинете сотрудника */
   .pg-wrap{margin-top:22px; display:grid; grid-template-columns:216px minmax(0,1fr); gap:22px; align-items:start;}
   .pg-stages{position:static;}
+  /* этап без записей остаётся кликабельным, но не тянет на себя взгляд */
+  .st.dim .st-t{font-weight:500; color:var(--ink-3);}
+  .st.dim[aria-current="true"] .st-t{font-weight:600; color:var(--on-tint);}
   @media (max-width:860px){
     .pg-wrap{grid-template-columns:minmax(0,1fr); gap:14px;}
     .pg-stages .st-list{flex-direction:row; overflow-x:auto; scrollbar-width:none;}
@@ -579,15 +582,10 @@
     background:var(--paper); border:1.5px solid var(--line-strong); border-radius:999px; padding:10px 16px;
   }
   .search:focus{border-color:var(--blue); outline:none;}
-  .filters{display:flex; gap:8px; flex-wrap:wrap; margin-top:18px;}
-  .fchip{
-    font-family:var(--body); font-weight:600; font-size:13px; padding:8px 14px; border-radius:999px;
-    border:1.5px solid var(--line-strong); background:transparent; color:var(--ink-2); cursor:pointer;
-  }
-  .fchip:hover{border-color:var(--blue); color:var(--blue-deep);}
-  .fchip.on{background:var(--blue); border-color:var(--blue); color:var(--blue-ink);}
-  .fcount{opacity:.65; font-variant-numeric:tabular-nums;}
-  .pgrid{margin-top:20px; display:grid; gap:14px; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr));}
+  /* align-items:start — короткая карточка не растягивается пустотой до высоты соседней */
+  .pgrid{margin-top:20px; display:grid; gap:14px; align-items:start; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr));}
+  /* список этапов слева — карточки начинаются вровень с первой кнопкой */
+  .pg-wrap .pgrid{margin-top:0;}
   .pcard{
     border:1px solid var(--line); border-radius:14px; background:var(--paper); padding:18px 18px 16px;
     display:flex; flex-direction:column; gap:12px;
@@ -735,9 +733,13 @@
           <h2>Выданные доступы</h2>
           <input id="peopleSearch" class="search" type="search" placeholder="Поиск по имени, логину, почте" autocomplete="off">
         </div>
-        <div class="filters" id="peopleFilters" role="group" aria-label="Фильтр по статусу"></div>
-        <div class="pgrid" id="peopleGrid"></div>
-        <p class="empty" id="peopleEmpty" hidden></p>
+        <div class="pg-wrap">
+          <aside class="stages pg-stages" id="peopleFilters" role="group" aria-label="Этапы"></aside>
+          <div>
+            <div class="pgrid" id="peopleGrid"></div>
+            <p class="empty" id="peopleEmpty" hidden></p>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -2560,17 +2562,27 @@
     if(ds.ready) return {key:'ready', label:'документы собраны', cls:'ready'};
     return {key:'collecting', label:'собирает документы', cls:'info'};
   }
-  var FILTERS = [
-    {key:'all', label:'Все'},
-    {key:'offered', label:'Ждут ответа на оффер'},
-    {key:'accepted', label:'Оффер принят — выдать доступ'},
-    {key:'tosend', label:'Отправить письмо'},
-    {key:'waiting', label:'Не заходили'},
-    {key:'collecting', label:'Собирают документы'},
-    {key:'ready', label:'Собраны, ждут отправки'},
-    {key:'sent', label:'Список отправлен'},
-    {key:'card', label:'Заявка на карту'}
+  /* Этапы списка — панель слева: путь от оффера до отправленных документов
+     виден целиком, вместе с числом людей на каждом этапе. Ключи совпадают с
+     statusOf, кроме «card» — это отметка, а не этап. */
+  var FILTER_GROUPS = [
+    {cap:'', items:[{key:'all', label:'Все записи'}]},
+    {cap:'Кандидаты', items:[
+      {key:'draft', label:'Оффер не отправлен'},
+      {key:'offered', label:'Ждут ответа'},
+      {key:'accepted', label:'Оффер принят'},
+      {key:'declined', label:'Отказались'}
+    ]},
+    {cap:'Сотрудники', items:[
+      {key:'tosend', label:'Отправить письмо'},
+      {key:'waiting', label:'Не заходили'},
+      {key:'collecting', label:'Собирают документы'},
+      {key:'ready', label:'Собраны, ждут отправки'},
+      {key:'sent', label:'Список отправлен'}
+    ]},
+    {cap:'Отметки', items:[{key:'card', label:'Заявка на карту'}]}
   ];
+  var FILTERS = FILTER_GROUPS.reduce(function(acc, gr){ return acc.concat(gr.items); }, []);
   function matchFilter(rec, key){
     if(key === 'all') return true;
     if(key === 'card') return docStats(rec).cardNeed;
@@ -2590,23 +2602,48 @@
     });
   }
 
+  function filterCount(key){
+    return state.people.filter(function(r){ return matchFilter(r, key); }).length;
+  }
+  /* Пустые этапы остаются в панели: HR видит, что на них никого нет, а не
+     гадает, куда делся этап. Счётчики считают всех — поиск на них не влияет. */
   function renderFilters(){
-    var bar = $('peopleFilters');
-    bar.innerHTML = '';
-    FILTERS.forEach(function(f){
-      var n = state.people.filter(function(r){ return matchFilter(r, f.key); }).length;
-      if(!n && f.key !== 'all') return;
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'fchip' + (state.filter === f.key ? ' on' : '');
-      b.setAttribute('aria-pressed', state.filter === f.key);
-      b.innerHTML = '';
-      b.appendChild(document.createTextNode(f.label + ' '));
-      var c = document.createElement('span'); c.className = 'fcount'; c.textContent = n;
-      b.appendChild(c);
-      b.addEventListener('click', function(){ state.filter = f.key; renderPeople(); });
-      bar.appendChild(b);
+    var rail = $('peopleFilters');
+    rail.innerHTML = '';
+    if(!FILTERS.some(function(f){ return f.key === state.filter; })) state.filter = 'all';
+    FILTER_GROUPS.forEach(function(gr){
+      var box = document.createElement('div'); box.className = 'st-group';
+      if(gr.cap){
+        box.setAttribute('aria-label', gr.cap);
+        box.setAttribute('role', 'group');
+        var cap = document.createElement('p'); cap.className = 'st-cap'; cap.textContent = gr.cap;
+        box.appendChild(cap);
+      }
+      var list = document.createElement('div'); list.className = 'st-list';
+      gr.items.forEach(function(f){
+        var n = filterCount(f.key);
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'st' + (n ? '' : ' dim');
+        b.setAttribute('data-filter', f.key);
+        b.setAttribute('aria-current', state.filter === f.key ? 'true' : 'false');
+        var t = document.createElement('span'); t.className = 'st-t'; t.textContent = f.label;
+        var c = document.createElement('span'); c.className = 'st-s';
+        c.textContent = n + ' ' + plural(n, 'человек', 'человека', 'человек');
+        b.appendChild(t); b.appendChild(c);
+        b.addEventListener('click', function(){
+          if(state.filter === f.key) return;
+          state.filter = f.key;
+          renderPeople();
+        });
+        list.appendChild(b);
+      });
+      box.appendChild(list);
+      rail.appendChild(box);
     });
+    var note = document.createElement('p'); note.className = 'st-note';
+    note.textContent = 'Счётчики считают всех — поиск сужает только список справа.';
+    rail.appendChild(note);
   }
 
   function row(label, value, muted){

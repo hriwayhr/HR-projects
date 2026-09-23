@@ -33,12 +33,12 @@ with sync_playwright() as p:
     pg.add_init_script('window.__seed='+json.dumps(seed, ensure_ascii=False)+'; Object.assign(window.__store, window.__seed);')
     pg.goto(url+'#admin'); pg.wait_for_timeout(1300)
     pg.click('#tabPeople'); pg.wait_for_timeout(300)   # список — на своей вкладке
-    print('фильтры:', pg.inner_text('#peopleFilters').replace('\n',' | '))
+    print('этапы слева:', pg.inner_text('#peopleFilters').replace('\n',' · '))
     print('карточек:', len(pg.query_selector_all('.pcard')))
     # фильтр «Готовы к выходу»
-    pg.get_by_role('button', name='Собраны, ждут отправки 1').click(); pg.wait_for_timeout(400)
+    pg.click('#peopleFilters [data-filter="ready"]'); pg.wait_for_timeout(400)
     print('после фильтра готовых:', [c.query_selector('.pc-name').inner_text() for c in pg.query_selector_all('.pcard')])
-    pg.get_by_role('button', name='Все 4').click(); pg.wait_for_timeout(300)
+    pg.click('#peopleFilters [data-filter="all"]'); pg.wait_for_timeout(300)
     # поиск
     pg.fill('#peopleSearch','пётр'); pg.wait_for_timeout(400)
     print('поиск «пётр»:', [c.query_selector('.pc-name').inner_text() for c in pg.query_selector_all('.pcard')])
