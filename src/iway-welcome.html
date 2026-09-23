@@ -783,10 +783,21 @@
           </div>
           <div id="offerBlock">
             <h3 class="pg-name" style="font-size:16px; margin-top:28px;">Оффер</h3>
-            <p class="hint" style="margin:6px 0 16px;">Можно заполнить сразу — письмо соберётся после создания доступа. Пустые поля в письмо не попадут, дозаполнить можно позже кнопкой «Оффер» в карточке.</p>
+            <p class="hint" style="margin:6px 0 16px;">Оффер — шаг до доступа: заполни поля и собери письмо, а доступ создашь, когда кандидат согласится. Пустые поля в письмо не попадут, дозаполнить можно позже кнопкой «Оффер» в карточке.</p>
             <div class="form-grid" id="offerNew"></div>
+            <div class="actions" style="margin-top:16px;">
+              <button class="mini" type="button" id="offerDraft">Собрать оффер</button>
+            </div>
+            <p class="hint" style="margin-top:10px;">Карточка при этом не создаётся — нужны только фамилия и имя.</p>
           </div>
-          <p class="hint" id="offerSkip" style="margin-top:22px;" hidden>Для этого отдела оффер не отправляется: после создания доступа появятся два сообщения для чата — в телеграм или на hh.ru.</p>
+          <div id="offerSkip" hidden>
+            <h3 class="pg-name" style="font-size:16px; margin-top:28px;">Приглашение на стажировку</h3>
+            <p class="hint" style="margin:6px 0 16px;">Для этого отдела оффер не отправляется. Первое сообщение можно собрать сразу — доступ создашь, когда кандидат согласится; второе сообщение с доступами появится вместе с ним.</p>
+            <div class="actions">
+              <button class="mini" type="button" id="chatDraft">Собрать приглашение</button>
+            </div>
+            <p class="hint" style="margin-top:10px;">Карточка при этом не создаётся — нужно только имя.</p>
+          </div>
           <div class="actions" style="margin-top:20px;">
             <button class="btn" type="submit">Создать доступ</button>
           </div>
@@ -965,7 +976,8 @@
         <textarea id="chatMsg1" rows="5" readonly></textarea>
         <div class="mail-actions"><button class="mini" type="button" id="chatCopy1">Скопировать</button></div>
       </div>
-      <div class="field" style="margin-top:22px;">
+      <p class="hint" id="chatLater" style="margin-top:18px;" hidden>Второе сообщение — с датой выхода и доступами к порталу — появится здесь, когда создашь доступ.</p>
+      <div class="field" id="chatSecond" style="margin-top:22px;">
         <label for="chatMsg2">2 · Детали выхода и доступы — после согласия</label>
         <textarea id="chatMsg2" rows="12" readonly></textarea>
         <div class="mail-actions">
@@ -1785,6 +1797,38 @@
            '\nПароль: ' + pass;
   }
 
+  /* Черновик кандидата: оффер и приглашение — шаг до доступа, поэтому письмо
+     собирается из полей формы, а карточка не создаётся. Поля те же, что уйдут
+     в карточку потом: state.newOffer у формы и у панели один и тот же. */
+  function draftRec(){
+    return {
+      draft: true,
+      lastName: $('fLast').value.trim(),
+      firstName: $('fFirst').value.trim(),
+      dept: $('fDept').value,
+      gender: $('fGender').value || 'f',
+      personalEmail: ($('fPersonal').value.trim() || '').toLowerCase(),
+      startDate: $('fDate').value || '',
+      startTime: $('fTime').value || '',
+      offer: state.newOffer
+    };
+  }
+  $('offerDraft').addEventListener('click', function(){
+    var rec = draftRec();
+    if(!rec.firstName || !rec.lastName){
+      notify('Нужны фамилия и имя', 'Они идут в тему письма и в обращение. Остальное можно заполнить позже.');
+      return;
+    }
+    showOffer(rec);
+  });
+  $('chatDraft').addEventListener('click', function(){
+    var rec = draftRec();
+    if(!rec.firstName){
+      notify('Нужно имя', 'С него начинается сообщение. Остальное можно заполнить позже.');
+      return;
+    }
+    showChat(rec, '', true);
+  });
   function resetNewOffer(){
     state.newOffer = {};
     renderOfferFields($('offerNew'), {offer: state.newOffer});
@@ -2245,10 +2289,16 @@
     state.offerRec = rec;
     $('offerPanel').hidden = false;
     $('issuePanels').hidden = false;
-    $('offerTo').textContent = rec.personalEmail
+    var to = rec.personalEmail
       ? 'Кому: ' + rec.personalEmail + '  ·  От кого: ' + HR_FROM
-      : 'Личная почта не указана — добавь её в карточке, чтобы отправить оффер.';
-    renderOfferFields($('offerEdit'), rec, function(){ refreshOffer(); saveOfferSoon(rec); });
+      : 'Личная почта не указана — добавь её, чтобы отправить оффер.';
+    /* черновик: карточки ещё нет, поэтому ни сохранять, ни отмечать отправку нечего */
+    $('offerTo').textContent = rec.draft ? 'Черновик до создания доступа · ' + to : to;
+    $('offerSent').hidden = !!rec.draft;
+    renderOfferFields($('offerEdit'), rec, function(){
+      refreshOffer();
+      if(!rec.draft) saveOfferSoon(rec);
+    });
     refreshOffer();
     $('offerSent').textContent = rec.offerSentAt
       ? 'Отправлено ' + fmtShort.format(new Date(rec.offerSentAt))
@@ -2268,7 +2318,11 @@
       refreshPeople();
     });
   });
-  $('offerClose').addEventListener('click', function(){ $('offerPanel').hidden = true; });
+  $('offerClose').addEventListener('click', function(){
+    $('offerPanel').hidden = true;
+    /* в черновике панель и форма правят один объект, но отрисованы врозь */
+    if(state.offerRec && state.offerRec.draft) renderOfferFields($('offerNew'), {offer: state.newOffer});
+  });
 
   /* ——— сообщения для чата ———
      Отделы со стажировкой оффер не получают: кандидату пишут в телеграм или
@@ -2293,8 +2347,8 @@
       second: fillTemplate(tpl.second, vals, false).trim()
     };
   }
-  function showChat(rec, pass){
-    if(!pass){                       /* пароль известен только в момент выпуска */
+  function showChat(rec, pass, draft){
+    if(!pass && !draft){             /* пароль известен только в момент выпуска */
       var np = newPassword();
       setPassword(rec, np).then(function(){ return state.store.saveEmployee(rec); }).then(function(){
         refreshPeople(); showChat(rec, np);
@@ -2305,9 +2359,15 @@
     var msg = buildChat(rec, pass);
     $('chatPanel').hidden = false;
     $('issuePanels').hidden = false;
-    $('chatSub').textContent = 'Отправляются кандидату по одному: второе — после согласия на стажировку.';
+    /* второе сообщение несёт ссылку и пароль — без карточки их просто нет */
+    $('chatSecond').hidden = !!draft;
+    $('chatLater').hidden = !draft;
+    $('chatSent').hidden = !!draft;
+    $('chatSub').textContent = draft
+      ? 'Черновик до создания доступа: отправь первое сообщение, а доступ создай, когда кандидат согласится.'
+      : 'Отправляются кандидату по одному: второе — после согласия на стажировку.';
     $('chatMsg1').value = msg.first;
-    $('chatMsg2').value = msg.second;
+    if(!draft) $('chatMsg2').value = msg.second;
     $('chatSent').textContent = rec.sentAt
       ? 'Отправлено ' + fmtShort.format(new Date(rec.sentAt))
       : 'Отметить отправленным';
