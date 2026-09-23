@@ -608,6 +608,7 @@
   .btn.sm{font-size:13.5px; padding:10px 18px; border-width:1.5px;}
   .wide-dlg{width:min(620px, calc(100vw - 32px));}
   .mini.danger{color:#B3261E; border-color:#E6C4C1;}
+  .mini.on{background:var(--avo); border-color:var(--blue-deep); color:var(--on-tint-blue);}
 
   /* ——— диалог вместо системных окон (в артефакте они заблокированы) ——— */
   .dlg{
@@ -982,9 +983,13 @@
         <textarea id="chatMsg2" rows="12" readonly></textarea>
         <div class="mail-actions">
           <button class="mini" type="button" id="chatCopy2">Скопировать</button>
-          <button class="mini" type="button" id="chatSent">Отметить отправленным</button>
-          <button class="mini" type="button" id="chatClose">Закрыть</button>
         </div>
+      </div>
+      <!-- отметка и закрытие — вне второго сообщения: в черновике оно скрыто,
+           а отметить отправку и закрыть панель нужно и там -->
+      <div class="mail-actions" style="margin-top:18px;">
+        <button class="mini" type="button" id="chatSent">Отметить отправленным</button>
+        <button class="mini" type="button" id="chatClose">Закрыть</button>
       </div>
       <p class="hint" style="margin-top:14px;">Пароль виден только сейчас: восстановить его нельзя, при повторном открытии сообщений выпускается новый.</p>
     </div>
@@ -1829,6 +1834,27 @@
     }
     showChat(rec, '', true);
   });
+  /* Кандидат — та же запись сотрудника, но без пароля: логин и hash появятся,
+     когда HR нажмёт «Создать доступ». Форма после сохранения очищается. */
+  function saveCandidate(draft){
+    var rec = {
+      code: newCode(), login: '',
+      lastName: draft.lastName, firstName: draft.firstName,
+      dept: draft.dept, gender: draft.gender,
+      email: '', personalEmail: draft.personalEmail, emailBoundAt: '',
+      startDate: draft.startDate, startTime: draft.startTime,
+      createdAt: new Date().toISOString(),
+      openedAt: '', sentAt: '', progress: {},
+      offer: draft.offer || {},
+      offerSentAt: draft.offerSentAt || '',
+      offerReply: '', offerReplyAt: '', accessAt: ''
+    };
+    return state.store.saveEmployee(rec).then(function(){
+      $('newForm').reset(); $('fDept').selectedIndex = 0; $('fMail').dataset.touched = '';
+      resetNewOffer(); renderTeamPreview(); syncOfferBlock();
+      return rec;
+    });
+  }
   function resetNewOffer(){
     state.newOffer = {};
     renderOfferFields($('offerNew'), {offer: state.newOffer});
@@ -2294,15 +2320,13 @@
       : 'Личная почта не указана — добавь её, чтобы отправить оффер.';
     /* черновик: карточки ещё нет, поэтому ни сохранять, ни отмечать отправку нечего */
     $('offerTo').textContent = rec.draft ? 'Черновик до создания доступа · ' + to : to;
-    $('offerSent').hidden = !!rec.draft;
+    $('offerSent').textContent = rec.draft ? 'Отправлен — сохранить кандидата'
+      : (rec.offerSentAt ? 'Отправлено ' + fmtShort.format(new Date(rec.offerSentAt)) : 'Отметить отправленным');
     renderOfferFields($('offerEdit'), rec, function(){
       refreshOffer();
       if(!rec.draft) saveOfferSoon(rec);
     });
     refreshOffer();
-    $('offerSent').textContent = rec.offerSentAt
-      ? 'Отправлено ' + fmtShort.format(new Date(rec.offerSentAt))
-      : 'Отметить отправленным';
     $('offerPanel').scrollIntoView({behavior:'smooth', block:'start'});
   }
   $('offerCopyRich').addEventListener('click', function(){ copyRich(state.offer.html, state.offer.text, $('offerCopyRich')); });
@@ -2313,10 +2337,13 @@
   $('offerSent').addEventListener('click', function(){
     var rec = state.offerRec; if(!rec) return;
     rec.offerSentAt = new Date().toISOString();
-    state.store.saveEmployee(rec).then(function(){
-      $('offerSent').textContent = 'Отправлено ' + fmtShort.format(new Date(rec.offerSentAt));
+    /* черновик становится карточкой кандидата: доступа ещё нет, ответ ждём */
+    (rec.draft ? saveCandidate(rec) : state.store.saveEmployee(rec)).then(function(saved){
+      var r = saved || rec;
+      state.offerRec = r;
+      $('offerSent').textContent = 'Отправлено ' + fmtShort.format(new Date(r.offerSentAt));
       refreshPeople();
-    });
+    }, function(){ notify('Не удалось сохранить', 'Попробуй ещё раз.'); });
   });
   $('offerClose').addEventListener('click', function(){
     $('offerPanel').hidden = true;
@@ -2362,21 +2389,29 @@
     /* второе сообщение несёт ссылку и пароль — без карточки их просто нет */
     $('chatSecond').hidden = !!draft;
     $('chatLater').hidden = !draft;
-    $('chatSent').hidden = !!draft;
+    $('chatSent').textContent = draft ? 'Отправлено — сохранить кандидата'
+      : (rec.sentAt ? 'Отправлено ' + fmtShort.format(new Date(rec.sentAt)) : 'Отметить отправленным');
     $('chatSub').textContent = draft
       ? 'Черновик до создания доступа: отправь первое сообщение, а доступ создай, когда кандидат согласится.'
       : 'Отправляются кандидату по одному: второе — после согласия на стажировку.';
     $('chatMsg1').value = msg.first;
     if(!draft) $('chatMsg2').value = msg.second;
-    $('chatSent').textContent = rec.sentAt
-      ? 'Отправлено ' + fmtShort.format(new Date(rec.sentAt))
-      : 'Отметить отправленным';
     $('chatPanel').scrollIntoView({behavior:'smooth', block:'start'});
   }
   $('chatCopy1').addEventListener('click', function(){ copyText($('chatMsg1').value, $('chatCopy1')); });
   $('chatCopy2').addEventListener('click', function(){ copyText($('chatMsg2').value, $('chatCopy2')); });
   $('chatSent').addEventListener('click', function(){
     var rec = state.chatRec; if(!rec) return;
+    if(rec.draft){
+      /* приглашение отправлено до доступа — сохраняем кандидата */
+      rec.offerSentAt = new Date().toISOString();
+      saveCandidate(rec).then(function(saved){
+        state.chatRec = saved;
+        $('chatSent').textContent = 'Отправлено ' + fmtShort.format(new Date(saved.offerSentAt));
+        refreshPeople();
+      }, function(){ notify('Не удалось сохранить', 'Попробуй ещё раз.'); });
+      return;
+    }
     rec.sentAt = new Date().toISOString();     /* тот же признак, что у письма */
     state.store.saveEmployee(rec).then(function(){
       $('chatSent').textContent = 'Отправлено ' + fmtShort.format(new Date(rec.sentAt));
@@ -2506,7 +2541,18 @@
     var b = document.createElement('button'); b.type = 'button'; b.className = 'mini' + (cls ? ' ' + cls : ''); b.textContent = text; return b;
   }
   /* ——— статусы и фильтры ——— */
+  /* Кандидат — запись без выданного пароля: оффер отправлен, доступа ещё нет.
+     Войти по такой записи нельзя: checkPassword без hash возвращает false. */
+  function hasAccess(rec){ return !!(rec.hash || rec.demoPass); }
+  function offerWord(rec){ return isIntern(rec.dept) ? 'приглашение' : 'оффер'; }
   function statusOf(rec){
+    if(!hasAccess(rec)){
+      var w = offerWord(rec);
+      if(rec.offerReply === 'no') return {key:'declined', label:'отказ · ' + w, cls:'warn'};
+      if(rec.offerReply === 'yes') return {key:'accepted', label:w + ' принят — выдать доступ', cls:'ready'};
+      if(rec.offerSentAt) return {key:'offered', label:w + ' отправлен · ждём ответа', cls:'info'};
+      return {key:'draft', label:w + ' не отправлен', cls:''};
+    }
     var ds = docStats(rec);
     if(!rec.sentAt) return {key:'tosend', label:'письмо не отправлено', cls:'warn'};
     if(ds.sentAt) return {key:'sent', label:'список отправлен', cls:'ready'};
@@ -2516,6 +2562,8 @@
   }
   var FILTERS = [
     {key:'all', label:'Все'},
+    {key:'offered', label:'Ждут ответа на оффер'},
+    {key:'accepted', label:'Оффер принят — выдать доступ'},
     {key:'tosend', label:'Отправить письмо'},
     {key:'waiting', label:'Не заходили'},
     {key:'collecting', label:'Собирают документы'},
@@ -2593,6 +2641,8 @@
       dchip.textContent = 'тестовый профиль';
       card.appendChild(dchip);
     }
+
+    if(!hasAccess(rec)){ card.appendChild(candidateBody(rec)); return card; }
 
     var docs = document.createElement('div'); docs.className = 'pc-docs';
     var top = document.createElement('div'); top.className = 'pc-docs-top';
@@ -2684,6 +2734,84 @@
     return card;
   }
 
+  /* У кандидата нет ни доступа, ни чек-листов — показываем только путь оффера */
+  function candidateBody(rec){
+    var box = document.createElement('div');
+    var rows = document.createElement('div'); rows.className = 'pc-rows';
+    var w = offerWord(rec);
+    rows.appendChild(row(w.charAt(0).toUpperCase() + w.slice(1), rec.offerSentAt
+      ? 'отправлен ' + fmtShort.format(new Date(rec.offerSentAt))
+      : 'не отправлен', !rec.offerSentAt));
+    rows.appendChild(row('Ответ', rec.offerReply === 'yes'
+      ? 'принят' + (rec.offerReplyAt ? ' · ' + fmtShort.format(new Date(rec.offerReplyAt)) : '')
+      : (rec.offerReply === 'no'
+         ? 'отказ' + (rec.offerReplyAt ? ' · ' + fmtShort.format(new Date(rec.offerReplyAt)) : '')
+         : 'ждём'), !rec.offerReply));
+    rows.appendChild(row('Личная почта', rec.personalEmail || 'не указана', !rec.personalEmail));
+    box.appendChild(rows);
+
+    var act = document.createElement('div'); act.className = 'pc-act';
+    var grant = document.createElement('button');
+    grant.type = 'button'; grant.className = 'btn sm'; grant.textContent = 'Создать доступ';
+    grant.addEventListener('click', function(){ grantAccess(rec); });
+
+    var letter = document.createElement('button');
+    letter.type = 'button'; letter.className = 'mini';
+    letter.textContent = isIntern(rec.dept) ? 'Сообщение' : 'Оффер';
+    letter.addEventListener('click', function(){
+      if(isIntern(rec.dept)) showChat(rec, '', true); else showOffer(rec);
+    });
+
+    function replyBtn(text, value){
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mini' + (rec.offerReply === value ? ' on' : '');
+      b.setAttribute('data-reply', value);
+      b.textContent = text;
+      b.addEventListener('click', function(){
+        rec.offerReply = rec.offerReply === value ? '' : value;   /* повторный клик снимает отметку */
+        rec.offerReplyAt = rec.offerReply ? new Date().toISOString() : '';
+        rec.updatedAt = new Date().toISOString();
+        state.store.saveEmployee(rec).then(refreshPeople, function(){
+          notify('Не удалось сохранить ответ', 'Попробуй ещё раз.');
+        });
+      });
+      return b;
+    }
+    var editBtn = document.createElement('button');
+    editBtn.type = 'button'; editBtn.className = 'mini'; editBtn.textContent = 'Настроить';
+    editBtn.addEventListener('click', function(){ openEdit(rec); });
+
+    act.appendChild(grant); act.appendChild(letter);
+    act.appendChild(replyBtn('Принят', 'yes')); act.appendChild(replyBtn('Отказ', 'no'));
+    act.appendChild(editBtn);
+    box.appendChild(act);
+    return box;
+  }
+  /* Второй шаг: кандидат согласился — выпускаем пароль и открываем письмо */
+  function grantAccess(rec){
+    if(rec.offerReply === 'no'){
+      ask({title:'Кандидат отказался', ok:'Всё равно выдать',
+           text:'В карточке стоит отказ. Если это ошибка, сначала поменяй ответ.'}).then(function(v){
+        if(v) issueAccess(rec);
+      });
+      return;
+    }
+    issueAccess(rec);
+  }
+  function issueAccess(rec){
+    var pass = newPassword();
+    rec.login = rec.login || rec.code.toLowerCase();
+    rec.accessAt = new Date().toISOString();
+    rec.updatedAt = rec.accessAt;
+    setPassword(rec, pass).then(function(){
+      return state.store.saveEmployee(rec);
+    }).then(function(){
+      refreshPeople();
+      if(isIntern(rec.dept)) showChat(rec, pass); else showMail(rec, pass);
+    }).catch(function(){ notify('Не удалось создать доступ', 'Попробуй ещё раз.'); });
+  }
+
   function renderPeople(){
     renderFilters();
     var grid = $('peopleGrid');
@@ -2741,8 +2869,10 @@
     $('editCancel').onclick = close;
     $('editDelete').onclick = function(){
       close();
-      ask({title:'Удалить доступ?', danger:true, ok:'Удалить',
-           text: rec.lastName + ' ' + rec.firstName + ' (' + rec.code + ') больше не сможет войти, отметки в чек-листах пропадут. Отменить нельзя.'})
+      ask({title: hasAccess(rec) ? 'Удалить доступ?' : 'Удалить кандидата?', danger:true, ok:'Удалить',
+           text: hasAccess(rec)
+             ? rec.lastName + ' ' + rec.firstName + ' (' + rec.code + ') больше не сможет войти, отметки в чек-листах пропадут. Отменить нельзя.'
+             : rec.lastName + ' ' + rec.firstName + ' пропадёт из списка вместе с оффером. Отменить нельзя.'})
         .then(function(v){
           if(!v) return;
           state.store.removeEmployee(rec.code).then(refreshPeople);
