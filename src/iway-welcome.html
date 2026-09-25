@@ -364,6 +364,17 @@
   .docs-send{margin-top:30px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;}
   .docs-send .btn[disabled]{opacity:.45; cursor:not-allowed; transform:none;}
   .docs-send .hint{margin:0; max-width:36ch;}
+  /* «оформляю впервые»: подстрока под документом, которого у новичка может
+     ещё не быть. Документ остаётся обязательным — просто закрывает его ответ,
+     а не отметка «принесу». Отступ слева равен ширине квадрата с зазором,
+     поэтому подстрока читается как часть пункта выше. */
+  .firstrow{cursor:default; border-top:none; padding-top:0; padding-left:53px;}
+  .firstrow:hover{background:transparent;}
+  .firstrow .c-t{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .firstrow .fq{font-size:14px; color:var(--ink-2);}
+  .firstrow .card-opts,.firstrow .card-note{margin-top:0;}
+  .check[aria-disabled="true"]{cursor:default;}
+  .check[aria-disabled="true"]:hover{background:transparent;}
   .cardrow{cursor:default;}
   .cardrow[aria-pressed="true"] .c-t{color:var(--ink); text-decoration:none;}
   .cardrow:hover{background:transparent;}
@@ -1197,7 +1208,7 @@
       <button class="check" type="button" data-key="passport" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Паспорт</span></button>
       <button class="check" type="button" data-key="snils" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">СНИЛС</span></button>
       <button class="check" type="button" data-key="military" data-doc="mil" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Военный билет или приписное свидетельство</span></button>
-      <button class="check" type="button" data-key="labor" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Трудовая книжка <span class="opt">— бумажная: оригинал. Электронная: форма СТД-Р</span></span></button>
+      <button class="check" type="button" data-key="labor" data-first="1" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">Трудовая книжка <span class="opt">— бумажная: оригинал. Электронная: форма СТД-Р</span></span></button>
       <button class="check" type="button" data-key="inn" aria-pressed="false"><span class="box"><svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="c-t">ИНН <span class="opt">— бланк или номер</span></span></button>
       </div>
       <p class="meter"><span id="docCount">0 из 5</span><span class="meter-bar"><b id="docFill"></b></span><span id="docDone" class="done-note" hidden></span></p>
@@ -2516,13 +2527,17 @@
       return {key: el.getAttribute('data-key'), title: el.querySelector('.c-t').textContent.replace(/\s+/g, ' ').trim()};
     });
   }
+  function firstOn(rec, key){ return !!(rec.firstTime && rec.firstTime[key]); }
   function docStats(rec){
     var p = rec.progress || {};
     var req = docItems(rec, '#docList'), extra = docItems(rec, '#docExtra');
-    var missing = [], done = 0;
-    req.forEach(function(it){ if(p[it.key]) done++; else missing.push(it.title); });
+    var missing = [], done = 0, first = [];
+    req.forEach(function(it){
+      if(p[it.key]) done++; else missing.push(it.title);
+      if(firstOn(rec, it.key)) first.push(it.title);
+    });
     return {
-      done: done, total: req.length, missing: missing,
+      done: done, total: req.length, missing: missing, first: first,
       ready: req.length > 0 && missing.length === 0,   /* диплом, 2-НДФЛ и карта на полноту не влияют */
       extraDone: extra.filter(function(it){ return p[it.key]; }).length,
       extraTotal: extra.length,
@@ -2700,6 +2715,7 @@
       if(ds.missing.length) lines.push('Не отмечено:\n· ' + ds.missing.join('\n· '));
       lines.push('\nНе обязательные: ' + ds.extraDone + ' из ' + ds.extraTotal +
         (ds.extraMissing.length ? '\nНет: ' + ds.extraMissing.join(', ') : ''));
+      if(ds.first.length) lines.push('\nОформляем впервые (приносить нечего): ' + ds.first.join(', '));
       lines.push('\nКарта Альфа-Банка: ' + (rec.cardChoice === 'have' ? 'есть' :
         (rec.cardChoice === 'need' ? 'нет — открываем в день трудоустройства' : 'нет ответа')));
       if(ds.sentAt) lines.push('\nСписок отправлен ' + fmtShort.format(new Date(ds.sentAt)) + '.');
@@ -3090,7 +3106,8 @@
               href: a ? a.getAttribute('href') : ''}; }); },
     check: function(box){ return nodes(box, '.check[data-key]').map(function(el){
       return {key: el.getAttribute('data-key'), t: txt(el.querySelector('.c-t')),
-              mil: el.getAttribute('data-doc') === 'mil'}; }); },
+              mil: el.getAttribute('data-doc') === 'mil',
+              first: el.getAttribute('data-first') === '1'}; }); },
     values: function(box){ return nodes(box, '.val').map(function(v){
       return {t: txt(v.querySelector('.v-t')), d: txt(v.querySelector('.v-d'))}; }); },
     cards: function(box){ return nodes(box, '.cult').map(function(c){
@@ -3134,6 +3151,7 @@
         b.type = 'button'; b.className = 'check';
         b.setAttribute('data-key', it.key || ('k' + randHex(4)));
         if(it.mil) b.setAttribute('data-doc', 'mil');
+        if(it.first) b.setAttribute('data-first', '1');
         b.setAttribute('aria-pressed', 'false');
         var mark = document.createElement('span'); mark.className = 'box';
         mark.innerHTML = CHECK_SVG;                    /* постоянная разметка, не из поля HR */
@@ -3172,9 +3190,10 @@
              add:'+ Добавить статью', del:'Удалить статью',
              note:'Без ссылки строка покажется без перехода — это видно сразу в предпросмотре.'}],
     docs: [{cfg:'items', attr:'docreq', label:'Обязательные — оригиналы', sel:'#docList', kind:'check',
-            fields:[['t','Документ','input'], ['mil','Только для мужчин','checkbox']],
+            fields:[['t','Документ','input'], ['mil','Только для мужчин','checkbox'],
+                    ['first','Может оформляться впервые','checkbox']],
             add:'+ Добавить документ', del:'Удалить документ',
-            note:'Удалённый документ перестаёт учитываться в полноте пакета; отметки сотрудников по нему просто перестают читаться.'},
+            note:'Удалённый документ перестаёт учитываться в полноте пакета; отметки сотрудников по нему просто перестают читаться. «Может оформляться впервые» добавляет к пункту вопрос «Оформляешь впервые?»: документ остаётся обязательным, но у новичка его может ещё не быть — ответ закрывает пункт.'},
            {cfg:'extra', attr:'docopt', label:'Не обязательные', sel:'#docExtra', kind:'check',
             fields:[['t','Документ','input']],
             add:'+ Добавить документ', del:'Удалить документ'}],
@@ -3696,8 +3715,69 @@
     var female = g(rec, 'm', 'f') === 'f';
     document.querySelectorAll('#docList [data-doc="mil"], #docExtra [data-doc="mil"]').forEach(function(mil){
       mil.hidden = female;
+      var sub = mil.nextElementSibling;
+      if(sub && sub.hasAttribute('data-first-row')) sub.hidden = female;
       var note = mil.querySelector('.opt');
       if(note) note.hidden = true;          /* для мужчин оговорка не нужна */
+    });
+  }
+  /* Документ, которого у новичка может ещё не быть (трудовая книжка на первой
+     работе). Пункт остаётся обязательным и в списке, и в счётчике — закрывает
+     его ответ «оформляю впервые»: приносить нечего, заводим в первый день.
+     Флаг ставит HR в редакторе страницы, поэтому подстроку собираем из DOM
+     после каждой пересборки списка, а не пишем в вёрстке. */
+  function firstRowFor(el){
+    var key = el.getAttribute('data-key');
+    var row = document.createElement('div');
+    row.className = 'check firstrow';
+    row.setAttribute('data-first-row', key);
+    var t = document.createElement('span'); t.className = 'c-t';
+    var q = document.createElement('span'); q.className = 'fq';
+    q.textContent = 'Оформляешь впервые?';
+    var opts = document.createElement('span'); opts.className = 'card-opts';
+    var btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'opt-btn'; btn.setAttribute('data-first-btn', key);
+    btn.textContent = 'Да, впервые';
+    opts.appendChild(btn);
+    var note = document.createElement('span'); note.className = 'opt card-note'; note.hidden = true;
+    note.textContent = '— приносить нечего: оформим в первый день';
+    t.appendChild(q); t.appendChild(opts); t.appendChild(note);
+    row.appendChild(t);
+    btn.addEventListener('click', function(){
+      var ft = state.rec.firstTime || (state.rec.firstTime = {});
+      var next = !ft[key];
+      ft[key] = next;
+      if(!next) delete ft[key];
+      /* ответ «впервые» сам закрывает пункт: приносить нечего */
+      state.rec.progress[key] = next;
+      state.rec.updatedAt = new Date().toISOString();
+      saveRec(); renderFirst(); renderMeters();
+    });
+    return row;
+  }
+  function applyFirstDocs(){
+    document.querySelectorAll('#docList .check[data-first="1"]').forEach(function(el){
+      var next = el.nextElementSibling;
+      if(!next || !next.hasAttribute('data-first-row')) el.parentNode.insertBefore(firstRowFor(el), next);
+    });
+    document.querySelectorAll('#docList [data-first-row]').forEach(function(row){
+      var prev = row.previousElementSibling;
+      if(!prev || prev.getAttribute('data-first') !== '1') row.remove();   /* HR снял флаг */
+    });
+  }
+  function renderFirst(){
+    document.querySelectorAll('#docList [data-first-row]').forEach(function(row){
+      var key = row.getAttribute('data-first-row');
+      var on = firstOn(state.rec, key);
+      row.querySelector('[data-first-btn]').setAttribute('aria-pressed', on ? 'true' : 'false');
+      row.querySelector('.card-note').hidden = !on;
+      var item = row.previousElementSibling;
+      if(item){
+        /* пока стоит «впервые», отметку руками не снять — иначе счётчик и
+           ответ разъедутся */
+        item.setAttribute('aria-disabled', on ? 'true' : 'false');
+        item.setAttribute('aria-pressed', on ? 'true' : (state.rec.progress[key] ? 'true' : 'false'));
+      }
     });
   }
   function renderCard(){
@@ -3717,6 +3797,7 @@
   function initChecks(){
     var progress = state.rec.progress || (state.rec.progress = {});
     applyGender(state.rec);
+    applyFirstDocs();
     /* списки может пересобрать HR, поэтому обработчик вешаем на сам узел, а не
        один раз на всю страницу: иначе новые пункты остались бы немыми */
     Array.prototype.slice.call(document.querySelectorAll('.checklist [data-key]')).forEach(function(el){
@@ -3746,9 +3827,11 @@
     }
     checksReady = true;
     renderCard();
+    renderFirst();
     renderMeters();
   }
   function toggleItem(el, key){
+    if(el.getAttribute('aria-disabled') === 'true') return;   /* закрыт ответом «впервые» */
     var next = el.getAttribute('aria-pressed') !== 'true';
     el.setAttribute('aria-pressed', next ? 'true' : 'false');
     state.rec.progress[key] = next;
