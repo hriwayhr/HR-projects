@@ -30,9 +30,10 @@ with sync_playwright() as p:
     # HR открывает панель
     pg.goto(url+'#admin'); pg.wait_for_timeout(1200)
     pg.click('#tabPeople'); pg.wait_for_timeout(300)   # список — на своей вкладке
-    card = pg.query_selector('.pcard')
-    print('карточка:', card.query_selector('.pc-docs-top b').inner_text(), '|', card.query_selector('.chip').inner_text())
-    pg.locator('.pcard .linky').click(); pg.wait_for_timeout(500)
+    card = pg.query_selector('.prow')
+    print('карточка:', card.query_selector('.pr-num').inner_text(), '|', card.query_selector('.chip').inner_text())
+    pg.locator('.prow').first.locator('.pr-head').click(); pg.wait_for_timeout(300)
+    pg.locator('.prow .linky').click(); pg.wait_for_timeout(500)
     print('диалог:', pg.inner_text('#dlgTitle'))
     print('список:', pg.inner_text('#dlgText')[:130].replace('\n',' / '))
     pg.screenshot(path=base+'shots/adm-doc.png', clip={'x':330,'y':230,'width':620,'height':420})
@@ -44,7 +45,7 @@ with sync_playwright() as p:
       window.__notify();
     }""")
     pg.wait_for_timeout(900)
-    print('после внешней правки:', pg.query_selector('.pcard .pc-docs-top b').inner_text(), '|', pg.query_selector('.pcard .chip').inner_text())
+    print('после внешней правки:', pg.query_selector('.prow .pr-num').inner_text(), '|', pg.query_selector('.prow .chip').inner_text())
     pg.screenshot(path=base+'shots/adm-ready.png')
     b.close()
 print('ОШИБКИ:', errs or 'нет')

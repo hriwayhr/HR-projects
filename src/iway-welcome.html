@@ -593,17 +593,60 @@
     background:var(--paper); border:1.5px solid var(--line-strong); border-radius:999px; padding:10px 16px;
   }
   .search:focus{border-color:var(--blue); outline:none;}
-  /* align-items:start — короткая карточка не растягивается пустотой до высоты соседней */
-  .pgrid{margin-top:20px; display:grid; gap:14px; align-items:start; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr));}
-  /* список этапов слева — карточки начинаются вровень с первой кнопкой */
-  .pg-wrap .pgrid{margin-top:0;}
-  .pcard{
-    border:1px solid var(--line); border-radius:14px; background:var(--paper); padding:18px 18px 16px;
-    display:flex; flex-direction:column; gap:12px;
+  /* ——— список людей: строки, а не плитки ———
+     Плитками десять человек уже не охватить взглядом: имя, отдел, дата и
+     статус стоят в каждой плитке на своём месте. В строках они выстроены в
+     колонки, поэтому список читается сверху вниз, а подробности и кнопки
+     разворачиваются по клику — в свёрнутом виде они только мешали. */
+  .plist{
+    --pcols: minmax(0,1.5fr) minmax(0,1fr) 104px 112px minmax(0,1.1fr) 22px;
+    margin-top:20px; border:1px solid var(--line); border-radius:14px; background:var(--paper); overflow:hidden;
   }
-  .pc-head{display:flex; align-items:flex-start; gap:10px; justify-content:space-between;}
-  .pc-name{font-family:var(--display); font-weight:600; font-size:17px; letter-spacing:-.01em; line-height:1.25;}
-  .pc-meta{font-size:13.5px; color:var(--ink-3); margin-top:-6px;}
+  .pg-wrap .plist{margin-top:0;}                 /* вровень с первой кнопкой панели слева */
+  .pl-cap,.pr-head{display:grid; grid-template-columns:var(--pcols); gap:12px; align-items:center;}
+  .pl-cap > span,.pr-head > span{min-width:0;}
+  .pl-cap{
+    padding:11px 18px; border-bottom:1px solid var(--line); background:var(--shell);
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-3);
+  }
+  .prow{position:relative; border-top:1px solid var(--line);}
+  .prow:first-child{border-top:none;}
+  .prow.open{background:var(--shell);}
+  .pr-head{
+    width:100%; padding:12px 16px; text-align:left; background:transparent; border:0; cursor:pointer;
+    font:inherit; color:var(--ink);
+  }
+  @media (hover:hover){ .pr-head:hover{background:var(--shell);} }
+  .pr-head:focus-visible{outline:2px solid var(--blue-deep); outline-offset:-2px;}
+  .pr-name{display:block; min-width:0;}
+  .pr-who{display:block; font-family:var(--display); font-weight:600; font-size:15.5px; letter-spacing:-.01em; line-height:1.25;}
+  .pr-id{display:block; margin-top:3px; font-family:var(--mono); font-size:11px; color:var(--ink-3); letter-spacing:.03em;}
+  .pr-mark{font-style:normal; color:var(--blue-deep); font-weight:600;}
+  .pr-mark::before{content:" · "; color:var(--ink-3); font-weight:400;}
+  .pr-dept,.pr-date{font-size:12.5px; color:var(--ink-2); line-height:1.3;}
+  .pr-date b{display:block; font-weight:600; color:var(--ink); font-variant-numeric:tabular-nums;}
+  .pr-num{font-size:12.5px; color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums;}
+  .pr-prog .pbar{margin-top:6px;}
+  .pr-dash{color:var(--ink-3);}
+  .pr-status{display:flex; flex-wrap:wrap; gap:6px;}
+  .pr-status .chip{white-space:normal; overflow-wrap:anywhere; letter-spacing:.04em;}
+  .pr-caret{
+    justify-self:end; width:22px; height:22px; display:flex; align-items:center; justify-content:center;
+    color:var(--ink-3); transition:transform .18s ease;
+  }
+  .prow.open .pr-caret{transform:rotate(180deg); color:var(--blue-deep);}
+  .pr-body{padding:2px 16px 16px;}
+  /* подписи и значения не разъезжаются по всей ширине списка */
+  .pr-body .pc-rows,.pr-body .pc-docs{border-top-color:var(--line-strong); max-width:560px;}
+  @media (max-width:900px){
+    /* на телефоне колонки не выстроить — строка складывается в две-три */
+    .pl-cap{display:none;}
+    .pr-head{display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; padding:14px 44px 14px 16px;}
+    .pr-name{flex:1 1 100%;}
+    .pr-prog{flex:0 0 118px;}
+    .pr-caret{position:absolute; top:15px; right:14px;}
+    .pr-body{padding:2px 16px 16px;}
+  }
   .pc-docs{border-top:1px solid var(--line); padding-top:12px;}
   .pc-docs-top{display:flex; justify-content:space-between; font-size:13.5px; color:var(--ink-2); margin-bottom:8px;}
   .pc-docs-top b{color:var(--ink); font-variant-numeric:tabular-nums;}
@@ -747,7 +790,13 @@
         <div class="pg-wrap">
           <aside class="stages pg-stages" id="peopleFilters" role="group" aria-label="Этапы"></aside>
           <div>
-            <div class="pgrid" id="peopleGrid"></div>
+            <div class="plist" id="peopleList">
+              <div class="pl-cap" aria-hidden="true">
+                <span>Сотрудник</span><span>Отдел</span><span>Выход</span>
+                <span>Документы</span><span>Статус</span><span></span>
+              </div>
+              <div id="peopleGrid"></div>
+            </div>
             <p class="empty" id="peopleEmpty" hidden></p>
           </div>
         </div>
@@ -1432,7 +1481,7 @@
   var fmtLong = new Intl.DateTimeFormat('ru-RU', {day:'numeric', month:'long'});
   var fmtShort = new Intl.DateTimeFormat('ru-RU', {day:'2-digit', month:'2-digit', year:'numeric'});
   var state = {store:null, mode:'local', canEditPage:false, depts:[], rec:null, me:null,
-               view:null, people:[], admins:[], gateKind:'emp', filter:'all', page:{}, newOffer:{},
+               view:null, people:[], admins:[], gateKind:'emp', filter:'all', open:{}, page:{}, newOffer:{},
                stage:null, pageStage:null, tplStage:null};
 
   function g(rec, male, female){ return (rec && rec.gender === 'm') ? male : female; }
@@ -2565,9 +2614,9 @@
   function statusOf(rec){
     if(!hasAccess(rec)){
       var w = offerWord(rec);
-      if(rec.offerReply === 'no') return {key:'declined', label:'отказ · ' + w, cls:'warn'};
-      if(rec.offerReply === 'yes') return {key:'accepted', label:w + ' принят — выдать доступ', cls:'ready'};
-      if(rec.offerSentAt) return {key:'offered', label:w + ' отправлен · ждём ответа', cls:'info'};
+      if(rec.offerReply === 'no') return {key:'declined', label:'отказ', cls:'warn'};
+      if(rec.offerReply === 'yes') return {key:'accepted', label:w + ' принят', cls:'ready'};
+      if(rec.offerSentAt) return {key:'offered', label:'ждём ответа', cls:'info'};
       return {key:'draft', label:w + ' не отправлен', cls:''};
     }
     var ds = docStats(rec);
@@ -2674,39 +2723,100 @@
     return fmtShort.format(dt) + (rec.startTime ? ', ' + rec.startTime : '');
   }
 
+  function mark(text){
+    var m = document.createElement('i'); m.className = 'pr-mark'; m.textContent = text;
+    return m;
+  }
+  var CARET = '<svg viewBox="0 0 12 8" fill="none" aria-hidden="true" width="12" height="8">' +
+    '<path d="M1 1.5L6 6.5l5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  /* Строка списка: шапка со всем, что нужно для просмотра сверху вниз, и
+     раскрывающееся тело с подробностями и кнопками. Раскрытые строки помним в
+     state.open — список перерисовывается на каждое событие базы. */
   function cardFor(rec){
-    var st = statusOf(rec), ds = docStats(rec);
-    var card = document.createElement('article'); card.className = 'pcard';
+    var st = statusOf(rec), ds = docStats(rec), has = hasAccess(rec);
+    var wrap = document.createElement('article');
+    wrap.className = 'prow' + (state.open[rec.code] ? ' open' : '');
+    wrap.setAttribute('data-code', rec.code);
 
-    var head = document.createElement('div'); head.className = 'pc-head';
-    var name = document.createElement('div'); name.className = 'pc-name';
-    name.textContent = rec.lastName + ' ' + rec.firstName;
-    var badge = document.createElement('span'); badge.className = 'chip ' + st.cls; badge.textContent = st.label;
-    head.appendChild(name); head.appendChild(badge);
-    card.appendChild(head);
+    var head = document.createElement('button');
+    head.type = 'button'; head.className = 'pr-head';
+    head.setAttribute('aria-expanded', state.open[rec.code] ? 'true' : 'false');
 
-    var meta = document.createElement('div'); meta.className = 'pc-meta';
-    meta.textContent = (rec.dept || 'отдел не указан') + ' · ' + dateLabel(rec);
-    card.appendChild(meta);
-    if(rec.demoPass){
-      var dchip = document.createElement('span'); dchip.className = 'chip demo'; dchip.style.marginTop = '8px';
-      dchip.textContent = 'тестовый профиль';
-      card.appendChild(dchip);
+    var name = document.createElement('span'); name.className = 'pr-name';
+    var who = document.createElement('b'); who.className = 'pr-who';
+    who.textContent = rec.lastName + ' ' + rec.firstName;
+    name.appendChild(who);
+    var id = document.createElement('span'); id.className = 'pr-id';
+    id.textContent = has ? (rec.login || rec.code) : 'кандидат';
+    /* пометки держим в строке логина, а не чипами в статусе: иначе строка
+       вырастает на лишний ряд и список теряет ровный шаг */
+    if(has && ds.cardNeed) id.appendChild(mark('нужна карта'));
+    if(rec.demoPass) id.appendChild(mark('тестовый профиль'));
+    name.appendChild(id);
+
+    var dept = document.createElement('span'); dept.className = 'pr-dept';
+    dept.textContent = rec.dept || 'отдел не указан';
+
+    var date = document.createElement('span'); date.className = 'pr-date';
+    if(rec.startDate){
+      var d = document.createElement('b');
+      d.textContent = fmtShort.format(new Date(rec.startDate + 'T00:00:00'));
+      date.appendChild(d);
+      if(rec.startTime) date.appendChild(document.createTextNode(rec.startTime));
+    } else {
+      date.appendChild(document.createTextNode('дата не указана'));
     }
 
-    if(!hasAccess(rec)){ card.appendChild(candidateBody(rec)); return card; }
+    var prog = document.createElement('span'); prog.className = 'pr-prog';
+    if(has){
+      var num = document.createElement('b'); num.className = 'pr-num';
+      num.textContent = ds.done + ' из ' + ds.total;
+      var bar = document.createElement('span'); bar.className = 'pbar';
+      var fill = document.createElement('b');
+      fill.style.width = (ds.total ? ds.done / ds.total * 100 : 0) + '%';
+      if(ds.ready) fill.style.background = '#009634';
+      bar.appendChild(fill);
+      prog.appendChild(num); prog.appendChild(bar);
+    } else {
+      var dash = document.createElement('span'); dash.className = 'pr-dash';
+      dash.textContent = 'нет доступа';                  /* чек-листов у кандидата нет */
+      prog.appendChild(dash);
+    }
+
+    var status = document.createElement('span'); status.className = 'pr-status';
+    var badge = document.createElement('span'); badge.className = 'chip ' + st.cls;
+    badge.textContent = st.label;
+    status.appendChild(badge);
+
+    var caret = document.createElement('span'); caret.className = 'pr-caret';
+    caret.innerHTML = CARET;
+
+    head.appendChild(name); head.appendChild(dept); head.appendChild(date);
+    head.appendChild(prog); head.appendChild(status); head.appendChild(caret);
+
+    var body = document.createElement('div'); body.className = 'pr-body';
+    body.hidden = !state.open[rec.code];
+    head.addEventListener('click', function(){
+      var next = !state.open[rec.code];
+      if(next) state.open[rec.code] = true; else delete state.open[rec.code];
+      wrap.classList.toggle('open', next);
+      head.setAttribute('aria-expanded', next ? 'true' : 'false');
+      body.hidden = !next;
+    });
+
+    if(!has){
+      body.appendChild(candidateBody(rec));
+      wrap.appendChild(head); wrap.appendChild(body);
+      return wrap;
+    }
 
     var docs = document.createElement('div'); docs.className = 'pc-docs';
     var top = document.createElement('div'); top.className = 'pc-docs-top';
     var lab = document.createElement('span'); lab.textContent = 'Документы';
     var cnt = document.createElement('b'); cnt.textContent = ds.done + ' из ' + ds.total;
     top.appendChild(lab); top.appendChild(cnt);
-    var bar = document.createElement('span'); bar.className = 'pbar';
-    var fill = document.createElement('b');
-    fill.style.width = (ds.total ? ds.done / ds.total * 100 : 0) + '%';
-    if(ds.ready) fill.style.background = '#009634';
-    bar.appendChild(fill);
-    docs.appendChild(top); docs.appendChild(bar);
+    docs.appendChild(top);
     var detail = document.createElement('button');
     detail.type = 'button'; detail.className = 'linky';
     detail.textContent = ds.missing.length ? 'чего не хватает' : 'что отмечено';
@@ -2730,12 +2840,12 @@
 
     if(ds.cardNeed || !ds.cardAnswered){
       var cc = document.createElement('div'); cc.style.marginTop = '10px';
-      var cchip = document.createElement('span');
-      cchip.className = 'chip ' + (ds.cardNeed ? 'card' : '');
-      cchip.textContent = ds.cardNeed ? 'открыть карту Альфа-Банка' : 'нет ответа про карту';
-      cc.appendChild(cchip); docs.appendChild(cc);
+      var chip = document.createElement('span');
+      chip.className = 'chip ' + (ds.cardNeed ? 'card' : '');
+      chip.textContent = ds.cardNeed ? 'открыть карту Альфа-Банка' : 'нет ответа про карту';
+      cc.appendChild(chip); docs.appendChild(cc);
     }
-    card.appendChild(docs);
+    body.appendChild(docs);
 
     var rows = document.createElement('div'); rows.className = 'pc-rows';
     rows.appendChild(row('Логин', rec.login || rec.code));
@@ -2749,7 +2859,7 @@
       (rec.sentAt ? ' · отправлено ' + fmtShort.format(new Date(rec.sentAt)) : ' · не отправлено'), !rec.sentAt));
     var day = dayStats(rec);
     if(day.done) rows.appendChild(row('План дня 1', day.done + ' из ' + day.total));
-    card.appendChild(rows);
+    body.appendChild(rows);
 
     var act = document.createElement('div'); act.className = 'pc-act';
     var mailBtn = document.createElement('button');
@@ -2783,8 +2893,10 @@
       offerBtn.addEventListener('click', function(){ showOffer(rec); });
     }
     act.appendChild(mailBtn); act.appendChild(offerBtn); act.appendChild(linkBtn); act.appendChild(editBtn);
-    card.appendChild(act);
-    return card;
+    body.appendChild(act);
+
+    wrap.appendChild(head); wrap.appendChild(body);
+    return wrap;
   }
 
   /* У кандидата нет ни доступа, ни чек-листов — показываем только путь оффера */
@@ -2872,6 +2984,7 @@
     var q = ($('peopleSearch').value || '').trim().toLowerCase();
     var list = sortPeople(state.people).filter(function(r){ return matchFilter(r, state.filter) && matchSearch(r, q); });
     list.forEach(function(rec){ grid.appendChild(cardFor(rec)); });
+    $('peopleList').hidden = !list.length;      /* иначе осталась бы одна шапка колонок */
     $('peopleEmpty').hidden = list.length > 0;
     $('peopleEmpty').textContent = state.people.length
       ? 'В этой категории никого нет.'

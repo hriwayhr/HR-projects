@@ -49,10 +49,11 @@ with sync_playwright() as p:
     pg.goto(url+'#admin'); pg.wait_for_timeout(1300)
     pg.click('#tabPeople'); pg.wait_for_timeout(300)   # список — на своей вкладке
     print('этапы слева:', pg.inner_text('#peopleFilters').replace('\n',' · '))
-    for c in pg.query_selector_all('.pcard'):
-        print(' ', c.query_selector('.pc-name').inner_text(), '|', c.query_selector('.pc-docs-top b').inner_text(),
-              '|', c.query_selector('.chip').inner_text(), '|', c.query_selector('.pc-sub').inner_text())
-    pg.locator('.pcard').first.locator('.linky').click(); pg.wait_for_timeout(500)
+    for c in pg.query_selector_all('.prow'):
+        print(' ', c.query_selector('.pr-who').inner_text(), '|', c.query_selector('.pr-num').inner_text(),
+              '|', c.query_selector('.chip').inner_text(), '|', c.query_selector('.pr-id').inner_text())
+    pg.locator('.prow').first.locator('.pr-head').click(); pg.wait_for_timeout(300)
+    pg.locator('.prow').first.locator('.linky').click(); pg.wait_for_timeout(500)
     print('детали:', pg.inner_text('#dlgText').replace('\n',' / ')[:200])
     b.close()
 print('ОШИБКИ:', errs or 'нет')

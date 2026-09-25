@@ -11,6 +11,13 @@ html = pathlib.Path(SRC).read_text(encoding='utf-8')
 pathlib.Path(base+'preview.html').write_text('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style></head><body>'+html+'</body></html>', encoding='utf-8')
 url='file://'+base+'preview.html'
 errs=[]
+def open_row(pg, text=''):
+    """строка списка сворачивается — раскрываем перед работой с подробностями"""
+    r = pg.locator('.prow', has_text=text).first if text else pg.locator('.prow').first
+    if r.locator('.pr-head').get_attribute('aria-expanded') != 'true':
+        r.locator('.pr-head').click(); pg.wait_for_timeout(300)
+    return r
+
 with sync_playwright() as p:
     b=p.chromium.launch(executable_path='/opt/pw-browsers/chromium')
     pg=b.new_page(viewport={'width':1280,'height':1000})
@@ -103,7 +110,7 @@ with sync_playwright() as p:
     assert 'Наше предложение' in doc2, 'правка шаблона не долетела в открытое письмо'
     pg.click('#tabNew'); pg.wait_for_timeout(200)
     pg.click('#tabPeople'); pg.wait_for_timeout(400)
-    pg.locator('.pcard', has_text='Иванова').first.locator('button', has_text='Оффер').click()
+    open_row(pg, 'Иванова').locator('.pr-body button', has_text='Оффер').click()
     pg.wait_for_timeout(800)
     assert pg.get_attribute('#offerCopySubject', 'title') == 'Оффер Иванова', 'необязательный кусок темы не исчез'
     print('необязательный кусок в скобках выпадает, строка остаётся')
@@ -134,7 +141,7 @@ with sync_playwright() as p:
     assert 'Также мы гарантируем:' in pg.input_value('[data-tpl="offer.body"]'), 'в поле не вернулся исходный текст'
     assert not (pg.evaluate("window.__store['config/templates'].tpl.offer") or {}).get('body'), 'шаблон не сброшен в базе'
     pg.click('#tabPeople'); pg.wait_for_timeout(400)
-    pg.locator('.pcard', has_text='Иванова').first.locator('button', has_text='Оффер').click()
+    open_row(pg, 'Иванова').locator('.pr-body button', has_text='Оффер').click()
     pg.wait_for_timeout(900)
     doc3 = pg.frame_locator('#offerPreview').locator('body').inner_text()
     assert 'Предложение о работе' in doc3 and 'Также мы гарантируем' in doc3, 'исходный текст оффера не вернулся'
@@ -152,7 +159,7 @@ with sync_playwright() as p:
     """)
     pg2.goto(url+'#admin'); pg2.wait_for_timeout(1000)
     pg2.click('#tabPeople'); pg2.wait_for_timeout(500)
-    pg2.locator('.pcard', has_text='Петров').first.locator('button', has_text='Оффер').click()
+    open_row(pg2, 'Петров').locator('.pr-body button', has_text='Оффер').click()
     pg2.wait_for_timeout(900)
     doc4 = pg2.frame_locator('#offerPreview').locator('body').inner_text()
     assert 'Из базы' in doc4 and 'Привет, Пётр!' in doc4, 'шаблон из базы не применился:\n' + doc4

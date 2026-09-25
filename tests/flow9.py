@@ -43,10 +43,10 @@ with sync_playwright() as p:
     print('М — билет виден:', not pg.is_hidden('#docList [data-doc="mil"]'), '| текст:', mil.inner_text().strip(), '| счётчик:', pg.inner_text('#docCount'))
     # панель HR
     pg.goto(url+'#admin'); pg.wait_for_timeout(1300)
-    for c in pg.query_selector_all('.pcard'):
-        print(' ', c.query_selector('.pc-name').inner_text(), '→',
-              c.query_selector('.pc-docs-top b').inner_text(),
+    for c in pg.query_selector_all('.prow'):
+        print(' ', c.query_selector('.pr-who').inner_text(), '→',
+              c.query_selector('.pr-num').inner_text(),
               '|', c.query_selector('.chip').inner_text(),
-              '| карта:', bool(c.query_selector('.chip.card')))
+              '| карта:', bool(c.query_selector('.pr-mark')))
     b.close()
 print('ОШИБКИ:', errs or 'нет')

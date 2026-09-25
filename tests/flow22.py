@@ -59,7 +59,8 @@ with sync_playwright() as p:
     # ——— HR видит причину
     pg.goto(url+'#admin'); pg.wait_for_timeout(1300)
     pg.click('#tabPeople'); pg.wait_for_timeout(400)
-    pg.locator('.pcard').first.locator('.linky').click(); pg.wait_for_timeout(400)
+    pg.locator('.prow').first.locator('.pr-head').click(); pg.wait_for_timeout(300)
+    pg.locator('.prow').first.locator('.linky').click(); pg.wait_for_timeout(400)
     txt = pg.inner_text('#dlgText')
     assert 'Оформляем впервые (приносить нечего): Трудовая книжка' in txt.replace('\n',' '), txt
     print('в панели HR:', [l for l in txt.split('\n') if 'впервые' in l][0][:80])

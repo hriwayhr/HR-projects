@@ -8,6 +8,13 @@ html = pathlib.Path(SRC).read_text(encoding='utf-8')
 pathlib.Path(base+'preview.html').write_text('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style></head><body>'+html+'</body></html>', encoding='utf-8')
 url='file://'+base+'preview.html'
 errs=[]
+def open_row(pg, text=''):
+    """строка списка сворачивается — раскрываем перед работой с подробностями"""
+    r = pg.locator('.prow', has_text=text).first if text else pg.locator('.prow').first
+    if r.locator('.pr-head').get_attribute('aria-expanded') != 'true':
+        r.locator('.pr-head').click(); pg.wait_for_timeout(300)
+    return r
+
 with sync_playwright() as p:
     b=p.chromium.launch(executable_path='/opt/pw-browsers/chromium')
     pg=b.new_page(viewport={'width':1280,'height':1000})
@@ -69,12 +76,12 @@ with sync_playwright() as p:
     assert 'Отправлено' in pg.inner_text('#chatSent'), 'отметка не встала'
     assert pg.evaluate("!!Object.values(window.__store).find(v => v.code)?.sentAt"), 'sentAt не сохранился'
     pg.click('#tabPeople'); pg.wait_for_timeout(500)
-    card = pg.inner_text('.pcard')
+    card = open_row(pg).inner_text()
     assert 'Оффер' not in card, 'в карточке стажировки осталась строка про оффер'
     assert 'отправлено' in card, 'карточка не показала отправку'
     print('карточка: без оффера, отправка отмечена')
 
-    btn = pg.locator('.pcard').first.locator('button', has_text='Сообщения')
+    btn = open_row(pg).locator('.pr-body button', has_text='Сообщения')
     assert btn.count() == 1, 'в карточке нет кнопки «Сообщения»'
     btn.click(); pg.wait_for_timeout(900)
     assert pg.is_visible('#chatPanel'), 'сообщения не открылись из карточки'

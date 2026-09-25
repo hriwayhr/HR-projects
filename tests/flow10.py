@@ -25,6 +25,13 @@ seed={
                        demoPass='тест', startDate='2026-09-28'),
  'config/departments':{'list':[{'name':'Операционный отдел','head':'','senior':'','chat':''},{'name':'Маркетинг','head':'','senior':'','chat':''}]}}
 errs=[]
+def open_row(pg, text=''):
+    """строка списка сворачивается — раскрываем перед работой с подробностями"""
+    r = pg.locator('.prow', has_text=text).first if text else pg.locator('.prow').first
+    if r.locator('.pr-head').get_attribute('aria-expanded') != 'true':
+        r.locator('.pr-head').click(); pg.wait_for_timeout(300)
+    return r
+
 with sync_playwright() as p:
     b=p.chromium.launch(executable_path='/opt/pw-browsers/chromium')
     pg=b.new_page(viewport={'width':1280,'height':1100}, device_scale_factor=2)
@@ -34,20 +41,19 @@ with sync_playwright() as p:
     pg.goto(url+'#admin'); pg.wait_for_timeout(1300)
     pg.click('#tabPeople'); pg.wait_for_timeout(300)   # список — на своей вкладке
     print('этапы слева:', pg.inner_text('#peopleFilters').replace('\n',' · '))
-    print('карточек:', len(pg.query_selector_all('.pcard')))
+    print('карточек:', len(pg.query_selector_all('.prow')))
     # фильтр «Готовы к выходу»
     pg.click('#peopleFilters [data-filter="ready"]'); pg.wait_for_timeout(400)
-    print('после фильтра готовых:', [c.query_selector('.pc-name').inner_text() for c in pg.query_selector_all('.pcard')])
+    print('после фильтра готовых:', [c.query_selector('.pr-who').inner_text() for c in pg.query_selector_all('.prow')])
     pg.click('#peopleFilters [data-filter="all"]'); pg.wait_for_timeout(300)
     # поиск
     pg.fill('#peopleSearch','пётр'); pg.wait_for_timeout(400)
-    print('поиск «пётр»:', [c.query_selector('.pc-name').inner_text() for c in pg.query_selector_all('.pcard')])
+    print('поиск «пётр»:', [c.query_selector('.pr-who').inner_text() for c in pg.query_selector_all('.prow')])
     pg.fill('#peopleSearch',''); pg.wait_for_timeout(300)
     box = pg.query_selector('#peopleFilters').bounding_box()
     pg.screenshot(path=base+'shots/panel.png', clip={'x':120,'y':box['y']-70,'width':1060,'height':620})
     # окно настроек
-    pg.query_selector_all('.pcard')[0].get_by_role = None
-    pg.locator('.pcard').first.locator('button', has_text='Настроить').click(); pg.wait_for_timeout(500)
+    open_row(pg).locator('.pr-body button', has_text='Настроить').click(); pg.wait_for_timeout(500)
     print('окно настроек:', pg.inner_text('#editTitle'), '|', pg.inner_text('#editSub'))
     pg.fill('#eTime','09:30'); pg.select_option('#eGender','m'); pg.click('#editSave'); pg.wait_for_timeout(700)
     rec = pg.evaluate("window.__store['employees/IW-1']")

@@ -17,6 +17,13 @@ def cards(pg):
     # без кода сохранился бы именно туда
     return pg.evaluate("Object.keys(window.__store).filter(k => k.indexOf('employees/') === 0).length")
 
+def open_row(pg, text=''):
+    """строка списка сворачивается — раскрываем перед работой с подробностями"""
+    r = pg.locator('.prow', has_text=text).first if text else pg.locator('.prow').first
+    if r.locator('.pr-head').get_attribute('aria-expanded') != 'true':
+        r.locator('.pr-head').click(); pg.wait_for_timeout(300)
+    return r
+
 with sync_playwright() as p:
     b=p.chromium.launch(executable_path='/opt/pw-browsers/chromium')
     pg=b.new_page(viewport={'width':1280,'height':1000})
@@ -72,24 +79,25 @@ with sync_playwright() as p:
     # карточка кандидата: статус, ответ, кнопка выдачи доступа
     pg.click('#tabPeople'); pg.wait_for_timeout(500)
     # статусная плашка набрана капителью — сверяем без учёта регистра
-    card = pg.inner_text('.pcard').lower()
-    assert 'оффер отправлен' in card, 'в карточке не тот статус: ' + card
+    card = open_row(pg).inner_text().lower()
+    assert 'ждём ответа' in card, 'в строке не тот статус: ' + card
+    assert 'оффер' in card, 'в строке нет слова «оффер»: ' + card
     assert 'создать доступ' in card, 'в карточке кандидата нет кнопки выдачи доступа'
     assert 'документы' not in card, 'у кандидата показаны чек-листы'
-    pg.locator('.pcard button[data-reply="yes"]').first.click(); pg.wait_for_timeout(700)
-    assert 'принят' in pg.inner_text('.pcard').lower(), 'ответ не отметился: ' + pg.inner_text('.pcard')
+    open_row(pg).locator('button[data-reply="yes"]').click(); pg.wait_for_timeout(700)
+    assert 'принят' in open_row(pg).inner_text().lower(), 'ответ не отметился: ' + open_row(pg).inner_text()
     assert pg.evaluate("Object.values(window.__store).find(v => v && v.code).offerReply") == 'yes', 'ответ не сохранился'
     print('карточка кандидата: ответ отмечен')
 
     # выдача доступа: пароль появляется, письмо открывается
-    pg.locator('.pcard button', has_text='Создать доступ').first.click(); pg.wait_for_timeout(1300)
+    open_row(pg).locator('.pr-body button', has_text='Создать доступ').click(); pg.wait_for_timeout(1300)
     rec = pg.evaluate("Object.values(window.__store).find(v => v && v.code)")
     assert rec['hash'] and rec['login'] and rec['accessAt'], 'доступ не выдан: %s' % {k: rec.get(k) for k in ['hash','login','accessAt']}
     assert rec['offerSentAt'] == cand['offerSentAt'], 'дата отправки оффера потерялась'
     assert pg.is_visible('#mailPanel'), 'письмо-приглашение не открылось'
     pg.click('#tabPeople'); pg.wait_for_timeout(500)
-    assert 'письмо не отправлено' in pg.inner_text('.pcard').lower(), \
-        'карточка не перешла к обычному статусу: ' + pg.inner_text('.pcard')
+    assert 'письмо не отправлено' in pg.locator('.prow').first.inner_text().lower(), \
+        'строка не перешла к обычному статусу: ' + pg.locator('.prow').first.inner_text()
     print('доступ выдан из карточки кандидата, письмо открыто')
 
     # ——— второй кандидат: снова черновик, теперь проверяем возврат правок в форму
@@ -138,13 +146,13 @@ with sync_playwright() as p:
     pg.click('#chatSent'); pg.wait_for_timeout(900)
     assert cards(pg) == 3, 'кандидат-стажёр не сохранился: %s' % cards(pg)
     pg.click('#tabPeople'); pg.wait_for_timeout(500)
-    texts = pg.eval_on_selector_all('.pcard', 'e => e.map(x => x.innerText.toLowerCase())')
-    olga = [t for t in texts if 'смирнова' in t]
-    assert olga and 'приглашение отправлен' in olga[0], 'у стажёра не тот статус: %s' % olga
+    olga = open_row(pg, 'Смирнова').inner_text().lower()
+    assert 'ждём ответа' in olga, 'у стажёра не тот статус: %s' % olga
+    assert 'приглашение' in olga and 'оффер' not in olga, 'у стажёра оффер вместо приглашения: %s' % olga
     print('кандидат-стажёр в списке со статусом приглашения')
 
     # доступ выдаём из карточки — открывается второе сообщение с паролем
-    pg.locator('.pcard', has_text='Смирнова').first.locator('button', has_text='Создать доступ').click()
+    open_row(pg, 'Смирнова').locator('.pr-body button', has_text='Создать доступ').click()
     pg.wait_for_timeout(1300)
     assert pg.is_visible('#chatPanel') and pg.is_visible('#chatSecond'), 'второе сообщение не открылось'
     assert 'Пароль: ' in pg.input_value('#chatMsg2'), 'во втором сообщении нет пароля'

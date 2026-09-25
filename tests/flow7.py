@@ -10,6 +10,13 @@ html = pathlib.Path(SRC).read_text(encoding='utf-8')
 pathlib.Path(base+'preview.html').write_text('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style></head><body>'+html+'</body></html>', encoding='utf-8')
 url='file://'+str(pathlib.Path(base+'preview.html').resolve())
 errs=[]
+def open_row(pg, text=''):
+    """строка списка сворачивается — раскрываем перед работой с подробностями"""
+    r = pg.locator('.prow', has_text=text).first if text else pg.locator('.prow').first
+    if r.locator('.pr-head').get_attribute('aria-expanded') != 'true':
+        r.locator('.pr-head').click(); pg.wait_for_timeout(300)
+    return r
+
 with sync_playwright() as p:
     b=p.chromium.launch(executable_path='/opt/pw-browsers/chromium')
     pg=b.new_page(viewport={'width':1280,'height':1000})
@@ -26,27 +33,27 @@ with sync_playwright() as p:
     pg.click('#tabNew'); pg.fill('#fLast','Иванова'); pg.fill('#fFirst','Анна'); pg.fill('#fPersonal','a@ex.com')
     pg.select_option('#fDept','Клиентский сервис'); pg.fill('#fDate','2026-10-05')
     pg.click('#newForm button[type=submit]'); pg.wait_for_timeout(900)
-    print('карточек до удаления:', len(pg.query_selector_all('.pcard')))
+    print('карточек до удаления:', len(pg.query_selector_all('.prow')))
 
     # логин меняется в окне настроек
     pg.click('#tabPeople'); pg.wait_for_timeout(300)
-    pg.locator('.pcard').first.locator('button', has_text='Настроить').click(); pg.wait_for_timeout(500)
+    open_row(pg).locator('.pr-body button', has_text='Настроить').click(); pg.wait_for_timeout(500)
     pg.fill('#eLogin','анна'); pg.click('#editSave'); pg.wait_for_timeout(700)
     print('логин в базе:', pg.evaluate("Object.values(window.__store).find(v=>v.code)?.login"))
 
     # отмена удаления
-    pg.locator('.pcard').first.locator('button', has_text='Настроить').click(); pg.wait_for_timeout(400)
+    open_row(pg).locator('.pr-body button', has_text='Настроить').click(); pg.wait_for_timeout(400)
     pg.click('#editDelete'); pg.wait_for_timeout(500)
     print('диалог удаления:', pg.inner_text('#dlgTitle'))
     pg.click('#dlgCancel'); pg.wait_for_timeout(500)
-    print('после отмены карточек:', len(pg.query_selector_all('.pcard')))
+    print('после отмены карточек:', len(pg.query_selector_all('.prow')))
 
     # подтверждение удаления
-    pg.locator('.pcard').first.locator('button', has_text='Настроить').click(); pg.wait_for_timeout(400)
+    open_row(pg).locator('.pr-body button', has_text='Настроить').click(); pg.wait_for_timeout(400)
     pg.click('#editDelete'); pg.wait_for_timeout(400)
     pg.screenshot(path=base+'shots/d1-dialog.png')
     pg.click('#dlgOk'); pg.wait_for_timeout(800)
-    print('после удаления карточек:', len(pg.query_selector_all('.pcard')))
+    print('после удаления карточек:', len(pg.query_selector_all('.prow')))
     print('в базе остались сотрудники:', [k for k in pg.evaluate("Object.keys(window.__store)") if k.startswith('employees/')] or 'нет')
 
     pg.click('#tabAdmins'); pg.wait_for_timeout(300)

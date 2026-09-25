@@ -8,6 +8,13 @@ html = pathlib.Path(SRC).read_text(encoding='utf-8')
 pathlib.Path(base+'preview.html').write_text('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style></head><body>'+html+'</body></html>', encoding='utf-8')
 url='file://'+base+'preview.html'
 errs=[]
+def open_row(pg, text=''):
+    """строка списка сворачивается — раскрываем перед работой с подробностями"""
+    r = pg.locator('.prow', has_text=text).first if text else pg.locator('.prow').first
+    if r.locator('.pr-head').get_attribute('aria-expanded') != 'true':
+        r.locator('.pr-head').click(); pg.wait_for_timeout(300)
+    return r
+
 with sync_playwright() as p:
     b=p.chromium.launch(executable_path='/opt/pw-browsers/chromium')
     pg=b.new_page(viewport={'width':1280,'height':1000})
@@ -91,7 +98,7 @@ with sync_playwright() as p:
     print('письмо закрывается по подтверждению, отмена его сохраняет')
 
     # письмо из карточки в списке — панель общая, иначе была бы невидима
-    pg.locator('.pcard').first.locator('button', has_text='Письмо').click(); pg.wait_for_timeout(900)
+    open_row(pg).locator('.pr-body button', has_text='Письмо').click(); pg.wait_for_timeout(900)
     assert pg.is_visible('#mailPanel'), 'письмо из карточки не показано на вкладке со списком'
     print('письмо открывается из карточки:', pg.inner_text('#mailTo')[:42])
 

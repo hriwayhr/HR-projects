@@ -80,21 +80,21 @@ with sync_playwright() as p:
 
     # ——— переход по этапам
     pg.click('#peopleFilters [data-filter="accepted"]'); pg.wait_for_timeout(300)
-    names = [c.query_selector('.pc-name').inner_text() for c in pg.query_selector_all('.pcard')]
+    names = [c.query_selector('.pr-who').inner_text() for c in pg.query_selector_all('.prow')]
     assert names == ['Принявшая Мария'], names
     cur = [i['key'] for i in rail(pg) if i['current']=='true']
     assert cur == ['accepted'], cur
     print('этап «Оффер принят»:', names[0], '| отмечен в панели')
 
     pg.click('#peopleFilters [data-filter="sent"]'); pg.wait_for_timeout(300)
-    assert not pg.query_selector_all('.pcard')
+    assert not pg.query_selector_all('.prow')
     assert not pg.is_hidden('#peopleEmpty'), 'пустой этап без подписи'
     print('пустой этап:', pg.inner_text('#peopleEmpty'))
 
     # ——— поиск сужает список, но не счётчики
     pg.click('#peopleFilters [data-filter="all"]'); pg.wait_for_timeout(300)
     pg.fill('#peopleSearch','егор'); pg.wait_for_timeout(400)
-    names = [c.query_selector('.pc-name').inner_text() for c in pg.query_selector_all('.pcard')]
+    names = [c.query_selector('.pr-who').inner_text() for c in pg.query_selector_all('.prow')]
     assert names == ['Ждущий Егор'], names
     assert {i['key']: i['count'] for i in rail(pg)} == want, 'поиск сдвинул счётчики'
     print('поиск «егор»:', names[0], '| счётчики не изменились')
@@ -102,7 +102,7 @@ with sync_playwright() as p:
 
     # ——— раскладка: панель слева от карточек, кнопка не мельче 44 px
     box = pg.query_selector('#peopleFilters').bounding_box()
-    grid = pg.query_selector('#peopleGrid').bounding_box()
+    grid = pg.query_selector('#peopleList').bounding_box()
     assert box['x'] + box['width'] <= grid['x'] + 1, (box, grid)
     hgt = pg.query_selector('#peopleFilters .st').bounding_box()['height']
     assert hgt >= 44, hgt

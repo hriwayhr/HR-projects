@@ -8,6 +8,13 @@ html = pathlib.Path(SRC).read_text(encoding='utf-8')
 pathlib.Path(base+'preview.html').write_text('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style></head><body>'+html+'</body></html>', encoding='utf-8')
 url='file://'+base+'preview.html'
 errs=[]
+def open_row(pg, text=''):
+    """строка списка сворачивается — раскрываем перед работой с подробностями"""
+    r = pg.locator('.prow', has_text=text).first if text else pg.locator('.prow').first
+    if r.locator('.pr-head').get_attribute('aria-expanded') != 'true':
+        r.locator('.pr-head').click(); pg.wait_for_timeout(300)
+    return r
+
 with sync_playwright() as p:
     b=p.chromium.launch(executable_path='/opt/pw-browsers/chromium')
     pg=b.new_page(viewport={'width':1280,'height':1000})
@@ -78,14 +85,14 @@ with sync_playwright() as p:
 
     # отметка об отправке и статус в карточке
     pg.click('#tabPeople'); pg.wait_for_timeout(400)
-    assert 'заполнен, не отправлен' in pg.inner_text('.pcard'), 'в карточке нет статуса оффера'
-    pg.locator('.pcard').first.locator('button', has_text='Оффер').click(); pg.wait_for_timeout(700)
+    assert 'заполнен, не отправлен' in open_row(pg).inner_text(), 'в строке нет статуса оффера'
+    open_row(pg).locator('.pr-body button', has_text='Оффер').click(); pg.wait_for_timeout(700)
     assert pg.is_visible('#offerPanel'), 'оффер не открылся из карточки'
     pg.click('#offerSent'); pg.wait_for_timeout(700)
     assert 'Отправлено' in pg.inner_text('#offerSent'), 'отметка об отправке не встала'
     assert pg.evaluate("!!Object.values(window.__store).find(v => v.code)?.offerSentAt"), 'offerSentAt не сохранился'
     pg.click('#tabPeople'); pg.wait_for_timeout(400)
-    assert 'отправлен ' in pg.inner_text('.pcard'), 'карточка не показала отправленный оффер'
+    assert 'отправлен ' in open_row(pg).inner_text(), 'строка не показала отправленный оффер'
     print('оффер отмечен отправленным, карточка это показывает')
 
     # правка из карточки долетает в письмо и в базу

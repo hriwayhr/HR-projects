@@ -45,8 +45,8 @@ with sync_playwright() as p:
     print('в базе sentAt:', bool(pg.evaluate("Object.values(window.__store).find(v=>v.code)?.sentAt")))
     pg.evaluate("window.scrollTo(0,0)"); pg.wait_for_timeout(300)
     pg.click('#tabPeople'); pg.wait_for_timeout(300)
-    pg.locator('.pgrid').scroll_into_view_if_needed(); pg.wait_for_timeout(300)
-    card = pg.query_selector('.pcard')
+    pg.locator('.plist').scroll_into_view_if_needed(); pg.wait_for_timeout(300)
+    card = pg.query_selector('.prow')
     print('статус карточки:', card.query_selector('.chip').inner_text(),
           '| приглашение:', [r.inner_text().replace('\n',' ') for r in card.query_selector_all('.pc-row')][-1])
     pg.locator('#mailPanel').scroll_into_view_if_needed(); pg.wait_for_timeout(400)
