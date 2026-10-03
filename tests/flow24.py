@@ -87,6 +87,9 @@ with sync_playwright() as p:
     bm = pg.inner_text('#vByMgr')
     assert 'Катя Шулятицкая\t2\t1' in bm and 'Юля Немчинова' in bm and '\nШулятицкая' not in bm, bm
     assert 'Катя Шулятицкая' in pg.inner_text('#vManager')
+    # фильтр по умолчанию — активные: закрытых в таблице нет, пока не выбрать «Все статусы»
+    assert pg.input_value('#vStatus') == 'активна' and 'Логист\t' not in pg.inner_text('#vTable') and 'Аналитик' in pg.inner_text('#vTable')
+    pg.select_option('#vStatus', ''); pg.wait_for_timeout(100); assert 'Бухгалтер' in pg.inner_text('#vTable')
     pg.screenshot(path=str(HERE / 'shots' / 'hr-vac.png'), full_page=True)
     pg.click('#tab_metrics'); pg.screenshot(path=str(HERE / 'shots' / 'hr-metrics-admin.png'), full_page=True)
 
@@ -112,13 +115,17 @@ with sync_playwright() as p:
     assert 'Анна' in pg.inner_text('#tArchive') and 'Анна' not in pg.inner_text('#tUsers')
     assert pg.evaluate("window.__store['config/team'].people.anna.archivedAt")
     pg.click('#tab_day'); pg.fill('#dDate', '2026-10-01'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
-    t = pg.inner_text('#dTable'); assert 'Анна\nв архиве' in t or 'Аннав архиве' in t.replace('\n', ''), t
+    t = pg.inner_text('#dTable'); assert 'Анна (архив)' in t, t
     assert 'Открытые вакансии\n14' in pg.inner_text('#dTiles')   # её цифры в итогах команды
     pg.fill('#dDate', '2026-10-06'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
     assert 'Анна' not in pg.inner_text('#dTable') and 'Анна' not in pg.inner_text('#dChips')   # на новых днях её нет
-    pg.click('#tab_sum'); assert 'Анна (в архиве)' in pg.inner_text('#sPerson')
+    pg.click('#tab_sum'); assert 'Анна (архив)' in pg.inner_text('#sPerson')
     pg.select_option('#sPerson', 'anna'); pg.wait_for_timeout(100); assert 'Пока нет' not in pg.inner_text('#sTable')
-    pg.click('#tab_entry'); assert 'Анна (в архиве)' in pg.inner_text('#fPerson')
+    pg.click('#tab_entry'); assert 'Анна (архив)' in pg.inner_text('#fPerson')
+    # Катя в архиве — в отчётах по вакансиям её имя с пометкой «(архив)»
+    pg.click('#tab_team'); pg.click('#tUsers button[data-act=archive]:not([data-p=yulia])'); pg.wait_for_timeout(300)
+    pg.click('#tab_vac'); pg.select_option('#vStatus', ''); pg.wait_for_timeout(100)
+    assert 'Катя Шулятицкая (архив)' in pg.inner_text('#vByMgr') and 'Катя Шулятицкая (архив)' in pg.inner_text('#vTable'), pg.inner_text('#vByMgr')
     pg.screenshot(path=str(HERE / 'shots' / 'hr-entry-admin.png'), full_page=True)
     pg.click('#tab_team'); pg.screenshot(path=str(HERE / 'shots' / 'hr-team.png'), full_page=True)
     pg.click('#logout')

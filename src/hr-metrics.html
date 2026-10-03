@@ -136,7 +136,6 @@
   .pill.active{background:var(--tint); color:var(--good);}
   .pill.hire{background:var(--accent-deep); color:var(--accent-ink);}
   .pill.long{background:var(--warn-bg); color:var(--warn-ink);}
-  .pill.arch{background:var(--off-bg); color:var(--ink-3); margin-left:6px;}
 </style>
 
 <div class="wrap">
@@ -297,7 +296,7 @@
       <div class="panel" id="tArchivePanel">
         <h3>Архив</h3>
         <div class="scroll"><table id="tArchive"></table></div>
-        <p class="hint mt">Пользователь в архиве не может войти и не появляется в форме и на дашборде новых дней. Его цифры остаются в истории: в дашборде прошлых дней, в сводке команды и в своей сводке — с пометкой «в архиве».</p>
+        <p class="hint mt">Пользователь в архиве не может войти и не появляется в форме и на дашборде новых дней. Его цифры остаются в истории: в дашборде прошлых дней, в сводке команды и в своей сводке — с пометкой «(архив)».</p>
       </div>
     </div>
   </section>
@@ -399,8 +398,9 @@ function visiblePeople(){ return scope() ? [scope()] : recruiters(); }
 // Строки дня: действующие рекрутеры и те из архива, у кого в этот день есть цифры
 function dayPeople(day){ var row = byDate[day] || {}; return visiblePeople().filter(function(p){ return !team[p].archived || (row[p] && Object.keys(row[p]).length); }); }
 function fullName(p){ return team[p].name + (team[p].surname ? ' ' + team[p].surname : ''); }
-function label(p){ return fullName(p) + (team[p].archived ? ' (в архиве)' : ''); }
-function nameHtml(p){ return esc(fullName(p)) + (team[p].archived ? '<span class="pill arch">в архиве</span>' : ''); }
+// В отчётах у пользователя из архива — пометка «(архив)» после имени
+function label(p){ return fullName(p) + (team[p].archived ? ' (архив)' : ''); }
+function nameHtml(p){ return esc(label(p)); }
 function metricList(){ return metrics || BUILTIN; }
 function activeMetrics(){ return metricList().filter(function(m){ return !m.off; }); }
 function customMetrics(){ return metricList().filter(function(m){ return m.custom && !m.off; }); }
@@ -741,7 +741,7 @@ function teamAction(e){
   function fail(err){ tStat(esc(writeError(err)), true); }
   if(act === 'archive'){
     if(team[p].admin && activeAdmins().length < 2 && activeAdmins()[0] === p){ tStat('Это последний администратор — сначала назначьте другого.', true); return; }
-    saveTeam(patchUser(p, {archived:true, archivedAt:today()})).then(function(){ tStat(esc(name) + ' в архиве: вход закрыт, цифры остаются в истории с пометкой «в архиве».'); }, fail);
+    saveTeam(patchUser(p, {archived:true, archivedAt:today()})).then(function(){ tStat(esc(name) + ' в архиве: вход закрыт, цифры остаются в истории с пометкой «(архив)».'); }, fail);
   }
   if(act === 'restore'){
     var t = patchUser(p, {archived:false}); delete t[p].archivedAt;
@@ -898,6 +898,7 @@ function ingest(snap){
 session = load('hrSession');
 $('fDate').value = today();
 $('vStatus').innerHTML = '<option value="">Все статусы</option>' + VAC_STATUSES.map(function(s){ return '<option>'+s+'</option>'; }).join('');
+$('vStatus').value = 'активна';   // по умолчанию — только вакансии в работе
 $('v_status').innerHTML = VAC_STATUSES.map(function(s){ return '<option>'+s+'</option>'; }).join('');
 $('mGroup').innerHTML = groupOptions('work');
 buildForm();
