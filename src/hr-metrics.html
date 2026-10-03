@@ -1028,7 +1028,7 @@ function hiringReport(){
   var cols = ['Вакансия', 'Отдел', 'Заказчик', 'Нужно людей', 'В работе с', 'Дней в работе', 'Публикации', 'Офферы', 'Комментарий'];
   var RIGHT = {3:1, 4:1, 5:1, 7:1};
   function cells(v){ return [v.title, v.dept || '—', v.customer || '—', fmt(needOf(v)) + (isMulti(v) ? ' из ' + v.seats.length : ''), shortDate(vacStart(v)), daysInWork(v) === null ? '—' : daysInWork(v),
-    linkObjs(v).map(function(l, j){ return pubLabel(j) + ': ' + linkNote(l); }).join('; ') || 'нет', num(v.offersSent) ? (v.offersAccepted || 0) + ' из ' + v.offersSent : '—', v.comment || '']; }
+    linkObjs(v).map(function(l, j){ return pubText(j) + ': ' + linkNote(l); }).join('; ') || 'нет', num(v.offersSent) ? (v.offersAccepted || 0) + ' из ' + v.offersSent : '—', v.comment || '']; }
   function sortByAge(list){ return list.slice().sort(function(a, b){ return (daysInWork(b) || 0) - (daysInWork(a) || 0); }); }
   var title = 'Текущий найм на ' + date + (scope() ? ' — ' + fullName(scope()) : '');
   var summary = 'В работе ' + act.length + ' ' + plural(act.length, 'вакансия', 'вакансии', 'вакансий') + ', нужно ' + fmt(need(act)) + ' ' + plural(Math.round(need(act)), 'человек', 'человека', 'человек') + '.';
@@ -1063,8 +1063,9 @@ function linkObjs(v){
     return typeof l === 'string' ? {url:l, at:vacStart(v), closedAt:v.archivedAt || '', ext:num(v.extensions) ? v.extensions : 0} : l;
   });
 }
-// Подпись публикации на hh.ru: «hh.ru p.1», «hh.ru p.2» — p = публикация
-function pubLabel(i){ return 'hh.ru p.' + (i + 1); }
+// Подпись публикации: «hh.ru» и жирный номер публикации (в тексте для Excel — без жирного)
+function pubLabel(i){ return 'hh.ru <b>' + (i + 1) + '</b>'; }
+function pubText(i){ return 'hh.ru ' + (i + 1); }
 function vacLinks(v){ return linkObjs(v).map(function(l){ return l.url; }); }
 function addMonths(s, n){
   var d = parse(s), day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + n);
