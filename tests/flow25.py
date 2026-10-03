@@ -93,8 +93,14 @@ with sync_playwright() as p:
     pg.click('#vTable tr[data-id=e] td:nth-child(2)'); pg.click('#vLinks [data-extend-link]'); pg.click('#vLinks [data-extend-link]')
     assert pg.input_value('#vLinks .v-link-closed') == '2026-12-10' and 'продлений: 2' in pg.inner_text('#vLinks')
     assert pg.input_value('#v_archivedAt') == '2026-12-10' and pg.input_value('#v_extensions') == '2'
+    pg.fill('#vLinks .v-link-cost', '4500')   # стоимость публикации — вручную, вместе с продлениями
     pg.click('#vSave'); pg.wait_for_timeout(300)
     e = pg.evaluate("window.__store['vacancies/e']")
+    assert e['links'][0]['cost'] == 4500, e
+    sp = lambda sel: pg.inner_text(sel).replace('\u00a0', ' ').replace('\u202f', ' ')   # в суммах — неразрывные пробелы
+    assert '4 500 ₽' in sp('#vTable tr[data-id=e]') and 'Потрачено на hh.ru\n4 500 ₽' in sp('#vTiles'), sp('#vTiles')
+    assert '4 500 ₽' in sp('#vByMgr')
+    pg.click('#vRemind button[data-extend=e]') if pg.query_selector('#vRemind button[data-extend=e]') else None
     assert e['links'][0]['closedAt'] == '2026-12-10' and e['links'][0]['ext'] == 2 and e['extensions'] == 2 and e['archivedAt'] == '2026-12-10', e
     assert 'E' not in pg.inner_text('#vRemind').split('\n')[0:0] and 'осталось' not in pg.inner_text('#vRemind'), pg.inner_text('#vRemind')
     pg.screenshot(path=str(HERE / 'shots' / 'hr-vac-remind.png'), full_page=True)
