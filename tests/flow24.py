@@ -37,7 +37,7 @@ with sync_playwright() as p:
     # 1. администраторов нет — владелец создаёт первого
     assert pg.is_visible('#bootForm') and not pg.is_visible('#loginForm'), pg.evaluate('[isOwner, JSON.stringify(admins), teamLoaded, !!db, $("bootForm").hidden, $("loginForm").hidden, $("viewLogin").hidden]')
     pg.fill('#bName', 'Юлия Немчинова'); pg.fill('#bLogin', 'Admin'); pg.fill('#bPass', 'secret1'); pg.click('#bootForm button[type=submit]'); pg.wait_for_timeout(400)
-    assert pg.inner_text('#meRole') == 'администратор' and pg.is_visible('#tab_team')
+    assert pg.inner_text('#meRole') == 'администратор' and pg.is_visible('#tab_settings') and not pg.query_selector('#tab_team')
     st = [u for u in pg.evaluate("window.__store['config/team'].people").values() if u.get('login') == 'admin'][0]
     assert st['hash'] and st['admin'] and st['recruiter'] is False and 'secret1' not in json.dumps(st), st
     assert 'Юлия Немчинова' not in pg.inner_text('#dTable')   # администратор без метрик — не в таблице рекрутеров
@@ -59,7 +59,7 @@ with sync_playwright() as p:
     pg.screenshot(path=str(HERE / 'shots' / 'hr-day-todo.png'), full_page=True)
 
     # 3. команда: логин Анне, пароль; новый рекрутер
-    pg.click('#tab_team')
+    pg.click('#tab_settings'); pg.click('#sub_team')
     L = '#tUsers input[data-p=anna][data-f=login]'
     pg.fill(L, 'yulia_x'); pg.dispatch_event(L, 'change'); pg.wait_for_timeout(200)
     pg.fill(L, 'admin'); pg.dispatch_event(L, 'change'); pg.wait_for_timeout(200)
@@ -77,7 +77,11 @@ with sync_playwright() as p:
     assert pg.evaluate("window.__store['config/team'].people.yulia.admin") is True
 
     # 4. своя метрика и убранная встроенная
-    pg.click('#tab_metrics'); pg.fill('#mName', 'Отклики hh'); pg.click('#mForm button[type=submit]'); pg.wait_for_timeout(300)
+    # «Настройки»: команда, метрики и отпуска — разделы одной вкладки; раздел запоминается
+    pg.click('#tab_vac'); pg.click('#tab_settings'); assert pg.is_visible('#viewTeam') and pg.is_visible('#subTabs')
+    pg.click('#sub_vacation'); assert pg.is_visible('#oPerson') and pg.get_attribute('#tab_settings', 'aria-selected') == 'true'
+    pg.click('#tab_day'); assert not pg.is_visible('#subTabs'); pg.click('#tab_settings'); assert pg.is_visible('#viewVacation')
+    pg.click('#tab_settings'); pg.click('#sub_metrics'); pg.fill('#mName', 'Отклики hh'); pg.click('#mForm button[type=submit]'); pg.wait_for_timeout(300)
     pg.click('#mTable button[data-i="4"]'); pg.wait_for_timeout(300)   # «Звонки» убираем из формы
     # 5. админ вносит день за Анну
     pg.click('#tab_entry'); pg.select_option('#fPerson', 'anna'); pg.fill('#fDate', '2026-10-02'); pg.dispatch_event('#fDate', 'change')
@@ -168,7 +172,7 @@ with sync_playwright() as p:
     assert v['status'] == 'активна' and v['rate'] == 1 and 'closedAt' not in v and len(v['seats']) == 3, v
     pg.click('#vCancel')
     pg.screenshot(path=str(HERE / 'shots' / 'hr-vac.png'), full_page=True)
-    pg.click('#tab_metrics'); pg.screenshot(path=str(HERE / 'shots' / 'hr-metrics-admin.png'), full_page=True)
+    pg.click('#tab_settings'); pg.click('#sub_metrics'); pg.screenshot(path=str(HERE / 'shots' / 'hr-metrics-admin.png'), full_page=True)
 
     # 7. кабинет рекрутера: Катя видит только себя и свои вакансии
     pg.click('#logout'); pg.wait_for_timeout(100)
@@ -197,7 +201,7 @@ with sync_playwright() as p:
 
     # 8. администратор отправляет Анну в архив — её сессия закрывается, история остаётся с пометкой
     pg.click('#logout'); pg.fill('#lLogin', 'admin'); pg.fill('#lPass', 'secret1'); pg.click('#lSubmit'); pg.wait_for_timeout(300)
-    pg.click('#tab_team'); pg.click('#tUsers button[data-act=archive][data-p=anna]'); pg.wait_for_timeout(300)
+    pg.click('#tab_settings'); pg.click('#sub_team'); pg.click('#tUsers button[data-act=archive][data-p=anna]'); pg.wait_for_timeout(300)
     assert 'Анна' in pg.inner_text('#tArchive') and 'Анна' not in pg.inner_text('#tUsers')
     assert pg.evaluate("window.__store['config/team'].people.anna.archivedAt")
     pg.click('#tab_day'); pg.fill('#dDate', '2026-10-01'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
@@ -209,11 +213,11 @@ with sync_playwright() as p:
     pg.select_option('#sPerson', 'anna'); pg.wait_for_timeout(100); assert 'Пока нет' not in pg.inner_text('#sBlocks')
     pg.click('#tab_entry'); assert 'Анна (архив)' in pg.inner_text('#fPerson')
     # Катя в архиве — в отчётах по вакансиям её имя с пометкой «(архив)»
-    pg.click('#tab_team'); pg.click('#tUsers button[data-act=archive]:not([data-p=yulia])'); pg.wait_for_timeout(300)
+    pg.click('#tab_settings'); pg.click('#sub_team'); pg.click('#tUsers button[data-act=archive]:not([data-p=yulia])'); pg.wait_for_timeout(300)
     pg.click('#tab_vac'); pg.select_option('#vStatus', ''); pg.wait_for_timeout(100)
     assert 'Катя Шулятицкая (архив)' in pg.inner_text('#vByMgr') and 'Катя Шулятицкая (архив)' in pg.inner_text('#vTable'), pg.inner_text('#vByMgr')
     pg.screenshot(path=str(HERE / 'shots' / 'hr-entry-admin.png'), full_page=True)
-    pg.click('#tab_team'); pg.screenshot(path=str(HERE / 'shots' / 'hr-team.png'), full_page=True)
+    pg.click('#tab_settings'); pg.click('#sub_team'); pg.screenshot(path=str(HERE / 'shots' / 'hr-team.png'), full_page=True)
     pg.click('#logout')
     pg.fill('#lLogin', anna_login); pg.fill('#lPass', anna_pw); pg.click('#lSubmit'); pg.wait_for_timeout(200)
     assert 'в архиве' in pg.inner_text('#lErr')

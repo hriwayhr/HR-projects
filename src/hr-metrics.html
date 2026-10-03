@@ -62,13 +62,16 @@
   nav:empty{display:none;}
   nav button{border:0; background:none; padding:8px 14px; border-radius:999px; color:var(--ink-2); font-weight:600;}
   nav button[aria-selected="true"]{background:var(--accent); color:var(--accent-ink);}
+  nav.sub{padding-top:2px;}
+  nav.sub button{font-size:14px; padding:6px 12px;}
+  nav.sub button[aria-selected="true"]{background:var(--tint); color:var(--good);}
 
   .bar{display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; margin-block:8px 18px;}
   .bar h2{font-size:26px;}
   .bar .sub{color:var(--ink-3);}
   .datenav{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-left:auto;}
   .icon{border:1px solid var(--line); background:var(--surface); width:36px; height:36px; border-radius:8px; font-size:18px; line-height:1;}
-  input[type=date],input[type=number],input[type=text],input[type=password],input[type=url],input[type=search],select,textarea{border:1px solid var(--line); background:var(--surface); border-radius:8px; padding:7px 10px; min-height:36px; min-width:0; max-width:100%;}
+  input[type=date],input[type=month],input[type=number],input[type=text],input[type=password],input[type=url],input[type=search],select,textarea{border:1px solid var(--line); background:var(--surface); border-radius:8px; padding:7px 10px; min-height:36px; min-width:0; max-width:100%;}
 
   .note{background:var(--warn-bg); color:var(--warn-ink); border-radius:10px; padding:10px 14px; margin-bottom:16px;}
   .chips{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px;}
@@ -204,6 +207,11 @@
     <h1>HR-метрики</h1>
     <div class="me" id="me" hidden><span class="role" id="meRole"></span><b id="meName"></b><button class="btn ghost sm" id="logout">Выйти</button></div>
     <nav role="tablist" id="tabs"></nav>
+    <nav role="tablist" id="subTabs" class="sub" hidden>
+      <button role="tab" id="sub_team" data-view="team">Команда</button>
+      <button role="tab" id="sub_metrics" data-view="metrics">Метрики</button>
+      <button role="tab" id="sub_vacation" data-view="vacation">Отпуска</button>
+    </nav>
   </header>
 
   <p class="note" id="offline" hidden>База недоступна в этом просмотре: войти, загрузить и сохранить данные не получится. Откройте страницу на claude.ai под своей учётной записью.</p>
@@ -234,9 +242,12 @@
       <h2 id="dayTitle">—</h2>
       <span class="sub" id="dayPrev"></span>
       <div class="datenav">
-        <button class="icon" id="dPrev" aria-label="Предыдущий день">‹</button>
+        <select id="dMode" aria-label="Период"><option value="day">День</option><option value="week">Неделя</option><option value="month">Месяц</option><option value="quarter">Квартал</option><option value="year">Год</option><option value="custom">Свой период</option></select>
+        <button class="icon" id="dPrev" aria-label="Предыдущий период">‹</button>
         <input type="date" id="dDate" aria-label="Дата">
-        <button class="icon" id="dNext" aria-label="Следующий день">›</button>
+        <input type="month" id="dMonth" aria-label="Месяц" hidden>
+        <span id="dCustom" hidden><input type="date" id="dFrom" aria-label="С"> — <input type="date" id="dTo" aria-label="По"></span>
+        <button class="icon" id="dNext" aria-label="Следующий период">›</button>
       </div>
     </div>
     <div id="dRemind"></div>
@@ -455,7 +466,7 @@ var SYNC_FROM = '2026-10-05';
 var SYNCED = ['vac_start', 'vac_end', 'cand_start', 'cand_end', 'vac_published'];
 var months = {};                   // id документа → документ
 var session = null;                // {id} — id пользователя в config/team
-var state = {view:null, date:null};
+var state = {view:null, date:null, mode:'day', from:null, to:null};
 
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
@@ -669,82 +680,141 @@ function tile(k, v, prev, opts){
   var d = '';
   if(num(v) && num(prev) && !opts.noDelta){
     var diff = v - prev, good = opts.lowerIsBetter ? diff < 0 : diff > 0;
-    d = diff === 0 ? 'как накануне' : '<span class="'+(good ? 'up' : 'down')+'">'+(diff > 0 ? '+' : '−')+Math.abs(diff)+(opts.unit||'')+'</span> к предыдущему дню';
+    d = diff === 0 ? 'как накануне' : '<span class="'+(good ? 'up' : 'down')+'">'+(diff > 0 ? '+' : '−')+Math.abs(diff)+(opts.unit||'')+'</span> ' + (opts.vs || 'к предыдущему дню');
   }
   return '<div class="tile'+(opts.hero ? ' hero' : '')+'"><div class="k">'+k+'</div><div class="v">'+(opts.text != null ? opts.text : num(v) ? v + (opts.suffix||'') : '—')+'</div><div class="d">'+(opts.note || d || '&nbsp;')+'</div></div>';
 }
+// ---------- период дашборда: день, неделя, месяц, квартал, год, свой ----------
+var MONTHS_SHORT = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+function monthEnd(s){ var d = parse(s.slice(0, 7) + '-01'); d.setMonth(d.getMonth() + 1); d.setDate(0); return iso(d); }
+function periodOf(mode, a){
+  if(mode === 'week'){ var m = weekKey(a); return {from:m, to:addDays(m, 6)}; }
+  if(mode === 'month'){ var f = a.slice(0, 7) + '-01'; return {from:f, to:monthEnd(f)}; }
+  if(mode === 'quarter'){ var q = Math.floor((+a.slice(5, 7) - 1) / 3), fq = a.slice(0, 4) + '-' + String(q * 3 + 1).padStart(2, '0') + '-01'; return {from:fq, to:monthEnd(addMonths(fq, 2))}; }
+  if(mode === 'year') return {from:a.slice(0, 4) + '-01-01', to:a.slice(0, 4) + '-12-31'};
+  if(mode === 'custom') return {from:state.from, to:state.to};
+  return {from:a, to:a};
+}
+function shiftPeriod(mode, r, n){
+  if(mode === 'custom'){ var len = daysBetween(r.from, r.to) + 1; return {from:addDays(r.from, n * len), to:addDays(r.to, n * len)}; }
+  return periodOf(mode, mode === 'week' ? addDays(r.from, 7 * n) : addMonths(r.from, n * ({month:1, quarter:3, year:12})[mode]));
+}
+function rangeLabel(mode, r){
+  var a = parse(r.from), b = parse(r.to);
+  if(mode === 'day') return human(r.from);
+  if(mode === 'week') b = parse(addDays(r.from, 4));   // в подписи — рабочая неделя, пн–пт
+  if(mode === 'week') return 'Неделя ' + isoWeekNo(r.from) + ' · ' + a.getDate() + (a.getMonth() !== b.getMonth() ? ' ' + MONTHS_GEN[a.getMonth()] : '') + '–' + b.getDate() + ' ' + MONTHS_GEN[b.getMonth()];
+  if(mode === 'month') return MONTHS[a.getMonth()] + ' ' + a.getFullYear();
+  if(mode === 'quarter') return (Math.floor(a.getMonth() / 3) + 1) + ' квартал ' + a.getFullYear();
+  if(mode === 'year') return a.getFullYear() + ' год';
+  return a.getDate() + ' ' + MONTHS_GEN[a.getMonth()] + (a.getFullYear() !== b.getFullYear() ? ' ' + a.getFullYear() : '') + ' – ' + b.getDate() + ' ' + MONTHS_GEN[b.getMonth()] + ' ' + b.getFullYear();
+}
+function rDates(r){ return dates().filter(function(d){ return d >= r.from && d <= r.to; }); }
+// Поток (собеседования, звонки…) — сумма за период; запас (вакансии, кандидаты) — на последний внесённый день периода
+function rSum(r, ps, k){ var s = null; rDates(r).forEach(function(d){ var v = sum(d, ps, k); if(v !== null) s = (s || 0) + v; }); return s; }
+function rStock(r, ps, f){
+  var ds = rDates(r), s = null;
+  ps.forEach(function(p){ var v = null; ds.forEach(function(d){ var m = (byDate[d] || {})[p]; if(m){ var x = f(m); if(x !== null) v = x; } }); if(v !== null) s = (s || 0) + v; });
+  return s;
+}
+function rVal(r, ps, k){ return k === vacStock || k === candStock ? rStock(r, ps, k) : rSum(r, ps, k); }
 function renderDay(){
-  var ps = visiblePeople(), day = state.date, prev = prevDate(day, ps), row = byDate[day] || {};
-  $('dDate').value = day;
-  $('dayTitle').textContent = human(day) + (day === today() ? ' · сегодня' : '');
-  $('dayPrev').textContent = prev ? 'сравнение с ' + human(prev) : '';
-  $('dNext').disabled = !nextDate(day, ps) && day >= today();
+  var ps = visiblePeople(), mode = state.mode, day = state.date, r = periodOf(mode, day), isDay = mode === 'day';
+  var prev = isDay ? (prevDate(day, ps) ? {from:prevDate(day, ps), to:prevDate(day, ps)} : null) : shiftPeriod(mode, r, -1);
+  // период ещё идёт — сравниваем с тем же сроком прошлого (1–3 октября с 1–3 сентября), а не с целым периодом
+  var partial = !isDay && r.from <= today() && r.to > today();
+  if(partial){ var cut = addDays(prev.from, daysBetween(r.from, today())); if(cut < prev.to) prev = {from:prev.from, to:cut}; }
+  $('dDate').value = day; $('dMonth').value = day.slice(0, 7); $('dFrom').value = state.from; $('dTo').value = state.to;
+  $('dDate').hidden = !(isDay || mode === 'week'); $('dMonth').hidden = mode !== 'month'; $('dCustom').hidden = mode !== 'custom';
+  $('dayTitle').textContent = rangeLabel(mode, r) + (isDay && day === today() ? ' · сегодня' : '');
+  $('dayPrev').textContent = prev ? (isDay ? 'сравнение с ' + human(prev.from) : 'сравнение: ' + rangeLabel(mode, shiftPeriod(mode, r, -1)).replace(/^./, function(c){ return c.toLowerCase(); }) + (partial ? ' по ' + shortDate(prev.to).slice(0, 5) : '')) : '';
+  $('dNext').disabled = isDay ? (!nextDate(day, ps) && day >= today()) : shiftPeriod(mode, r, 1).from > today();
 
-  var rows = dayPeople(day);
+  var rows = isDay ? dayPeople(day) : visiblePeople().filter(function(p){ return !team[p].archived || rDates(r).some(function(d){ return hasDay(p, d); }); });
   renderTodo();
   $('dChips').innerHTML = scope() ? '' : rows.map(function(p){
-    var st = dayStatus(p, day), cls = st === 'ok' ? ' ok' : st === 'vac' || st === 'off' ? ' vac' : '';
-    return '<span class="chip'+cls+'">'+esc(label(p))+' — '+STATUS_TEXT[st]+'</span>';
+    if(isDay){
+      var st = dayStatus(p, day), cls = st === 'ok' ? ' ok' : st === 'vac' || st === 'off' ? ' vac' : '';
+      return '<span class="chip'+cls+'">'+esc(label(p))+' — '+STATUS_TEXT[st]+'</span>';
+    }
+    var need = 0, got = 0;
+    for(var d = r.from; d <= r.to && d <= today(); d = addDays(d, 1)){ var st2 = dayStatus(p, d); if(st2 === 'ok'){ need++; got++; } else if(st2 === 'missing') need++; }   // сегодняшний ещё не внесённый — не пропуск
+    return '<span class="chip'+(got >= need ? ' ok' : '')+'">'+esc(label(p))+' — внесено '+got+' из '+need+' '+plural(need, 'рабочего дня', 'рабочих дней', 'рабочих дней')+'</span>';
   }).join('');
 
-  var pl = sum(day, ps, 'int_planned'), dn = sum(day, ps, 'int_done');
-  var pPl = prev && sum(prev, ps, 'int_planned'), pDn = prev && sum(prev, ps, 'int_done');
+  var vs = isDay ? 'к предыдущему дню' : partial ? 'к тому же сроку прошлого периода' : 'к прошлому периоду';
+  function V(k){ return rVal(r, ps, k); }
+  function P(k){ return prev ? rVal(prev, ps, k) : null; }
+  var pl = V('int_planned'), dn = V('int_done'), pPl = P('int_planned'), pDn = P('int_done');
   var hiresWeek = 0;
-  dates().forEach(function(d){ if(d <= day && weekKey(d) === weekKey(day)) hiresWeek += sum(d, ps, 'hires') || 0; });
-  function P(k){ return prev ? sum(prev, ps, k) : null; }
+  if(isDay) dates().forEach(function(d){ if(d <= day && weekKey(d) === weekKey(day)) hiresWeek += sum(d, ps, 'hires') || 0; });
   $('dTiles').innerHTML =
-    tile('Собеседования прошли', dn, pDn, {hero:true, suffix: num(pl) ? ' <small>из '+pl+'</small>' : ''}) +
-    tile('Доходимость', num(dn) && pl ? Math.round(dn/pl*100) : null, num(pDn) && pPl ? Math.round(pDn/pPl*100) : null, {suffix:'<small>%</small>', unit:' п.п.'}) +
-    tile('Открытые вакансии', sum(day, ps, vacStock), P(vacStock), {lowerIsBetter:true}) +
-    tile('Кандидаты на вакансию', sum(day, ps, candStock), P(candStock)) +
-    tile('Звонки', sum(day, ps, 'calls'), P('calls')) +
-    tile('Чаты', sum(day, ps, chats), P(chats)) +
-    tile('Отказы', sum(day, ps, 'rejections'), null, {noDelta:true, note:'кандидатам за день'}) +
-    tile('Выходы новых сотрудников', sum(day, ps, 'hires'), null, {noDelta:true, note:'с начала недели: ' + hiresWeek});
+    tile('Собеседования прошли', dn, pDn, {hero:true, vs:vs, suffix: num(pl) ? ' <small>из '+pl+'</small>' : ''}) +
+    tile('Доходимость', num(dn) && pl ? Math.round(dn/pl*100) : null, num(pDn) && pPl ? Math.round(pDn/pPl*100) : null, {vs:vs, suffix:'<small>%</small>', unit:' п.п.'}) +
+    tile('Открытые вакансии', V(vacStock), P(vacStock), {vs:vs, lowerIsBetter:true, note: isDay ? '' : 'на конец периода'}) +
+    tile('Кандидаты на вакансию', V(candStock), P(candStock), {vs:vs, note: isDay ? '' : 'на конец периода'}) +
+    tile('Звонки', V('calls'), P('calls'), {vs:vs}) +
+    tile('Чаты', V(chats), P(chats), {vs:vs}) +
+    tile('Отказы', V('rejections'), null, {noDelta:true, note: isDay ? 'кандидатам за день' : 'кандидатам за период'}) +
+    tile('Выходы новых сотрудников', V('hires'), P('hires'), isDay ? {noDelta:true, note:'с начала недели: ' + hiresWeek} : {vs:vs});
 
   var cols = [['Вакансии', vacStock], ['Кандидаты', candStock], ['Собес. назнач.', 'int_planned'], ['Собес. факт', 'int_done'],
     ['Звонки', 'calls'], ['Чаты', chats], ['Отказы', 'rejections'], ['Новые вакансии', 'vac_published'], ['Выходы', 'hires']]
     .concat(customMetrics().map(function(m){ return [m.t, m.k]; }));
   function cell(v){ return '<td'+(v === null ? ' class="empty"' : '')+'>'+(v === null ? '—' : v)+'</td>'; }
-  $('dTableTitle').textContent = scope() ? 'Мои показатели' : 'По рекрутерам';
-  var body = rows.map(function(p){
-    return '<tr><td>'+nameHtml(p)+'</td>'+cols.map(function(c){ return cell(row[p] ? fn(c[1])(row[p]) : null); }).join('')+'</tr>';
-  }).join('');
-  var foot = rows.length > 1 ? '<tfoot><tr><td>Команда</td>'+cols.map(function(c){ return cell(sum(day, ps, c[1])); }).join('')+'</tr></tfoot>' : '';
+  $('dTableTitle').textContent = (scope() ? 'Мои показатели' : 'По рекрутерам') + (isDay ? '' : ' · ' + rangeLabel(mode, r));
+  var body = rows.map(function(p){ return '<tr><td>'+nameHtml(p)+'</td>'+cols.map(function(c){ return cell(rVal(r, [p], c[1])); }).join('')+'</tr>'; }).join('');
+  var foot = rows.length > 1 ? '<tfoot><tr><td>Команда</td>'+cols.map(function(c){ return cell(rVal(r, ps, c[1])); }).join('')+'</tr></tfoot>' : '';
   $('dTable').innerHTML = '<thead><tr><th>Рекрутер</th>'+cols.map(function(c){ return '<th>'+esc(c[0])+'</th>'; }).join('')+'</tr></thead><tbody>'+body+'</tbody>'+foot;
-  renderChart(day, ps);
+  renderChart(mode, r, ps);
 }
-// Рабочая неделя выбранного дня: собеседования по дням (назначено / прошло) и итоги недели
-function renderChart(day, ps){
-  var mon = weekKey(day), days = [0, 1, 2, 3, 4].map(function(i){ return addDays(mon, i); }), t = today();
-  var a = parse(mon), b = parse(days[4]);
-  $('dChartTitle').textContent = 'Неделя ' + isoWeekNo(mon) + ' · ' + a.getDate() + (a.getMonth() !== b.getMonth() ? ' ' + MONTHS_GEN[a.getMonth()] : '') + '–' + b.getDate() + ' ' + MONTHS_GEN[b.getMonth()];
-  var rows = days.map(function(d){ return {d:d, pl:sum(d, ps, 'int_planned'), dn:sum(d, ps, 'int_done'), future:d > t}; });
-  var max = Math.max(4, Math.max.apply(null, rows.map(function(r){ return Math.max(r.pl || 0, r.dn || 0); })));
+// Части периода для графика: неделя — по дням, месяц и квартал — по неделям, год — по месяцам
+function chartBuckets(mode, r){
+  var out = [], len = daysBetween(r.from, r.to) + 1;
+  var kind = mode === 'day' || mode === 'week' ? 'days' : mode === 'year' ? 'months' : mode === 'custom' ? (len <= 14 ? 'days' : len <= 120 ? 'weeks' : 'months') : 'weeks';
+  if(kind === 'days'){
+    var from = mode === 'day' ? weekKey(r.from) : r.from, to = mode === 'day' ? addDays(from, 4) : r.to;
+    for(var d = from; d <= to; d = addDays(d, 1)) if(!isWeekend(d)){ var p = parse(d); out.push({from:d, to:d, l1:WD[p.getDay()], l2:p.getDate()+'.'+String(p.getMonth()+1).padStart(2,'0'), cur:d === state.date}); }
+  } else if(kind === 'weeks'){
+    for(var w = weekKey(r.from); w <= r.to; w = addDays(w, 7)){
+      var a = w < r.from ? r.from : w, b = addDays(w, 6) > r.to ? r.to : addDays(w, 6), pa = parse(a);
+      out.push({from:a, to:b, l1:'нед. ' + isoWeekNo(w), l2:pa.getDate()+'.'+String(pa.getMonth()+1).padStart(2,'0')});
+    }
+  } else {
+    for(var m = r.from.slice(0, 7) + '-01'; m <= r.to; m = addMonths(m, 1)){
+      out.push({from:m < r.from ? r.from : m, to:monthEnd(m) > r.to ? r.to : monthEnd(m), l1:MONTHS_SHORT[+m.slice(5, 7) - 1], l2:m.slice(2, 4) !== String(new Date().getFullYear()).slice(2) ? m.slice(0, 4) : ''});
+    }
+  }
+  return out;
+}
+function renderChart(mode, r, ps){
+  var t = today(), bk = chartBuckets(mode, r);
+  $('dChartTitle').textContent = mode === 'day' ? rangeLabel('week', periodOf('week', r.from)) : 'Собеседования · ' + rangeLabel(mode, r);
+  var rows = bk.map(function(b){ return Object.assign({pl:rSum(b, ps, 'int_planned'), dn:rSum(b, ps, 'int_done'), future:b.from > t}, b); });
+  var max = Math.max(4, Math.max.apply(null, rows.map(function(x){ return Math.max(x.pl || 0, x.dn || 0); })));
   max = Math.ceil(max / 4) * 4;
-  var W = 440, H = 200, L = 26, B = 34, T = 16, step = (W - L) / 5, bw = Math.min(26, step * 0.3), gap = 2;
+  var n = rows.length, W = 440, H = 200, L = 26, B = 34, T = 16, step = (W - L) / Math.max(n, 1), bw = Math.min(26, step * 0.3), gap = 2, labels = n <= 8;
   function y(v){ return T + (H - B - T) * (1 - v / max); }
-  var s = '<svg viewBox="0 0 '+W+' '+H+'" width="100%" role="img" aria-label="Собеседования за неделю по дням">';
+  var s = '<svg viewBox="0 0 '+W+' '+H+'" width="100%" role="img" aria-label="Собеседования за период">';
   for(var i = 0; i <= 4; i++){ var v = max * i / 4; s += '<line x1="'+L+'" x2="'+W+'" y1="'+y(v)+'" y2="'+y(v)+'" stroke="var(--line)" stroke-width="1"/><text x="'+(L-6)+'" y="'+(y(v)+4)+'" text-anchor="end">'+v+'</text>'; }
-  rows.forEach(function(r, i){
-    var cx = L + i * step + step / 2, x1 = cx - bw - gap / 2, x2 = cx + gap / 2, p = parse(r.d), cur = r.d === day;
-    if(r.future || (r.pl === null && r.dn === null)){
-      s += '<text x="'+cx+'" y="'+(y(0) - 8)+'" text-anchor="middle"'+(r.future ? '' : ' style="fill:var(--warn-ink)"')+'>'+(r.future ? 'впереди' : 'не внесено')+'</text>';
+  rows.forEach(function(x, i){
+    var cx = L + i * step + step / 2, x1 = cx - bw - gap / 2, x2 = cx + gap / 2, bold = x.cur ? ' style="font-weight:700;fill:var(--ink)"' : '';
+    var title = x.from === x.to ? human(x.from) : shortDate(x.from) + '–' + shortDate(x.to);
+    if(x.future || (x.pl === null && x.dn === null)){
+      if(labels) s += '<text x="'+cx+'" y="'+(y(0) - 8)+'" text-anchor="middle"'+(x.future ? '' : ' style="fill:var(--warn-ink)"')+'>'+(x.future ? 'впереди' : 'не внесено')+'</text>';
     } else {
-      [[x1, r.pl, 'var(--muted-bar)', 'назначено'], [x2, r.dn, 'var(--accent)', 'прошло']].forEach(function(m){
-        var v = m[1] || 0, h = y(0) - y(v);
-        s += '<rect x="'+m[0]+'" y="'+y(v)+'" width="'+bw+'" height="'+Math.max(h, 0)+'" rx="3" fill="'+m[2]+'"><title>'+human(r.d)+': '+m[3]+' '+(m[1] === null ? '— не внесено' : v)+'</title></rect>';
-        if(m[1] !== null) s += '<text x="'+(m[0] + bw / 2)+'" y="'+(y(v) - 4)+'" text-anchor="middle" style="fill:var(--ink-2)">'+v+'</text>';
+      [[x1, x.pl, 'var(--muted-bar)', 'назначено'], [x2, x.dn, 'var(--accent)', 'прошло']].forEach(function(m){
+        var v = m[1] || 0;
+        s += '<rect x="'+m[0]+'" y="'+y(v)+'" width="'+bw+'" height="'+Math.max(y(0) - y(v), 0)+'" rx="3" fill="'+m[2]+'"><title>'+title+': '+m[3]+' '+(m[1] === null ? '— не внесено' : v)+'</title></rect>';
+        if(labels && m[1] !== null) s += '<text x="'+(m[0] + bw / 2)+'" y="'+(y(v) - 4)+'" text-anchor="middle" style="fill:var(--ink-2)">'+v+'</text>';
       });
     }
-    s += '<text x="'+cx+'" y="'+(H - 16)+'" text-anchor="middle"'+(cur ? ' style="font-weight:700;fill:var(--ink)"' : '')+'>'+WD[p.getDay()]+'</text>' +
-         '<text x="'+cx+'" y="'+(H - 3)+'" text-anchor="middle"'+(cur ? ' style="font-weight:700;fill:var(--ink)"' : '')+'>'+p.getDate()+'.'+String(p.getMonth()+1).padStart(2,'0')+'</text>';
+    if(labels || i % Math.ceil(n / 8) === 0) s += '<text x="'+cx+'" y="'+(H - 16)+'" text-anchor="middle"'+bold+'>'+x.l1+'</text><text x="'+cx+'" y="'+(H - 3)+'" text-anchor="middle"'+bold+'>'+x.l2+'</text>';
   });
   s += '</svg>';
-  var past = days.filter(function(d){ return d <= t; });
-  function tot(k){ return past.reduce(function(acc, d){ var v = sum(d, ps, k); return v === null ? acc : (acc || 0) + v; }, null); }
-  var pl = tot('int_planned'), dn = tot('int_done');
-  var items = [['Назначено', pl], ['Прошло', dn], ['Доходимость', num(dn) && pl ? Math.round(dn / pl * 100) + '%' : null], ['Выходы', tot('hires')], ['Звонки', tot('calls')], ['Отказы', tot('rejections')]];
+  var past = {from:bk.length ? bk[0].from : r.from, to:(bk.length ? bk[bk.length - 1].to : r.to) > t ? t : (bk.length ? bk[bk.length - 1].to : r.to)};
+  var pl = rSum(past, ps, 'int_planned'), dn = rSum(past, ps, 'int_done');
+  var items = [['Назначено', pl], ['Прошло', dn], ['Доходимость', num(dn) && pl ? Math.round(dn / pl * 100) + '%' : null], ['Выходы', rSum(past, ps, 'hires')], ['Звонки', rSum(past, ps, 'calls')], ['Отказы', rSum(past, ps, 'rejections')]];
   $('dChart').innerHTML = s + '<div class="wk-tot">' + items.map(function(x){ return '<div><span>'+x[0]+'</span><b>'+(x[1] === null ? '—' : x[1])+'</b></div>'; }).join('') + '</div>';
 }
 
@@ -1427,10 +1497,13 @@ function validSession(){ var t = me(); return !!(t && !t.archived && t.hash); }
 
 // ---------- маршрутизация ----------
 var TABS = {
-  admin: [['day','Дашборд дня'], ['entry','Внести день'], ['sum','Сводка'], ['vac','Вакансии'], ['vacation','Отпуска'], ['team','Команда'], ['metrics','Метрики']],
+  admin: [['day','Дашборд'], ['entry','Внести день'], ['sum','Сводка'], ['vac','Вакансии'], ['settings','Настройки']],
   rec:   [['day','Мой день'], ['entry','Внести день'], ['sum','Моя сводка'], ['vac','Мои вакансии'], ['vacation','Мой отпуск']]
 };
 var VIEWS = ['login','day','entry','sum','vac','vacation','team','metrics'];
+// У администратора команда, метрики и отпуска — разделы одной вкладки «Настройки»
+var SETTINGS = ['team', 'metrics', 'vacation'];
+function inSettings(v){ return isAdmin() && SETTINGS.indexOf(v) >= 0; }
 function route(){
   if(!teamLoaded) return;   // ждём базу
   if(session && !validSession()){ session = null; store('hrSession', null); }
@@ -1449,13 +1522,17 @@ function route(){
   fillPeople();
   $('fPersonWrap').hidden = !!scope();
   var want = state.view || load('hrView');
-  showView(tabs.some(function(t){ return t[0] === want; }) ? want : 'day');
+  showView(tabs.some(function(t){ return t[0] === want; }) || inSettings(want) ? want : 'day');
 }
 function showView(view){
+  if(view === 'settings') view = state.sub || 'team';
+  if(inSettings(view)) state.sub = view;
   var changed = state.view !== view;
   state.view = view === 'login' ? null : view;
   VIEWS.forEach(function(v){ $('view' + v[0].toUpperCase() + v.slice(1)).hidden = v !== view; });
-  document.querySelectorAll('#tabs button').forEach(function(b){ b.setAttribute('aria-selected', b.dataset.view === view); });
+  document.querySelectorAll('#tabs button').forEach(function(b){ b.setAttribute('aria-selected', b.dataset.view === view || (b.dataset.view === 'settings' && inSettings(view))); });
+  $('subTabs').hidden = !inSettings(view);
+  document.querySelectorAll('#subTabs button').forEach(function(b){ b.setAttribute('aria-selected', b.dataset.view === view); });
   if(view !== 'login') store('hrView', view);
   if(view === 'entry' && changed) loadForm();
   render();
@@ -1480,19 +1557,39 @@ function ingest(snap){
 
 // ---------- запуск ----------
 session = load('hrSession');
+state.mode = load('hrMode') || 'day'; $('dMode').value = state.mode;
+if(state.mode === 'custom'){ state.mode = 'day'; $('dMode').value = 'day'; }   // свой период не запоминаем — его даты не хранятся
 $('fDate').value = today();
 $('vStatus').innerHTML = '<option value="">Все статусы</option>' + VAC_STATUSES.map(function(s){ return '<option>'+s+'</option>'; }).join('');
 $('vStatus').value = 'активна';   // по умолчанию — только вакансии в работе
 $('v_status').innerHTML = VAC_STATUSES.map(function(s){ return '<option>'+s+'</option>'; }).join('');
 $('mGroup').innerHTML = groupOptions('work');
 buildForm();
-$('tabs').onclick = function(e){ var b = e.target.closest('button[data-view]'); if(b) showView(b.dataset.view); };
+$('tabs').onclick = $('subTabs').onclick = function(e){ var b = e.target.closest('button[data-view]'); if(b) showView(b.dataset.view); };
 $('logout').onclick = logout;
 $('loginForm').onsubmit = login;
 $('bootForm').onsubmit = bootstrap;
 $('dDate').onchange = function(){ if(this.value){ state.date = this.value; renderDay(); } };
-$('dPrev').onclick = function(){ var p = prevDate(state.date, visiblePeople()); if(p){ state.date = p; renderDay(); } };
-$('dNext').onclick = function(){ state.date = nextDate(state.date, visiblePeople()) || today(); renderDay(); };
+$('dMonth').onchange = function(){ if(this.value){ state.date = this.value + '-01'; renderDay(); } };
+$('dFrom').onchange = function(){ if(!this.value) return; state.from = this.value; if(state.to < state.from) state.to = state.from; renderDay(); };
+$('dTo').onchange = function(){ if(!this.value) return; state.to = this.value; if(state.from > state.to) state.from = state.to; renderDay(); };
+$('dMode').onchange = function(){
+  state.mode = this.value; store('hrMode', state.mode);
+  if(state.mode === 'custom' && !state.from){ state.from = state.date.slice(0, 7) + '-01'; state.to = state.date; }
+  renderDay();
+};
+function stepPeriod(n){
+  if(state.mode === 'day'){
+    var d = n < 0 ? prevDate(state.date, visiblePeople()) : (nextDate(state.date, visiblePeople()) || today());
+    if(d) state.date = d;
+  } else {
+    var r = shiftPeriod(state.mode, periodOf(state.mode, state.date), n);
+    if(state.mode === 'custom'){ state.from = r.from; state.to = r.to; } else state.date = r.from;
+  }
+  renderDay();
+}
+$('dPrev').onclick = function(){ stepPeriod(-1); };
+$('dNext').onclick = function(){ stepPeriod(1); };
 $('fPerson').onchange = loadForm; $('fDate').onchange = loadForm;
 $('dayForm').onsubmit = saveDay;
 $('sYear').onchange = renderSum; $('sPerson').onchange = renderSum; $('sBlocks').onclick = copyReport;

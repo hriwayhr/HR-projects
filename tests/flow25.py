@@ -47,6 +47,23 @@ with sync_playwright() as p:
     assert svg.count('впереди') == 2 and 'не внесено' in svg, svg[:300]
     assert 'Назначено\n3' in pg.inner_text('#dChart .wk-tot'), pg.inner_text('#dChart .wk-tot')
     assert not pg.query_selector('#dHero')   # блока прогресса недели нет
+    # периоды: неделя / месяц / квартал / год / свой; назначено 1 (2.10) + 3 (6.10)
+    def mode(m):
+        pg.select_option('#dMode', m); pg.wait_for_timeout(100)
+        return pg.inner_text('#dayTitle'), pg.inner_text('#dTable tfoot') if pg.query_selector('#dTable tfoot') else pg.inner_text('#dTable tbody')
+    t, row = mode('week'); assert t == 'Неделя 41 · 5–9 октября' and '\t3\t' in row, (t, row)
+    assert 'сравнение: неделя 40' in pg.inner_text('#dayPrev') and 'по 30.09' in pg.inner_text('#dayPrev') and 'внесено 1 из 2' in pg.inner_text('#dChips'), pg.inner_text('#dChips')
+    t, row = mode('month'); assert t == 'Октябрь 2026' and '\t4\t' in row and pg.is_visible('#dMonth'), (t, row)
+    assert 'нед. 40' in pg.inner_html('#dChart svg') and 'нед. 41' in pg.inner_html('#dChart svg')
+    pg.click('#dPrev'); pg.wait_for_timeout(100); assert pg.inner_text('#dayTitle') == 'Сентябрь 2026'
+    pg.click('#dNext'); pg.wait_for_timeout(100); assert pg.inner_text('#dayTitle') == 'Октябрь 2026' and pg.is_disabled('#dNext')
+    t, row = mode('quarter'); assert t == '4 квартал 2026' and '\t4\t' in row, (t, row)
+    t, row = mode('year'); assert t == '2026 год' and pg.inner_html('#dChart svg').count('<rect') == 2, (t, pg.inner_html('#dChart svg').count('<rect'))   # данные только за октябрь: 2 столбика
+    t, row = mode('custom'); assert pg.is_visible('#dFrom') and pg.is_visible('#dTo')
+    pg.fill('#dFrom', '2026-10-03'); pg.dispatch_event('#dFrom', 'change'); pg.fill('#dTo', '2026-10-06'); pg.dispatch_event('#dTo', 'change'); pg.wait_for_timeout(100)
+    assert pg.inner_text('#dayTitle') == '3 октября – 6 октября 2026' and '\t3\t' in pg.inner_text('#dTable tbody'), pg.inner_text('#dTable tbody')
+    pg.click('#dPrev'); pg.wait_for_timeout(100); assert pg.inner_text('#dayTitle') == '29 сентября – 2 октября 2026'
+    pg.select_option('#dMode', 'day'); pg.wait_for_timeout(100)
     # новая вакансия сегодня — сразу в ячейках сегодняшнего дня
     pg.click('#tab_vac'); pg.click('#vAdd'); pg.fill('#v_title', 'D'); pg.fill('#v_manager', 'Юлия Немчинова')
     pg.fill('#vLinks .v-link', 'https://hh.ru/5'); assert pg.input_value('#vLinks .v-link-at') == '2026-10-07'
