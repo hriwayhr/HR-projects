@@ -46,6 +46,11 @@ with sync_playwright() as p:
     svg = pg.inner_html('#dChart svg')
     assert svg.count('впереди') == 2 and 'не внесено' in svg, svg[:300]
     assert 'Назначено\n3' in pg.inner_text('#dChart .wk-tot'), pg.inner_text('#dChart .wk-tot')
+    # прогресс недели: цель — обычная неделя, серия (6.10 внесён, 5.10 пропущен), победа — выход по единице B 6.10
+    hero = pg.inner_text('#dHero')
+    assert 'Неделя команды · 41' in hero and 'Собеседования прошли\n0 из 1' in hero, hero
+    assert pg.evaluate("streak('yulia')") == {'cur': 1, 'best': 1}
+    assert 'на «B» · 06.10' in hero, hero
     # новая вакансия сегодня — сразу в ячейках сегодняшнего дня
     pg.click('#tab_vac'); pg.click('#vAdd'); pg.fill('#v_title', 'D'); pg.fill('#v_manager', 'Юлия Немчинова')
     pg.fill('#vLinks .v-link', 'https://hh.ru/5'); assert pg.input_value('#vLinks .v-link-at') == '2026-10-07'
