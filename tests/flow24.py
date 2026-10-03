@@ -82,6 +82,11 @@ with sync_playwright() as p:
     assert 'В работе\n1' in vt and 'Нужно людей\n2' in vt and 'Скорость закрытия\n40' in vt and 'медиана 40' in vt, vt
     pg.click('#vAdd'); pg.fill('#v_title', 'Тестировщик'); pg.fill('#v_manager', 'Шулятицкая'); pg.click('#vSave'); pg.wait_for_timeout(300)
     assert 'В работе\n2' in pg.inner_text('#vTiles')
+    # «Шулятицкая» и «Катя Шулятицкая» — один ответственный: строка по пользователю, а не по тексту
+    pg.click('#vAdd'); pg.fill('#v_title', 'Логист 2'); pg.fill('#v_manager', 'Катя Шулятицкая'); pg.click('#vSave'); pg.wait_for_timeout(300)
+    bm = pg.inner_text('#vByMgr')
+    assert 'Катя Шулятицкая\t2\t1' in bm and 'Юля Немчинова' in bm and '\nШулятицкая' not in bm, bm
+    assert 'Катя Шулятицкая' in pg.inner_text('#vManager')
     pg.screenshot(path=str(HERE / 'shots' / 'hr-vac.png'), full_page=True)
     pg.click('#tab_metrics'); pg.screenshot(path=str(HERE / 'shots' / 'hr-metrics-admin.png'), full_page=True)
 
@@ -129,7 +134,7 @@ with sync_playwright() as p:
     # сохранённая сессия рекрутера с паролем открывает кабинет сразу
     pg.add_init_script("window.__store['config/team'].people.yulia.hash = 'h'; localStorage.setItem('hrSession', JSON.stringify({id:'yulia'}));")
     pg.reload(); pg.wait_for_timeout(400)
-    assert pg.inner_text('#meName') == 'Юля'
+    assert pg.inner_text('#meName') == 'Юля Немчинова'
     pg.click('#tab_vac'); pg.wait_for_timeout(100)
     vt = pg.inner_text('#vTable'); assert 'Аналитик' in vt and 'Бухгалтер' not in vt, vt
     assert pg.evaluate('document.documentElement.scrollWidth <= innerWidth'), 'горизонтальный скролл на телефоне'

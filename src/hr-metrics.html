@@ -269,7 +269,7 @@
     </div>
     <div class="panel mt">
       <div class="scroll"><table id="vTable"></table></div>
-      <p class="hint">Дней в работе — от публикации (если её нет — от запроса) до закрытия, у активных — до сегодня. Скорость закрытия — среднее по вакансиям «выход сотрудника» и «архив», у которых есть дата закрытия или выхода; «не актуальна» в расчёт не входит.</p>
+      <p class="hint">Ответственный привязан к пользователю из «Команды» по фамилии (если её нет — по имени): «Шулятицкая» и «Анна Шулятицкая» — один человек. Дней в работе — от публикации (если её нет — от запроса) до закрытия, у активных — до сегодня. Скорость закрытия — среднее по вакансиям «выход сотрудника» и «архив», у которых есть дата закрытия или выхода; «не актуальна» в расчёт не входит.</p>
     </div>
     <div class="grid2 mt">
       <div class="panel"><h3>По ответственным</h3><div class="scroll"><table id="vByMgr"></table></div></div>
@@ -398,8 +398,9 @@ function activeAdmins(){ return allPeople().filter(function(p){ return team[p].a
 function visiblePeople(){ return scope() ? [scope()] : recruiters(); }
 // Строки дня: действующие рекрутеры и те из архива, у кого в этот день есть цифры
 function dayPeople(day){ var row = byDate[day] || {}; return visiblePeople().filter(function(p){ return !team[p].archived || (row[p] && Object.keys(row[p]).length); }); }
-function label(p){ return team[p].name + (team[p].archived ? ' (в архиве)' : ''); }
-function nameHtml(p){ return esc(team[p].name) + (team[p].archived ? '<span class="pill arch">в архиве</span>' : ''); }
+function fullName(p){ return team[p].name + (team[p].surname ? ' ' + team[p].surname : ''); }
+function label(p){ return fullName(p) + (team[p].archived ? ' (в архиве)' : ''); }
+function nameHtml(p){ return esc(fullName(p)) + (team[p].archived ? '<span class="pill arch">в архиве</span>' : ''); }
 function metricList(){ return metrics || BUILTIN; }
 function activeMetrics(){ return metricList().filter(function(m){ return !m.off; }); }
 function customMetrics(){ return metricList().filter(function(m){ return m.custom && !m.off; }); }
@@ -603,11 +604,15 @@ function daysInWork(v){
 function closeDays(v){ return isClosed(v) ? Math.max(0, daysBetween(vacStart(v), vacEnd(v))) : null; }
 function mean(a){ return a.length ? Math.round(a.reduce(function(s, x){ return s + x; }, 0) / a.length) : null; }
 function median(a){ if(!a.length) return null; var b = a.slice().sort(function(x, y){ return x - y; }), m = b.length >> 1; return b.length % 2 ? b[m] : Math.round((b[m-1] + b[m]) / 2); }
-// Вакансия рекрутера — если в «Ответственном» его имя или фамилия
-function mine(v, p){
-  var m = norm(v.manager), t = team[p]; if(!m || !t) return false;
-  return [t.name, t.surname].some(function(x){ x = norm(x); return x && m.indexOf(x) >= 0; });
+// Чья вакансия: в «Ответственном» фамилия пользователя, а если фамилии нет — имя.
+// Так «Шулятицкая» и «Анна Шулятицкая» — одна и та же Анна.
+function vacOwner(v){
+  var m = norm(v.manager); if(!m) return null;
+  function has(f){ return allPeople().filter(function(p){ var x = norm(team[p][f]); return x && m.indexOf(x) >= 0; })[0]; }
+  return has('surname') || has('name') || null;
 }
+function mine(v, p){ return vacOwner(v) === p; }
+function managerLabel(v){ var p = vacOwner(v); return p ? label(p) : (v.manager || '—'); }
 function visibleVacancies(){ var p = scope(); return Object.keys(vacancies).map(function(id){ return Object.assign({id:id}, vacancies[id]); }).filter(function(v){ return !p || mine(v, p); }); }
 function vacStats(list){
   var active = list.filter(isActive), cd = list.filter(isClosed).map(closeDays);
@@ -630,7 +635,7 @@ function renderVac(){
 
   var q = norm($('vSearch').value), fs = $('vStatus').value, fm = $('vManager').value;
   var list = all.filter(function(v){
-    return (!q || norm(v.title + ' ' + v.dept).indexOf(q) >= 0) && (!fs || (v.status || '') === fs) && (!fm || v.manager === fm);
+    return (!q || norm(v.title + ' ' + v.dept).indexOf(q) >= 0) && (!fs || (v.status || '') === fs) && (!fm || managerLabel(v) === fm);
   }).sort(function(a, b){
     return (isActive(a) ? 0 : 1) - (isActive(b) ? 0 : 1) || (vacStart(b) || '').localeCompare(vacStart(a) || '');
   });
@@ -638,14 +643,14 @@ function renderVac(){
     (list.length ? list.map(function(v){
       var d = daysInWork(v), cls = isActive(v) ? 'active' : CLOSED[v.status] ? 'hire' : '';
       return '<tr class="click" data-id="'+esc(v.id)+'" tabindex="0"><td class="wrapc">'+(v.link ? '<a href="'+esc(v.link)+'" target="_blank" rel="noopener">'+esc(v.title)+'</a>' : esc(v.title))+'</td><td class="l">'+esc(v.dept||'—')+'</td>' +
-        '<td class="l"><span class="pill '+cls+'">'+esc(v.status||'без статуса')+'</span></td><td class="l">'+esc(v.manager||'—')+'</td><td>'+(num(v.rate) ? v.rate : '—')+'</td>' +
+        '<td class="l"><span class="pill '+cls+'">'+esc(v.status||'без статуса')+'</span></td><td class="l">'+esc(managerLabel(v))+'</td><td>'+(num(v.rate) ? v.rate : '—')+'</td>' +
         '<td>'+shortDate(vacStart(v))+'</td><td>'+shortDate(vacEnd(v))+'</td><td>'+(d === null ? '—' : (isActive(v) && d > 60 ? '<span class="pill long">'+d+'</span>' : d))+'</td>' +
         '<td>'+(num(v.extensions) ? v.extensions : '—')+'</td><td>'+(num(v.offersSent) ? (v.offersAccepted||0)+' из '+v.offersSent : '—')+'</td></tr>';
     }).join('') : '<tr><td colspan="10" class="empty">Вакансий нет. Добавьте первую кнопкой «Новая вакансия».</td></tr>') + '</tbody>';
 
   function group(key){
     var g = {};
-    all.forEach(function(v){ var k = v[key] || '—'; (g[k] || (g[k] = [])).push(v); });
+    all.forEach(function(v){ var k = key === 'manager' ? managerLabel(v) : v[key] || '—'; (g[k] || (g[k] = [])).push(v); });
     return Object.keys(g).map(function(k){ var s = vacStats(g[k]); s.k = k; return s; }).sort(function(a, b){ return b.active - a.active || b.closed - a.closed; });
   }
   function gtable(rows, title){
@@ -656,10 +661,10 @@ function renderVac(){
   $('vByDept').innerHTML = gtable(group('dept'), 'Отдел');
 
   var depts = {}, mgrs = {};
-  Object.keys(vacancies).forEach(function(id){ if(vacancies[id].dept) depts[vacancies[id].dept] = 1; if(vacancies[id].manager) mgrs[vacancies[id].manager] = 1; });
-  activePeople().forEach(function(p){ mgrs[team[p].surname || team[p].name] = 1; });
+  Object.keys(vacancies).forEach(function(id){ var v = vacancies[id]; if(v.dept) depts[v.dept] = 1; if(v.manager) mgrs[managerLabel(v)] = 1; });
   function opts(o){ return Object.keys(o).sort().map(function(d){ return '<option value="'+esc(d)+'">'; }).join(''); }
-  $('deptList').innerHTML = opts(depts); $('mgrList').innerHTML = opts(mgrs);
+  var pick = {}; activePeople().forEach(function(p){ pick[fullName(p)] = 1; });
+  $('deptList').innerHTML = opts(depts); $('mgrList').innerHTML = opts(pick);
   var curM = $('vManager').value;
   $('vManager').innerHTML = '<option value="">Все ответственные</option>' + Object.keys(mgrs).sort().map(function(d){ return '<option value="'+esc(d)+'">'+esc(d)+'</option>'; }).join('');
   $('vManager').value = mgrs[curM] ? curM : '';
@@ -667,7 +672,7 @@ function renderVac(){
 var editingVac = null;
 function openVac(id){
   var me = scope() && team[scope()];
-  var v = id ? vacancies[id] : {status:'активна', publishedAt:today(), manager: me ? (me.surname || me.name) : ''};
+  var v = id ? vacancies[id] : {status:'активна', publishedAt:today(), manager: me ? fullName(scope()) : ''};
   editingVac = id || null;
   VAC_FIELDS.forEach(function(f){ $('v_'+f).value = v[f] == null ? '' : v[f]; });
   $('vEdTitle').textContent = id ? 'Вакансия' : 'Новая вакансия';
@@ -856,7 +861,7 @@ function route(){
   var tabs = TABS[isAdmin() ? 'admin' : 'rec'];
   $('tabs').innerHTML = tabs.map(function(t){ return '<button role="tab" id="tab_'+t[0]+'" data-view="'+t[0]+'">'+t[1]+'</button>'; }).join('');
   $('me').hidden = false;
-  $('meName').textContent = me().name;
+  $('meName').textContent = fullName(session.id);
   $('meRole').textContent = isAdmin() ? 'администратор' : 'рекрутер';
   fillPeople();
   $('fPersonWrap').hidden = !!scope();
