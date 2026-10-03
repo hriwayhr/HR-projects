@@ -35,6 +35,7 @@ def metric_key(label):
     return next((k for p, k in METRICS if s.startswith(p)), None)
 
 
+WEEKDAYS = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
 OFF_MARKS = {'о', 'o', 'отпуск', 'в', 'выходной'}   # «о» — отпуск, «в» — выходной
 
 
@@ -42,7 +43,8 @@ def parse_sheet(ws, off=None):
     """Метрики по дням; даты с отметками отпуска/выходного складываются в множество off."""
     out = {}
     year, month, dates = 2024, None, {}
-    for row in ws.iter_rows(values_only=True):
+    rows = list(ws.iter_rows(values_only=True))
+    for n, row in enumerate(rows):
         a = row[0]
         if isinstance(a, (int, float)) and 2020 < a < 2100:
             year = int(a)
@@ -50,19 +52,35 @@ def parse_sheet(ws, off=None):
         name = str(a).strip().lower() if a is not None else ''
         if name in MONTHS or name == '(':  # «(» — опечатка вместо «Июль» у Кати
             month = MONTHS.index(name) + 1 if name in MONTHS else 7
-            dates = {}
+            # каждая ячейка шапки → дата; формулы вида «=F446+7» считаем от столбца, на который они ссылаются
+            full, dates = {}, {}
             for i, v in enumerate(row[1:], 1):
-                day = None
+                d = None
                 if isinstance(v, dt.datetime):
-                    day = v.day if v.month == month else None
+                    d = v.date()
                 elif isinstance(v, (int, float, str)) and re.fullmatch(r'\d{1,2}\.\d{1,2}', str(v)):
-                    d, m = str(v).split('.')
+                    dd, m = str(v).split('.')
                     m = int(m.ljust(2, '0')) if len(m) == 1 else int(m)  # 18.1 → октябрь
-                    day = int(d) if m == month else None
-                elif isinstance(v, str) and v.startswith('=') and i - 1 in dates:
-                    day = dates[i - 1] + 1
-                if day:
-                    dates[i] = day
+                    try:
+                        d = dt.date(year, m, int(dd))
+                    except ValueError:
+                        d = None
+                elif isinstance(v, str) and v.startswith('='):
+                    f = re.fullmatch(r'=\$?([A-Z]+)\$?\d+\s*([+-])\s*(\d+)', v.replace(' ', ''))
+                    if f:
+                        ref = 0
+                        for ch in f[1]:
+                            ref = ref * 26 + ord(ch) - 64
+                        base = full.get(ref - 1)   # A → индекс 0 в строке
+                        if base:
+                            d = base + dt.timedelta(days=int(f[3]) * (1 if f[2] == '+' else -1))
+                if d:
+                    full[i] = d
+                    # под датой — день недели; не совпал — это забытая копия столбца из шаблона («1.08 ЧТ» в 2026)
+                    wd = rows[n + 1][i] if n + 1 < len(rows) and i < len(rows[n + 1]) else None
+                    wd = str(wd).strip().lower() if wd else ''
+                    if d.month == month and (wd not in WEEKDAYS or WEEKDAYS.index(wd) == d.weekday()):
+                        dates[i] = d.day
             continue
         key = metric_key(a) if a else None
         if not key or not month:
