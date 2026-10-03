@@ -17,7 +17,7 @@ seed = {
      '2026-10-01': {'vac_start': 4, 'vac_end': 5, 'int_planned': 4, 'int_done': 3, 'chats': 2, 'chats_first': 1, 'hires': 1}}},
   'vacancies/v1': {'title': 'Логист', 'status': 'выход сотрудника', 'manager': 'Немчинова', 'publishedAt': ago(40), 'closedAt': ago(10)},  # 30 дн.
   'vacancies/v2': {'title': 'Бухгалтер', 'status': 'архив', 'manager': 'Шулятицкая', 'publishedAt': ago(70), 'startAt': ago(20)},     # 50 дн.
-  'vacancies/v3': {'title': 'Аналитик', 'status': 'активна', 'manager': 'Немчинова', 'rate': 2, 'publishedAt': ago(5)},
+  'vacancies/v3': {'title': 'Аналитик', 'status': 'активна', 'manager': 'Немчинова', 'rate': 2, 'publishedAt': ago(5), 'link': 'https://hh.ru/vacancy/1'},
   'vacancies/v4': {'title': 'BDM', 'status': 'не актуальна', 'manager': 'Немчинова', 'publishedAt': ago(90), 'closedAt': ago(1)},     # не в скорости
 }
 errs = []
@@ -124,8 +124,23 @@ with sync_playwright() as p:
     html_, text_ = pg.evaluate('window.__clip')
     assert text_.startswith('Текущий найм на ') and 'В работе 3 вакансии, нужно 4 человека.' in text_, text_
     assert 'Катя Шулятицкая — 2, нужно 2' in text_ and 'Юля Немчинова — 1, нужно 2' in text_, text_
-    assert 'Логист\t' not in text_ and 'Бухгалтер' not in text_ and 'Аналитик\t—\t2\t' in text_, text_
+    assert 'Логист\t' not in text_ and 'Бухгалтер' not in text_ and 'Аналитик\t—\t—\t2\t' in text_, text_
     assert '<table' in html_ and 'Скопировано' in pg.inner_text('#vCopyStat')
+    # несколько публикаций и заказчик: старая ссылка подхватывается, сохраняется списком
+    pg.select_option('#vStatus', 'активна'); pg.click('#vTable tr[data-id=v3] td:nth-child(2)'); pg.wait_for_timeout(100)
+    assert pg.input_value('#vLinks .v-link') == 'https://hh.ru/vacancy/1'
+    pg.click('#vLinkAdd'); pg.fill('#vLinks .link-row:nth-child(2) .v-link', 'https://hh.ru/vacancy/2')
+    pg.click('#vLinkAdd'); pg.fill('#vLinks .link-row:nth-child(3) .v-link', 'https://hh.ru/vacancy/3')
+    pg.click('#vLinks .link-row:nth-child(3) [data-del-link]')
+    pg.fill('#v_customer', 'Дмитрий Васильевич'); pg.click('#vSave'); pg.wait_for_timeout(300)
+    v3 = pg.evaluate("window.__store['vacancies/v3']")
+    assert v3['links'] == ['https://hh.ru/vacancy/1', 'https://hh.ru/vacancy/2'] and 'link' not in v3 and v3['customer'] == 'Дмитрий Васильевич', v3
+    row = pg.inner_text('#vTable tr[data-id=v3]'); assert 'hh 1' in row and 'hh 2' in row and 'Дмитрий Васильевич' in row, row
+    pg.fill('#vSearch', 'дмитрий'); pg.dispatch_event('#vSearch', 'input'); assert 'Аналитик' in pg.inner_text('#vTable') and 'Тестировщик' not in pg.inner_text('#vTable')
+    pg.fill('#vSearch', ''); pg.dispatch_event('#vSearch', 'input')
+    pg.click('#vCopy'); pg.wait_for_timeout(200)
+    html_, text_ = pg.evaluate('window.__clip')
+    assert 'Заказчик' in text_ and 'Дмитрий Васильевич' in text_ and 'hh 2</a>' in html_, text_
     pg.screenshot(path=str(HERE / 'shots' / 'hr-vac.png'), full_page=True)
     pg.click('#tab_metrics'); pg.screenshot(path=str(HERE / 'shots' / 'hr-metrics-admin.png'), full_page=True)
 
