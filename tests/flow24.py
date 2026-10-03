@@ -93,6 +93,7 @@ with sync_playwright() as p:
     assert 'Назначенных собеседований\t8\t8' in blk and 'Собеседований (факт)\t6\t6' in blk, blk
     assert 'Вакантных мест (на пятницу)\t—' in blk and 'Отклики hh\t7\t7' in blk, blk
     assert '75%' in blk and '16,7%' in blk, blk
+    assert 'Отказов' not in blk   # отказы в сводке не нужны
     # копирование для отчёта: в буфер уходят HTML-таблица и текст через табуляцию
     pg.evaluate("""window.__clip = null; Object.defineProperty(navigator, 'clipboard', {configurable: true, value: {write: function(items){
       return Promise.all(['text/html', 'text/plain'].map(function(t){ return items[0].getType(t).then(function(b){ return b.text(); }); }))
@@ -118,6 +119,13 @@ with sync_playwright() as p:
     # фильтр по умолчанию — активные: закрытых в таблице нет, пока не выбрать «Все статусы»
     assert pg.input_value('#vStatus') == 'активна' and 'Логист\t' not in pg.inner_text('#vTable') and 'Аналитик' in pg.inner_text('#vTable')
     pg.select_option('#vStatus', ''); pg.wait_for_timeout(100); assert 'Бухгалтер' in pg.inner_text('#vTable')
+    # «Скопировать для отчёта»: только активные, по ответственным, фильтр «Все статусы» не влияет
+    pg.click('#vCopy'); pg.wait_for_timeout(200)
+    html_, text_ = pg.evaluate('window.__clip')
+    assert text_.startswith('Текущий найм на ') and 'В работе 3 вакансии, нужно 4 человека.' in text_, text_
+    assert 'Катя Шулятицкая — 2, нужно 2' in text_ and 'Юля Немчинова — 1, нужно 2' in text_, text_
+    assert 'Логист\t' not in text_ and 'Бухгалтер' not in text_ and 'Аналитик\t—\t2\t' in text_, text_
+    assert '<table' in html_ and 'Скопировано' in pg.inner_text('#vCopyStat')
     pg.screenshot(path=str(HERE / 'shots' / 'hr-vac.png'), full_page=True)
     pg.click('#tab_metrics'); pg.screenshot(path=str(HERE / 'shots' / 'hr-metrics-admin.png'), full_page=True)
 

@@ -265,9 +265,11 @@
         <input type="search" id="vSearch" placeholder="Название или отдел" aria-label="Поиск">
         <select id="vStatus" aria-label="Статус"></select>
         <select id="vManager" aria-label="Ответственный"></select>
+        <button class="btn ghost" id="vCopy">Скопировать для отчёта</button>
         <button class="btn" id="vAdd">Новая вакансия</button>
       </div>
     </div>
+    <p class="status" id="vCopyStat" role="status"></p>
     <div class="tiles" id="vTiles"></div>
     <div class="panel" id="vEditor" hidden>
       <h3 id="vEdTitle">Новая вакансия</h3>
@@ -725,13 +727,13 @@ function weeklyTotals(ps, extra){
   var out = {};
   dates().forEach(function(d){
     if(d < COLLECT_START) return;
-    var k = weekKey(d), r = out[k] || (out[k] = {vac:{}, pub:0, planned:0, done:0, hires:0, dis:0, rej:0, x:{}, any:false});
+    var k = weekKey(d), r = out[k] || (out[k] = {vac:{}, pub:0, planned:0, done:0, hires:0, dis:0, x:{}, any:false});
     ps.forEach(function(p){
       var m = (byDate[d] || {})[p]; if(!m || !Object.keys(m).length) return; r.any = true;
       // вакантные места = «кандидатов на вакансию» (сколько людей нужно), как в листе sum; даты по порядку — остаётся пятница
       if(num(candStock(m))) r.vac[p] = candStock(m);
       r.pub += m.vac_published||0; r.planned += m.int_planned||0; r.done += m.int_done||0;
-      r.hires += m.hires||0; r.dis += m.dismissals||0; r.rej += m.rejections||0;
+      r.hires += m.hires||0; r.dis += m.dismissals||0;
       extra.forEach(function(k){ if(num(m[k])) r.x[k] = (r.x[k]||0) + m[k]; });
     });
   });
@@ -761,7 +763,11 @@ function reportText(r){
 }
 function copyReport(e){
   var b = e.target.closest('button[data-copy]'); if(!b) return;
-  var r = sumReports[b.dataset.copy], st = b.nextElementSibling, html = reportHtml(r), text = reportText(r);
+  var r = sumReports[b.dataset.copy];
+  copyRich(reportHtml(r), reportText(r), b.nextElementSibling);
+}
+// В буфер — HTML (для письма) и текст (для Excel); не дали доступ — копируем выделением
+function copyRich(html, text, st){
   function done(){ st.className = 'status'; st.textContent = 'Скопировано — вставьте в письмо или в Excel.'; setTimeout(function(){ st.textContent = ''; }, 4000); }
   function legacy(){
     var holder = document.createElement('div');
@@ -812,8 +818,7 @@ function renderSum(){
     }).join('') + '<th class="sum">sum</th></tr></thead>';
     var lines = [['Вакантных мест (на пятницу)', function(r){ return r.vacs; }, false], ['Новых вакансий', function(r){ return r.pub; }, true],
       ['Назначенных собеседований', function(r){ return r.planned; }, true], ['Собеседований (факт)', function(r){ return r.done; }, true],
-      ['Выходов новых сотрудников', function(r){ return r.hires; }, true], ['Уволенных сотрудников', function(r){ return r.dis; }, true],
-      ['Отказов', function(r){ return r.rej; }, true]]
+      ['Выходов новых сотрудников', function(r){ return r.hires; }, true], ['Уволенных сотрудников', function(r){ return r.dis; }, true]]
       .concat(extra.map(function(x){ return [x.t, function(r){ return num(r.x[x.k]) ? r.x[x.k] : null; }, true]; }));
     sumReports[m] = {
       title: MONTHS[+m.slice(5) - 1] + ' ' + m.slice(0, 4) + ' — ' + (who ? fullName(who) : 'вся команда'),
@@ -828,7 +833,6 @@ function renderSum(){
       row('Собеседований (факт)', function(r){ return r.done; }, true) +
       row('Выходов новых сотрудников', function(r){ return r.hires; }, true) +
       row('Уволенных сотрудников', function(r){ return r.dis; }, true) +
-      row('Отказов', function(r){ return r.rej; }, true) +
       extra.map(function(x){ return row(esc(x.t), function(r){ return num(r.x[x.k]) ? r.x[x.k] : null; }, true); }).join('');
     return '<div class="panel"><div class="month-head"><h3>'+MONTHS[+m.slice(5) - 1]+' '+m.slice(0, 4)+'</h3>' +
       '<button class="btn ghost sm" data-copy="'+m+'">Скопировать для отчёта</button><span class="status" role="status"></span></div><div class="month-block">' +
@@ -916,6 +920,39 @@ function renderVac(){
   var curM = $('vManager').value;
   $('vManager').innerHTML = '<option value="">Все ответственные</option>' + Object.keys(mgrs).sort().map(function(d){ return '<option value="'+esc(d)+'">'+esc(d)+'</option>'; }).join('');
   $('vManager').value = mgrs[curM] ? curM : '';
+}
+// Отчёт «Текущий найм»: активные вакансии на сегодня по ответственным (фильтры таблицы не влияют)
+function hiringReport(){
+  var act = visibleVacancies().filter(isActive), groups = {};
+  act.forEach(function(v){ var k = managerLabel(v); (groups[k] || (groups[k] = [])).push(v); });
+  var names = Object.keys(groups).sort(function(a, b){ return groups[b].length - groups[a].length || a.localeCompare(b); });
+  function need(list){ return list.reduce(function(s, v){ return s + (num(v.rate) ? v.rate : 1); }, 0); }
+  function fmt(n){ return String(n).replace('.', ','); }
+  var d = parse(today()), date = d.getDate() + ' ' + MONTHS_GEN[d.getMonth()] + ' ' + d.getFullYear();
+  var cols = ['Вакансия', 'Отдел', 'Нужно людей', 'В работе с', 'Дней в работе', 'Офферы', 'Комментарий'];
+  function cells(v){ return [v.title, v.dept || '—', fmt(num(v.rate) ? v.rate : 1), shortDate(vacStart(v)), daysInWork(v) === null ? '—' : daysInWork(v),
+    num(v.offersSent) ? (v.offersAccepted || 0) + ' из ' + v.offersSent : '—', v.comment || '']; }
+  function sortByAge(list){ return list.slice().sort(function(a, b){ return (daysInWork(b) || 0) - (daysInWork(a) || 0); }); }
+  var title = 'Текущий найм на ' + date + (scope() ? ' — ' + fullName(scope()) : '');
+  var summary = 'В работе ' + act.length + ' ' + plural(act.length, 'вакансия', 'вакансии', 'вакансий') + ', нужно ' + fmt(need(act)) + ' ' + plural(Math.round(need(act)), 'человек', 'человека', 'человек') + '.';
+  var td = 'border:1px solid #C9D3C3;padding:4px 10px;font:14px Arial,sans-serif;vertical-align:top;';
+  var html = '<p style="font:bold 16px Arial,sans-serif;margin:0 0 4px">' + esc(title) + '</p><p style="font:14px Arial,sans-serif;margin:0 0 12px">' + esc(summary) + '</p>' +
+    names.map(function(n){
+      var list = sortByAge(groups[n]);
+      return '<p style="font:bold 14px Arial,sans-serif;margin:12px 0 6px">' + esc(n) + ' — ' + list.length + ' ' + plural(list.length, 'вакансия', 'вакансии', 'вакансий') + ', нужно ' + fmt(need(list)) + '</p>' +
+        '<table cellspacing="0" cellpadding="0" style="border-collapse:collapse"><tr>' + cols.map(function(c, i){ return '<th style="'+td+'background:#E4F1E8;white-space:nowrap;text-align:'+(i >= 2 && i <= 5 ? 'right' : 'left')+'">'+c+'</th>'; }).join('') + '</tr>' +
+        list.map(function(v){
+          return '<tr>' + cells(v).map(function(c, i){
+            var inner = i === 0 && v.link ? '<a href="'+esc(v.link)+'" style="color:#007026">'+esc(c)+'</a>' : esc(c);
+            return '<td style="'+td+(i >= 2 && i <= 5 ? 'text-align:right;white-space:nowrap;' : '')+(i === 4 && daysInWork(v) > 60 ? 'background:#FBF0DA;font-weight:bold;' : '')+'">'+inner+'</td>';
+          }).join('') + '</tr>';
+        }).join('') + '</table>';
+    }).join('');
+  var text = title + '\n' + summary + '\n' + names.map(function(n){
+    var list = sortByAge(groups[n]);
+    return '\n' + n + ' — ' + list.length + ', нужно ' + fmt(need(list)) + '\n' + cols.join('\t') + '\n' + list.map(function(v){ return cells(v).join('\t'); }).join('\n');
+  }).join('\n');
+  return {html:html, text:text, count:act.length};
 }
 var editingVac = null;
 function openVac(id){
@@ -1162,6 +1199,11 @@ $('dayForm').onsubmit = saveDay;
 $('sYear').onchange = renderSum; $('sPerson').onchange = renderSum; $('sBlocks').onclick = copyReport;
 $('vSearch').oninput = renderVac; $('vStatus').onchange = renderVac; $('vManager').onchange = renderVac;
 $('vAdd').onclick = function(){ openVac(null); };
+$('vCopy').onclick = function(){
+  var r = hiringReport();
+  if(!r.count){ $('vCopyStat').className = 'status'; $('vCopyStat').textContent = 'Активных вакансий нет — копировать нечего.'; return; }
+  copyRich(r.html, r.text, $('vCopyStat'));
+};
 $('vCancel').onclick = function(){ $('vEditor').hidden = true; editingVac = null; };
 $('vForm').onsubmit = saveVac;
 $('vDelete').onclick = deleteVac;
