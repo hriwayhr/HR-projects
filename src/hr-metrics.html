@@ -156,6 +156,14 @@
   .link-row input{flex:1;}
   .pubs{display:block; font-size:12px; margin-top:2px;}
   .pubs a{margin-right:8px;}
+  .pub-expired{color:var(--bad) !important; font-weight:600;}
+  .pill.pub-expired{background:var(--warn-bg); color:var(--bad);}
+  .pub-soon,.pill.pub-soon{color:var(--warn-ink) !important;}
+  .pill.pub-soon,.pill.pub-nodate{background:var(--warn-bg); color:var(--warn-ink);}
+  .pill.pub-ok{background:var(--tint); color:var(--good);}
+  .pill.pub-archived{background:var(--off-bg); color:var(--ink-3);}
+  .remind{border-color:var(--warn-ink); margin-bottom:16px;}
+  .remind .todo-row{gap:6px 12px;}
   .month-head{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; margin-bottom:12px;}
   .month-head h3{margin:0;}
   .cv{display:grid; gap:10px; font-size:14px;}
@@ -223,6 +231,7 @@
         <button class="icon" id="dNext" aria-label="Следующий день">›</button>
       </div>
     </div>
+    <div id="dRemind"></div>
     <div class="panel todo" id="dTodo"></div>
     <div class="chips" id="dChips"></div>
     <div class="tiles" id="dTiles"></div>
@@ -281,6 +290,7 @@
       </div>
     </div>
     <p class="status" id="vCopyStat" role="status"></p>
+    <div id="vRemind"></div>
     <div class="tiles" id="vTiles"></div>
     <div class="panel" id="vEditor" hidden>
       <h3 id="vEdTitle">Новая вакансия</h3>
@@ -294,7 +304,7 @@
           <label class="f">Заказчик (кто запросил вакансию)<input type="text" id="v_customer" list="custList" placeholder="Имя сотрудника"></label>
           <label class="f">Дата запроса<input type="date" id="v_requestedAt"></label>
           <label class="f">Дата публикации<input type="date" id="v_publishedAt"></label>
-          <label class="f">Дата архивации<input type="date" id="v_archivedAt"></label>
+          <label class="f">Дата архивации<input type="date" id="v_archivedAt" title="Если есть публикации — по ним"></label>
           <label class="f">Дата закрытия<input type="date" id="v_closedAt"></label>
           <label class="f">Дата выхода сотрудника<input type="date" id="v_startAt"></label>
           <label class="f">Количество продлений<input type="number" min="0" step="1" id="v_extensions"></label>
@@ -310,7 +320,7 @@
         <fieldset class="links"><legend>Публикации на hh.ru</legend>
           <div id="vLinks" class="stack"></div>
           <button type="button" class="btn ghost sm" id="vLinkAdd">+ Ещё публикация</button>
-          <p class="hint mt">По публикациям считаются «открытые вакансии» менеджера в метриках дня (с 5 октября 2026): открыта — с этого дня, снята — с этого дня уже не считается. «Кандидаты на вакансию» — сколько человек нужно (ставка или единицы в поиске).</p>
+          <p class="hint mt">По публикациям считаются «открытые вакансии» менеджера в метриках дня (с 5 октября 2026): открыта — с этого дня, с даты архивации уже не считается. Новая публикация висит месяц; «Продление» — ещё месяц (можно нажимать несколько раз). За 5 дней до архивации — напоминание на дашборде и здесь. «Кандидаты на вакансию» — сколько человек нужно (ставка или единицы в поиске).</p>
         </fieldset>
         <label class="f">Комментарий<textarea id="v_comment" rows="2"></textarea></label>
         <div class="actions">
@@ -534,6 +544,38 @@ function missingDays(p){
 }
 var STATUS_TEXT = {ok:'внесено', missing:'нужно внести', today:'сегодня ещё не внесено', vac:'отпуск', off:'выходной'};
 function openEntry(p, d){ showView('entry'); if(!scope()) $('fPerson').value = p; $('fDate').value = d; loadForm(); $('fGroups').querySelector('input') && $('fGroups').querySelector('input').focus(); }
+function pubReminders(){
+  var p = scope(), out = [];
+  Object.keys(vacancies).forEach(function(id){
+    var v = vacancies[id]; if(!isActive(v) || (p && vacOwner(v) !== p)) return;
+    linkObjs(v).forEach(function(l, i){ var st = linkState(l); if(st !== 'ok' && st !== 'archived') out.push({id:id, i:i, v:v, l:l, st:st}); });
+  });
+  var order = {expired:0, soon:1, nodate:2};
+  return out.sort(function(a, b){ return order[a.st] - order[b.st] || (a.l.closedAt || '').localeCompare(b.l.closedAt || ''); });
+}
+function remindersHtml(){
+  var list = pubReminders(); if(!list.length) return '';
+  var ex = list.filter(function(r){ return r.st === 'expired'; }).length, soon = list.filter(function(r){ return r.st === 'soon'; }).length, nd = list.length - ex - soon;
+  return '<div class="panel todo remind"><h3>Публикации на hh.ru: ' + [ex ? 'в архиве ' + ex : '', soon ? 'продлить в ближайшие ' + REMIND_DAYS + ' дней ' + soon : '', nd ? 'без даты архивации ' + nd : ''].filter(Boolean).join(', ') + '</h3>' +
+    list.map(function(r){
+      return '<div class="todo-row"><span class="pill pub-'+r.st+'">'+esc(linkNote(r.l))+'</span><b>'+esc(r.v.title)+'</b>' +
+        '<a href="'+esc(r.l.url)+'" target="_blank" rel="noopener">hh '+(r.i+1)+'</a>' + (scope() ? '' : '<span class="hint">'+esc(managerLabel(r.v))+'</span>') +
+        (r.st === 'nodate' ? '<button class="btn ghost sm" data-open-vac="'+r.id+'">Указать дату</button>' : '<button class="btn sm" data-extend="'+r.id+'" data-i="'+r.i+'">Продлить на месяц</button>') +
+        (r.st === 'expired' ? '<button class="btn ghost sm" data-stop="'+r.id+'" data-i="'+r.i+'" title="Публикация остаётся в истории как снятая и больше не напоминает">Не продлеваем</button>' : '') + '</div>';
+    }).join('') + '<p class="hint">Публикация в архиве не считается открытой вакансией в метриках дня. Продление — от даты архивации, если срок уже вышел — с сегодня.</p></div>';
+}
+function extendFromReminder(e){
+  var b = e.target.closest('[data-extend],[data-open-vac],[data-stop]'); if(!b || !db) return;
+  if(b.dataset.openVac){ showView('vac'); openVac(b.dataset.openVac); return; }
+  var id = b.dataset.extend || b.dataset.stop, v = vacancies[id], links = linkObjs(v).slice();
+  var l = b.dataset.stop ? Object.assign({}, links[+b.dataset.i], {stopped:true}) : extendLink(links[+b.dataset.i]);
+  links[+b.dataset.i] = l;
+  var next = Object.assign({}, v, {links:links, archivedAt:links.map(function(x){ return x.closedAt || ''; }).sort().pop(), extensions:links.reduce(function(s, x){ return s + (x.ext || 0); }, 0), updatedAt:new Date().toISOString()});
+  delete next.link;
+  b.disabled = true;
+  db.doc('vacancies/' + id).set(next).catch(function(err){ b.disabled = false; alertStatus(writeError(err)); });
+}
+function alertStatus(msg){ var s = document.querySelector('#vCopyStat'); if(s){ s.className = 'status err'; s.textContent = msg; } }
 function renderTodo(){
   var ps = scope() ? [scope()] : activePeople(), box = $('dTodo');
   var miss = ps.map(function(p){ return [p, missingDays(p)]; }).filter(function(x){ return x[1].length; });
@@ -558,6 +600,7 @@ function renderTodo(){
     '<div class="legend"><span><i style="background:var(--accent)"></i>внесено</span><span><i style="background:var(--warn-bg);box-shadow:inset 0 0 0 1.5px var(--warn-ink)"></i>нужно внести</span><span><i style="background:var(--off-bg)"></i>О — отпуск</span></div>';
   box.className = 'panel todo' + (miss.length ? '' : ' done');
   box.innerHTML = head + (ps.length ? grid : '');
+  $('dRemind').innerHTML = remindersHtml();
 }
 function todoClick(e){
   var b = e.target.closest('button[data-d]'); if(!b) return;
@@ -926,6 +969,7 @@ function vacStats(list){
           oldest:active.reduce(function(m, v){ var d = daysInWork(v); return d !== null && d > m ? d : m; }, 0)};
 }
 function renderVac(){
+  $('vRemind').innerHTML = remindersHtml();
   var p = scope(), all = visibleVacancies(), st = vacStats(all);
   $('vTitle').textContent = p ? 'Мои вакансии' : 'Вакансии';
   $('vManager').hidden = !!p;
@@ -981,9 +1025,10 @@ function hiringReport(){
   function need(list){ return list.reduce(function(s, v){ return s + needOf(v); }, 0); }
   function fmt(n){ return String(n).replace('.', ','); }
   var d = parse(today()), date = d.getDate() + ' ' + MONTHS_GEN[d.getMonth()] + ' ' + d.getFullYear();
-  var cols = ['Вакансия', 'Отдел', 'Заказчик', 'Нужно людей', 'В работе с', 'Дней в работе', 'Офферы', 'Комментарий'];
+  var cols = ['Вакансия', 'Отдел', 'Заказчик', 'Нужно людей', 'В работе с', 'Дней в работе', 'Публикации', 'Офферы', 'Комментарий'];
+  var RIGHT = {3:1, 4:1, 5:1, 7:1};
   function cells(v){ return [v.title, v.dept || '—', v.customer || '—', fmt(needOf(v)) + (isMulti(v) ? ' из ' + v.seats.length : ''), shortDate(vacStart(v)), daysInWork(v) === null ? '—' : daysInWork(v),
-    num(v.offersSent) ? (v.offersAccepted || 0) + ' из ' + v.offersSent : '—', v.comment || '']; }
+    linkObjs(v).map(function(l, j){ return 'hh ' + (j+1) + ': ' + linkNote(l); }).join('; ') || 'нет', num(v.offersSent) ? (v.offersAccepted || 0) + ' из ' + v.offersSent : '—', v.comment || '']; }
   function sortByAge(list){ return list.slice().sort(function(a, b){ return (daysInWork(b) || 0) - (daysInWork(a) || 0); }); }
   var title = 'Текущий найм на ' + date + (scope() ? ' — ' + fullName(scope()) : '');
   var summary = 'В работе ' + act.length + ' ' + plural(act.length, 'вакансия', 'вакансии', 'вакансий') + ', нужно ' + fmt(need(act)) + ' ' + plural(Math.round(need(act)), 'человек', 'человека', 'человек') + '.';
@@ -992,12 +1037,13 @@ function hiringReport(){
     names.map(function(n){
       var list = sortByAge(groups[n]);
       return '<p style="font:bold 14px Arial,sans-serif;margin:12px 0 6px">' + esc(n) + ' — ' + list.length + ' ' + plural(list.length, 'вакансия', 'вакансии', 'вакансий') + ', нужно ' + fmt(need(list)) + '</p>' +
-        '<table cellspacing="0" cellpadding="0" style="border-collapse:collapse"><tr>' + cols.map(function(c, i){ return '<th style="'+td+'background:#E4F1E8;white-space:nowrap;text-align:'+(i >= 3 && i <= 6 ? 'right' : 'left')+'">'+c+'</th>'; }).join('') + '</tr>' +
+        '<table cellspacing="0" cellpadding="0" style="border-collapse:collapse"><tr>' + cols.map(function(c, i){ return '<th style="'+td+'background:#E4F1E8;white-space:nowrap;text-align:'+(RIGHT[i] ? 'right' : 'left')+'">'+c+'</th>'; }).join('') + '</tr>' +
         list.map(function(v){
           return '<tr>' + cells(v).map(function(c, i){
-            var l = vacLinks(v), inner = i === 0 && l.length ? '<a href="'+esc(l[0])+'" style="color:#007026">'+esc(c)+'</a>' +
-              (l.length > 1 ? '<br><span style="font-size:12px">' + l.map(function(u, j){ return '<a href="'+esc(u)+'" style="color:#007026">hh '+(j+1)+'</a>'; }).join(' · ') + '</span>' : '') : esc(c);
-            return '<td style="'+td+(i >= 3 && i <= 6 ? 'text-align:right;white-space:nowrap;' : '')+(i === 5 && daysInWork(v) > 60 ? 'background:#FBF0DA;font-weight:bold;' : '')+'">'+inner+'</td>';
+            var lo = linkObjs(v), inner = i === 0 && lo.length ? '<a href="'+esc(lo[0].url)+'" style="color:#007026">'+esc(c)+'</a>'
+              : i === 6 && lo.length ? lo.map(function(l, j){ var st = linkState(l);
+                  return '<a href="'+esc(l.url)+'" style="color:'+(st === 'expired' ? '#B4321F;font-weight:bold' : st === 'soon' || st === 'nodate' ? '#7A5310' : '#007026')+'">hh '+(j+1)+'</a> '+esc(linkNote(l)); }).join('<br>') : esc(c);
+            return '<td style="'+td+(RIGHT[i] ? 'text-align:right;white-space:nowrap;' : '')+(i === 6 ? 'white-space:nowrap;' : '')+(i === 5 && daysInWork(v) > 60 ? 'background:#FBF0DA;font-weight:bold;' : '')+'">'+inner+'</td>';
           }).join('') + '</tr>';
         }).join('') + '</table>';
     }).join('');
@@ -1009,18 +1055,62 @@ function hiringReport(){
 }
 // Публикации: список ссылок; у старых вакансий из таблицы — одна в поле link
 // Публикация: {url, at — открыта, closedAt? — снята}; у старых — строка, открыта вместе с вакансией
-function linkObjs(v){ return (v.links || (v.link ? [v.link] : [])).map(function(l){ return typeof l === 'string' ? {url:l, at:vacStart(v)} : l; }); }
+// Публикация на hh.ru: {url, at — открыта, closedAt — дата архивации, ext — продлений, gaps — [[с, по)] пока висела в архиве}.
+// У старых ссылок строкой даты берутся из вакансии (дата публикации, дата архивации, продления).
+var PUB_MONTHS = 1, REMIND_DAYS = 5;
+function linkObjs(v){
+  return (v.links || (v.link ? [v.link] : [])).map(function(l){
+    return typeof l === 'string' ? {url:l, at:vacStart(v), closedAt:v.archivedAt || '', ext:num(v.extensions) ? v.extensions : 0} : l;
+  });
+}
 function vacLinks(v){ return linkObjs(v).map(function(l){ return l.url; }); }
+function addMonths(s, n){
+  var d = parse(s), day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + n);
+  d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate())); return iso(d);
+}
+function linkOpen(l, start, d, eod){ return openOn(l.at || start, l.closedAt, d, eod) && !(l.gaps || []).some(function(g){ return openOn(g[0], g[1], d, eod); }); }
+// expired — срок вышел (в день архивации публикация уже не висит), soon — до архивации ≤ 5 дней, nodate — дата не указана
+function linkState(l){
+  if(!l.closedAt) return 'nodate';
+  var left = daysBetween(today(), l.closedAt);
+  return left <= 0 ? (l.stopped ? 'archived' : 'expired') : left <= REMIND_DAYS ? 'soon' : 'ok';
+}
+function linkNote(l){
+  var st = linkState(l), left = l.closedAt ? daysBetween(today(), l.closedAt) : null;
+  return st === 'archived' ? 'снята с ' + shortDate(l.closedAt) : st === 'expired' ? 'в архиве с ' + shortDate(l.closedAt) : st === 'soon' ? 'до ' + shortDate(l.closedAt) + ' — осталось ' + left + ' ' + plural(left, 'день', 'дня', 'дней')
+       : st === 'nodate' ? 'нет даты архивации' : 'до ' + shortDate(l.closedAt);
+}
+// Продление на месяц: от даты архивации, а если срок уже вышел — с сегодня (перерыв запоминается)
+function extendLink(l){
+  var t = today(), n = Object.assign({}, l);
+  if(l.closedAt && l.closedAt <= t){ n.gaps = (l.gaps || []).concat([[l.closedAt, t]]); n.closedAt = addMonths(t, PUB_MONTHS); }
+  else n.closedAt = addMonths(l.closedAt || t, PUB_MONTHS);
+  n.ext = (l.ext || 0) + 1; delete n.stopped;
+  return n;
+}
 function pubsHtml(v){
-  var l = vacLinks(v); if(l.length < 2) return '';
-  return '<span class="pubs">' + l.map(function(u, i){ return '<a href="'+esc(u)+'" target="_blank" rel="noopener">hh '+(i+1)+'</a>'; }).join('') + '</span>';
+  var l = linkObjs(v); if(!l.length) return '';
+  return '<span class="pubs">' + l.map(function(x, i){
+    var st = isActive(v) ? linkState(x) : 'ok';
+    return '<a href="'+esc(x.url)+'" target="_blank" rel="noopener" class="pub-'+st+'" title="'+esc(linkNote(x))+'">hh '+(i+1)+(isActive(v) ? ' · '+esc(linkNote(x)) : '')+'</a>';
+  }).join('') + '</span>';
 }
 function linkRow(l){
-  l = l || {at:today()};
-  return '<div class="link-row"><input type="url" class="v-link" value="'+esc(l.url || '')+'" placeholder="https://hh.ru/vacancy/…" aria-label="Ссылка на публикацию">' +
+  l = l || {at:today(), closedAt:addMonths(today(), PUB_MONTHS)};
+  var st = linkState(l);
+  return '<div class="link-row" data-stopped="'+(l.stopped ? 1 : 0)+'" data-ext="'+(l.ext || 0)+'" data-gaps="'+esc(JSON.stringify(l.gaps || []))+'"><input type="url" class="v-link" value="'+esc(l.url || '')+'" placeholder="https://hh.ru/vacancy/…" aria-label="Ссылка на публикацию">' +
     '<label class="f">открыта<input type="date" class="v-link-at" value="'+esc(l.at || '')+'"></label>' +
-    '<label class="f">снята<input type="date" class="v-link-closed" value="'+esc(l.closedAt || '')+'"></label>' +
+    '<label class="f">дата архивации<input type="date" class="v-link-closed" value="'+esc(l.closedAt || '')+'"></label>' +
+    '<button type="button" class="btn ghost sm" data-extend-link title="Продлить публикацию на hh.ru ещё на месяц">Продление</button>' +
+    '<span class="pill pub-'+st+'">'+esc(linkNote(l))+(l.ext ? ' · продлений: '+l.ext : '')+'</span>' +
     '<button type="button" class="btn danger sm" data-del-link aria-label="Убрать ссылку">×</button></div>';
+}
+function readLinkRow(r){
+  var l = {url:r.querySelector('.v-link').value.trim(), at:r.querySelector('.v-link-at').value}, c = r.querySelector('.v-link-closed').value;
+  if(c) l.closedAt = c;
+  var ext = +r.dataset.ext || 0, gaps = JSON.parse(r.dataset.gaps || '[]');
+  if(ext) l.ext = ext; if(gaps.length) l.gaps = gaps; if(r.dataset.stopped === '1' && c && c <= today()) l.stopped = true;
+  return l;
 }
 function setLinks(list){ $('vLinks').innerHTML = (list.length ? list : [null]).map(linkRow).join(''); }
 function seatRow(x){
@@ -1075,7 +1165,7 @@ function registryDay(p, d){
     [true, false].forEach(function(eod){
       if(!openOn(sp[0], sp[1], d, eod)) return;
       var sfx = eod ? '_end' : '_start';
-      r['vac' + sfx] += links.filter(function(l){ return openOn(l.at || sp[0], l.closedAt, d, eod); }).length;
+      r['vac' + sfx] += links.filter(function(l){ return linkOpen(l, sp[0], d, eod); }).length;
       r['cand' + sfx] += isMulti(v) ? v.seats.filter(function(x){ return openOn(seatStart(v, x), x.startAt, d, eod); }).length : needOf(v);
     });
     links.forEach(function(l){ if((l.at || sp[0]) === d) r.vac_published++; });
@@ -1098,6 +1188,16 @@ function rebuild(){
     });
   }
 }
+// Пока у вакансии есть публикации, её «дата архивации» и «продления» считаются по ним
+function syncPubFields(){
+  var links = Array.prototype.map.call(document.querySelectorAll('#vLinks .link-row'), readLinkRow).filter(function(l){ return l.url || l.closedAt; });
+  var has = links.length > 0;
+  ['v_archivedAt', 'v_extensions'].forEach(function(id){ $(id).readOnly = has; });
+  if(has){
+    $('v_archivedAt').value = links.map(function(l){ return l.closedAt || ''; }).sort().pop() || '';
+    $('v_extensions').value = links.reduce(function(s, l){ return s + (l.ext || 0); }, 0);
+  }
+}
 var editingVac = null;
 function openVac(id){
   var me = scope() && team[scope()];
@@ -1105,6 +1205,7 @@ function openVac(id){
   editingVac = id || null;
   VAC_FIELDS.forEach(function(f){ $('v_'+f).value = v[f] == null ? '' : v[f]; });
   setLinks(linkObjs(v));
+  syncPubFields();
   $('v_multi').checked = isMulti(v);
   $('vSeats').innerHTML = '';
   if(isMulti(v)) setSeats(v.seats);
@@ -1120,11 +1221,16 @@ function saveVac(e){
   if(!db) return;
   var v = {};
   VAC_FIELDS.forEach(function(f){ var x = $('v_'+f).value.trim(); if(x !== '') v[f] = NUM_FIELDS[f] ? +x : x; });
-  var seen = {}, links = Array.prototype.map.call(document.querySelectorAll('#vLinks .link-row'), function(r){
-      var l = {url:r.querySelector('.v-link').value.trim(), at:r.querySelector('.v-link-at').value || v.publishedAt || today()};
-      var c = r.querySelector('.v-link-closed').value; if(c) l.closedAt = c; return l;
-    }).filter(function(l){ if(!l.url || seen[l.url]) return false; seen[l.url] = 1; return true; });
-  if(links.length) v.links = links;   // старое поле link не сохраняем — его заменяет список
+  var seen = {}, links = Array.prototype.map.call(document.querySelectorAll('#vLinks .link-row'), readLinkRow)
+    .map(function(l){ if(!l.at) l.at = v.publishedAt || today(); return l; })
+    .filter(function(l){ if(!l.url || seen[l.url]) return false; seen[l.url] = 1; return true; });
+  if(links.length){
+    v.links = links;   // старое поле link не сохраняем — его заменяет список
+    // дата архивации и продления вакансии — по публикациям: самая поздняя дата и сумма продлений
+    var last = links.map(function(l){ return l.closedAt || ''; }).sort().pop();
+    if(last) v.archivedAt = last; else delete v.archivedAt;
+    v.extensions = links.reduce(function(s, l){ return s + (l.ext || 0); }, 0);
+  }
   if($('v_multi').checked){
     var seats = readSeats().map(function(x){ if(!x.requestedAt) x.requestedAt = v.requestedAt || v.publishedAt || today(); return x; });
     if(!seats.length){ $('vStat').className = 'status err'; $('vStat').textContent = 'Добавьте хотя бы одну единицу или снимите галку «несколько ставок».'; return; }
@@ -1378,8 +1484,22 @@ $('vSeatAdd').onclick = function(){
 };
 $('vSeats').onclick = function(e){ var b = e.target.closest('[data-del-seat]'); if(b){ b.closest('tr').remove(); seatSummary(); } };
 $('vSeats').onchange = seatSummary;
-$('vLinkAdd').onclick = function(){ $('vLinks').insertAdjacentHTML('beforeend', linkRow(null)); $('vLinks').lastElementChild.querySelector('input').focus(); };
-$('vLinks').onclick = function(e){ var b = e.target.closest('[data-del-link]'); if(!b) return; b.parentNode.remove(); if(!$('vLinks').children.length) setLinks([]); };
+$('vLinkAdd').onclick = function(){ $('vLinks').insertAdjacentHTML('beforeend', linkRow(null)); $('vLinks').lastElementChild.querySelector('input').focus(); syncPubFields(); };
+$('vLinks').onclick = function(e){
+  var b = e.target.closest('[data-del-link]');
+  if(b){ b.parentNode.remove(); if(!$('vLinks').children.length) setLinks([]); syncPubFields(); return; }
+  var x = e.target.closest('[data-extend-link]');
+  if(x){ var row = x.closest('.link-row'), l = extendLink(readLinkRow(row)); row.outerHTML = linkRow(l); syncPubFields(); }
+};
+$('vLinks').onchange = function(e){
+  var row = e.target.closest('.link-row'); if(!row) return;
+  // новая дата открытия без даты архивации — архивация через месяц, как на hh.ru
+  if(e.target.classList.contains('v-link-at') && e.target.value && !row.querySelector('.v-link-closed').value) row.querySelector('.v-link-closed').value = addMonths(e.target.value, PUB_MONTHS);
+  // перерисовываем только пометку: заменить строку целиком — потерять клик по «×» или «Продление» рядом
+  var l = readLinkRow(row), pill = row.querySelector('.pill');
+  pill.className = 'pill pub-' + linkState(l); pill.textContent = linkNote(l) + (l.ext ? ' · продлений: ' + l.ext : '');
+  syncPubFields();
+};
 $('vTable').onclick = function(e){ if(e.target.closest('a')) return; var tr = e.target.closest('tr[data-id]'); if(tr) openVac(tr.dataset.id); };
 $('vTable').onkeydown = function(e){ var tr = e.target.closest('tr[data-id]'); if(tr && e.key === 'Enter') openVac(tr.dataset.id); };
 $('tUsers').onclick = teamAction; $('tUsers').onchange = teamEdit; $('tArchive').onclick = teamAction;
@@ -1387,6 +1507,7 @@ $('tUserForm').onsubmit = addUser;
 $('mTable').onclick = metricEdit; $('mTable').onchange = metricEdit;
 $('mForm').onsubmit = addMetric;
 $('dTodo').onclick = todoClick;
+$('dRemind').onclick = extendFromReminder; $('vRemind').onclick = extendFromReminder;
 $('oForm').onsubmit = addVacation; $('oTable').onclick = removeVacation;
 
 function offline(){ $('offline').hidden = false; teamLoaded = true; route(); }

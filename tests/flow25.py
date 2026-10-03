@@ -46,7 +46,7 @@ with sync_playwright() as p:
     pg.fill('#vLinks .v-link', 'https://hh.ru/5'); assert pg.input_value('#vLinks .v-link-at') == '2026-10-07'
     pg.click('#vSave'); pg.wait_for_timeout(300)
     d = [v for k, v in pg.evaluate('window.__store').items() if k.startswith('vacancies/') and v.get('title') == 'D'][0]
-    assert d['links'] == [{'url': 'https://hh.ru/5', 'at': '2026-10-07'}], d
+    assert d['links'] == [{'url': 'https://hh.ru/5', 'at': '2026-10-07', 'closedAt': '2026-11-07'}] and d['archivedAt'] == '2026-11-07', d   # архивация через месяц
     assert pg.evaluate("byDate['2026-10-07'].yulia") == {'vac_start': 3, 'cand_start': 3, 'vac_end': 4, 'cand_end': 4, 'vac_published': 1}, pg.evaluate("byDate['2026-10-07'].yulia")
     # снятая публикация перестаёт считаться со дня снятия
     pg.click('#vTable tr[data-id=a] td:nth-child(2)'); pg.fill('#vLinks .link-row:nth-child(1) .v-link-closed', '2026-10-07'); pg.click('#vSave'); pg.wait_for_timeout(300)
@@ -55,6 +55,48 @@ with sync_playwright() as p:
     pg.click('#tab_sum'); pg.wait_for_timeout(100)
     blk = pg.inner_text('#sBlocks')
     assert 'Вакантных мест (на пятницу)\t50\t4' in blk and 'Новых вакансий\t0\t2\t2' in blk, blk[:600]
+    # срок публикации и продление: E уходит в архив 10.10 (через 3 дня), у F срок вышел 5.10
+    base6 = pg.evaluate("registryDay('yulia', '2026-10-06')"); base7 = pg.evaluate("registryDay('yulia', '2026-10-07')")
+    pg.evaluate("""window.__store['vacancies/e'] = {title: 'E', status: 'активна', manager: 'Немчинова', publishedAt: '2026-09-10', rate: 1,
+        links: [{url: 'https://hh.ru/6', at: '2026-09-10', closedAt: '2026-10-10'}]};
+      window.__store['vacancies/f'] = {title: 'F', status: 'активна', manager: 'Немчинова', publishedAt: '2026-09-05', rate: 1,
+        links: [{url: 'https://hh.ru/7', at: '2026-09-05', closedAt: '2026-10-05'}]}; window.__notify();"""); pg.wait_for_timeout(300)
+    r6 = pg.evaluate("registryDay('yulia', '2026-10-06')")
+    assert r6['vac_end'] == base6['vac_end'] + 1 and r6['cand_end'] == base6['cand_end'] + 2, (base6, r6)   # F в архиве — минус из вакансий, люди нужны
+    pg.click('#tab_vac'); pg.wait_for_timeout(100)
+    rem = pg.inner_text('#vRemind')
+    assert 'в архиве с 05.10.26' in rem and 'осталось 3 дня' in rem and rem.index('F') < rem.index('E'), rem
+    pg.click('#tab_day'); pg.wait_for_timeout(100); assert 'осталось 3 дня' in pg.inner_text('#dRemind')
+    pg.evaluate("""Object.defineProperty(navigator, 'clipboard', {configurable: true, value: {write: function(items){
+      return Promise.all(['text/html', 'text/plain'].map(function(t){ return items[0].getType(t).then(function(b){ return b.text(); }); }))
+        .then(function(v){ window.__clip = v; }); }}});""")
+    pg.click('#tab_vac'); pg.click('#vCopy'); pg.wait_for_timeout(200)
+    clip = pg.evaluate('window.__clip')
+    assert 'hh 1: в архиве с 05.10.26' in clip[1] and '#B4321F' in clip[0], clip[1]   # в отчёте по найму — подсвечено
+    # «Не продлеваем»: снятая публикация не напоминает, но остаётся в истории и не считается
+    pg.evaluate("""window.__store['vacancies/g'] = {title: 'G', status: 'активна', manager: 'Немчинова', publishedAt: '2026-09-01', rate: 1,
+        links: [{url: 'https://hh.ru/8', at: '2026-09-01', closedAt: '2026-10-01'}]}; window.__notify();"""); pg.wait_for_timeout(200)
+    pg.click('#vRemind button[data-stop=g]'); pg.wait_for_timeout(300)
+    assert pg.evaluate("window.__store['vacancies/g'].links[0].stopped") is True and 'hh.ru/8' not in pg.inner_html('#vRemind')
+    assert 'снята с 01.10.26' in pg.inner_text('#vTable tr[data-id=g]')
+    pg.click('#vTable tr[data-id=g] td:nth-child(2)'); pg.click('#vSave'); pg.wait_for_timeout(300)
+    assert pg.evaluate("window.__store['vacancies/g'].links[0].stopped") is True   # пересохранение карточки отметку не теряет
+    pg.click('#vCancel')
+    # продление просроченной из напоминания: с сегодня на месяц, перерыв 5–7.10 не считается
+    pg.click('#vRemind button[data-extend=f]'); pg.wait_for_timeout(300)
+    f = pg.evaluate("window.__store['vacancies/f']")
+    assert f['links'][0] == {'url': 'https://hh.ru/7', 'at': '2026-09-05', 'closedAt': '2026-11-07', 'ext': 1, 'gaps': [['2026-10-05', '2026-10-07']]} and f['extensions'] == 1, f
+    assert pg.evaluate("registryDay('yulia', '2026-10-06').vac_end") == r6['vac_end']
+    assert pg.evaluate("registryDay('yulia', '2026-10-07').vac_end") == base7['vac_end'] + 2
+    # продление в карточке несколько месяцев подряд: 10.10 → 10.11 → 10.12
+    pg.click('#vTable tr[data-id=e] td:nth-child(2)'); pg.click('#vLinks [data-extend-link]'); pg.click('#vLinks [data-extend-link]')
+    assert pg.input_value('#vLinks .v-link-closed') == '2026-12-10' and 'продлений: 2' in pg.inner_text('#vLinks')
+    assert pg.input_value('#v_archivedAt') == '2026-12-10' and pg.input_value('#v_extensions') == '2'
+    pg.click('#vSave'); pg.wait_for_timeout(300)
+    e = pg.evaluate("window.__store['vacancies/e']")
+    assert e['links'][0]['closedAt'] == '2026-12-10' and e['links'][0]['ext'] == 2 and e['extensions'] == 2 and e['archivedAt'] == '2026-12-10', e
+    assert 'E' not in pg.inner_text('#vRemind').split('\n')[0:0] and 'осталось' not in pg.inner_text('#vRemind'), pg.inner_text('#vRemind')
+    pg.screenshot(path=str(HERE / 'shots' / 'hr-vac-remind.png'), full_page=True)
     b.close()
 print('ОШИБКИ:', errs or 'нет')
 assert not errs

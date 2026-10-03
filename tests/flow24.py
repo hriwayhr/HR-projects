@@ -134,7 +134,7 @@ with sync_playwright() as p:
     pg.click('#vLinks .link-row:nth-child(3) [data-del-link]')
     pg.fill('#v_customer', 'Дмитрий Васильевич'); pg.click('#vSave'); pg.wait_for_timeout(300)
     v3 = pg.evaluate("window.__store['vacancies/v3']")
-    assert v3['links'] == [{'url': 'https://hh.ru/vacancy/1', 'at': ago(5)}, {'url': 'https://hh.ru/vacancy/2', 'at': ago(0)}] and 'link' not in v3 and v3['customer'] == 'Дмитрий Васильевич', v3
+    assert v3['links'] == [{'url': 'https://hh.ru/vacancy/1', 'at': ago(5)}, {'url': 'https://hh.ru/vacancy/2', 'at': ago(0), 'closedAt': pg.evaluate("addMonths(today(), 1)")}] and 'link' not in v3 and v3['customer'] == 'Дмитрий Васильевич', v3
     row = pg.inner_text('#vTable tr[data-id=v3]'); assert 'hh 1' in row and 'hh 2' in row and 'Дмитрий Васильевич' in row, row
     pg.fill('#vSearch', 'дмитрий'); pg.dispatch_event('#vSearch', 'input'); assert 'Аналитик' in pg.inner_text('#vTable') and 'Тестировщик' not in pg.inner_text('#vTable')
     pg.fill('#vSearch', ''); pg.dispatch_event('#vSearch', 'input')
