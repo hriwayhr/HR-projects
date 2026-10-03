@@ -126,14 +126,17 @@
   .status.err{color:var(--bad);}
   .hint{font-size:13px; color:var(--ink-3);}
   .secret{font-family:ui-monospace,Menlo,Consolas,monospace; background:var(--tint); color:var(--good); padding:2px 8px; border-radius:6px; user-select:all;}
+  label.check{display:flex; gap:6px; align-items:center; font-size:14px; min-height:36px; white-space:nowrap;}
   .login{max-width:380px; margin:6vh auto 0; display:grid; gap:14px;}
   .login h2{font-size:24px;}
   .login input{width:100%;}
-  .row-actions{display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap;}
+  .row-actions{display:flex; gap:6px; justify-content:flex-end;}
+  input[type=checkbox]{accent-color:var(--accent); width:18px; height:18px; margin:0;}
   .pill{display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:600; background:var(--off-bg); color:var(--ink-2);}
   .pill.active{background:var(--tint); color:var(--good);}
   .pill.hire{background:var(--accent-deep); color:var(--accent-ink);}
   .pill.long{background:var(--warn-bg); color:var(--warn-ink);}
+  .pill.arch{background:var(--off-bg); color:var(--ink-3); margin-left:6px;}
 </style>
 
 <div class="wrap">
@@ -276,27 +279,25 @@
 
   <!-- Команда (администратор) -->
   <section id="viewTeam" hidden>
-    <div class="bar"><h2>Команда</h2><span class="sub">Рекрутеры входят в свой кабинет по логину и паролю.</span></div>
+    <div class="bar"><h2>Команда</h2><span class="sub">Каждый входит по своему логину и паролю. Администратор видит всю команду и настройки, рекрутер — только себя.</span></div>
     <div class="stack">
       <p class="status" id="tStat" role="status"></p>
       <div class="panel">
-        <h3>Рекрутеры</h3>
-        <div class="scroll"><table id="tRec"></table></div>
-        <form class="who mt" id="tRecForm" autocomplete="off">
+        <h3>Пользователи</h3>
+        <div class="scroll"><table id="tUsers"></table></div>
+        <form class="who mt" id="tUserForm" autocomplete="off">
           <label class="f">Имя<input type="text" id="tName" required></label>
           <label class="f">Фамилия (как в вакансиях)<input type="text" id="tSurname"></label>
           <label class="f">Логин<input type="text" id="tLogin" autocapitalize="none" required></label>
-          <button class="btn" type="submit">Добавить рекрутера</button>
+          <label class="check"><input type="checkbox" id="tAdmin"> Администратор</label>
+          <label class="check"><input type="checkbox" id="tRecr" checked> Вносит метрики</label>
+          <button class="btn" type="submit">Добавить пользователя</button>
         </form>
       </div>
-      <div class="panel">
-        <h3>Администраторы</h3>
-        <div class="scroll"><table id="tAdm"></table></div>
-        <form class="who mt" id="tAdmForm" autocomplete="off">
-          <label class="f">Имя<input type="text" id="aName" required></label>
-          <label class="f">Логин<input type="text" id="aLogin" autocapitalize="none" required></label>
-          <button class="btn" type="submit">Добавить администратора</button>
-        </form>
+      <div class="panel" id="tArchivePanel">
+        <h3>Архив</h3>
+        <div class="scroll"><table id="tArchive"></table></div>
+        <p class="hint mt">Пользователь в архиве не может войти и не появляется в форме и на дашборде новых дней. Его цифры остаются в истории: в дашборде прошлых дней, в сводке команды и в своей сводке — с пометкой «в архиве».</p>
       </div>
     </div>
   </section>
@@ -345,13 +346,12 @@ var MONTHS = ['Январь','Февраль','Март','Апрель','Май'
 var WD = ['вс','пн','вт','ср','чт','пт','сб'];
 
 var db = null, isOwner = false;
-var team = {}, teamLoaded = false; // pid → {name, surname, login, salt, hash, order, archived}
-var admins = null;                 // login → {name, salt, hash}; null — ещё не загружены
+var team = {}, teamLoaded = false; // id → {name, surname, login, salt, hash, order, admin, recruiter, archived}
 var metrics = null;                // [{k, t, g, off, custom}] из config/metrics; null — встроенный набор
 var vacancies = {};                // id → вакансия
 var byDate = {};                   // 'YYYY-MM-DD' → pid → {метрика: число}
 var months = {};                   // id документа → документ
-var session = null;                // {role:'admin'|'rec', id}
+var session = null;                // {id} — id пользователя в config/team
 var state = {view:null, date:null};
 
 function $(id){ return document.getElementById(id); }
@@ -387,12 +387,19 @@ function newPassword(){
 }
 
 // ---------- кто смотрит ----------
-function isAdmin(){ return !!session && session.role === 'admin'; }
-function scope(){ return session && session.role === 'rec' ? session.id : null; }  // рекрутер видит только себя
+function me(){ return session && team[session.id]; }
+function isAdmin(){ return !!(me() && me().admin); }
+function scope(){ return session && !isAdmin() ? session.id : null; }  // рекрутер видит только себя
 function byOrder(a, b){ return (team[a].order||0) - (team[b].order||0) || team[a].name.localeCompare(team[b].name); }
 function allPeople(){ return Object.keys(team).sort(byOrder); }
-function activePeople(){ return allPeople().filter(function(p){ return !team[p].archived; }); }
-function visiblePeople(){ return scope() ? [scope()] : activePeople(); }
+function recruiters(){ return allPeople().filter(function(p){ return team[p].recruiter !== false; }); }       // и в архиве — для истории
+function activePeople(){ return recruiters().filter(function(p){ return !team[p].archived; }); }
+function activeAdmins(){ return allPeople().filter(function(p){ return team[p].admin && !team[p].archived && team[p].hash; }); }
+function visiblePeople(){ return scope() ? [scope()] : recruiters(); }
+// Строки дня: действующие рекрутеры и те из архива, у кого в этот день есть цифры
+function dayPeople(day){ var row = byDate[day] || {}; return visiblePeople().filter(function(p){ return !team[p].archived || (row[p] && Object.keys(row[p]).length); }); }
+function label(p){ return team[p].name + (team[p].archived ? ' (в архиве)' : ''); }
+function nameHtml(p){ return esc(team[p].name) + (team[p].archived ? '<span class="pill arch">в архиве</span>' : ''); }
 function metricList(){ return metrics || BUILTIN; }
 function activeMetrics(){ return metricList().filter(function(m){ return !m.off; }); }
 function customMetrics(){ return metricList().filter(function(m){ return m.custom && !m.off; }); }
@@ -435,9 +442,10 @@ function renderDay(){
   $('dayPrev').textContent = prev ? 'сравнение с ' + human(prev) : '';
   $('dNext').disabled = !nextDate(day, ps) && day >= today();
 
-  $('dChips').innerHTML = scope() ? '' : ps.map(function(p){
+  var rows = dayPeople(day);
+  $('dChips').innerHTML = scope() ? '' : rows.map(function(p){
     var ok = row[p] && Object.keys(row[p]).length;
-    return '<span class="chip'+(ok ? ' ok' : '')+'">'+esc(team[p].name)+(ok ? ' — внесено' : ' — нет данных')+'</span>';
+    return '<span class="chip'+(ok ? ' ok' : '')+'">'+esc(label(p))+(ok ? ' — внесено' : ' — нет данных')+'</span>';
   }).join('');
 
   var pl = sum(day, ps, 'int_planned'), dn = sum(day, ps, 'int_done');
@@ -460,10 +468,10 @@ function renderDay(){
     .concat(customMetrics().map(function(m){ return [m.t, m.k]; }));
   function cell(v){ return '<td'+(v === null ? ' class="empty"' : '')+'>'+(v === null ? '—' : v)+'</td>'; }
   $('dTableTitle').textContent = scope() ? 'Мои показатели' : 'По рекрутерам';
-  var body = ps.map(function(p){
-    return '<tr><td>'+esc(team[p].name)+'</td>'+cols.map(function(c){ return cell(row[p] ? fn(c[1])(row[p]) : null); }).join('')+'</tr>';
+  var body = rows.map(function(p){
+    return '<tr><td>'+nameHtml(p)+'</td>'+cols.map(function(c){ return cell(row[p] ? fn(c[1])(row[p]) : null); }).join('')+'</tr>';
   }).join('');
-  var foot = ps.length > 1 ? '<tfoot><tr><td>Команда</td>'+cols.map(function(c){ return cell(sum(day, ps, c[1])); }).join('')+'</tr></tfoot>' : '';
+  var foot = rows.length > 1 ? '<tfoot><tr><td>Команда</td>'+cols.map(function(c){ return cell(sum(day, ps, c[1])); }).join('')+'</tr></tfoot>' : '';
   $('dTable').innerHTML = '<thead><tr><th>Рекрутер</th>'+cols.map(function(c){ return '<th>'+esc(c[0])+'</th>'; }).join('')+'</tr></thead><tbody>'+body+'</tbody>'+foot;
   renderChart(day, ps);
 }
@@ -501,12 +509,13 @@ function buildForm(){
   loadForm();
 }
 function fillPeople(){
-  var ps = activePeople(), cur = $('fPerson').value, curS = $('sPerson').value;
-  function opts(list){ return list.map(function(p){ return '<option value="'+p+'">'+esc(team[p].name)+(team[p].archived ? ' (убран)' : '')+'</option>'; }).join(''); }
-  $('fPerson').innerHTML = opts(ps);
-  if(ps.indexOf(cur) >= 0) $('fPerson').value = cur;
-  $('sPerson').innerHTML = '<option value="">Вся команда</option>' + opts(allPeople());
-  $('sPerson').value = allPeople().indexOf(curS) >= 0 ? curS : '';
+  var ps = activePeople(), arch = recruiters().filter(function(p){ return team[p].archived; }), cur = $('fPerson').value, curS = $('sPerson').value;
+  function opts(list){ return list.map(function(p){ return '<option value="'+p+'">'+esc(label(p))+'</option>'; }).join(''); }
+  // администратор может поправить и историю пользователя в архиве
+  $('fPerson').innerHTML = opts(ps) + (arch.length ? '<optgroup label="В архиве">' + opts(arch) + '</optgroup>' : '');
+  $('fPerson').value = recruiters().indexOf(cur) >= 0 ? cur : (session && ps.indexOf(session.id) >= 0 ? session.id : ps[0] || '');
+  $('sPerson').innerHTML = '<option value="">Вся команда</option>' + opts(recruiters());
+  $('sPerson').value = recruiters().indexOf(curS) >= 0 ? curS : '';
 }
 function formPerson(){ return scope() || $('fPerson').value; }
 // Подставляет сохранённый день; если его нет — начало дня из конца предыдущего
@@ -572,7 +581,7 @@ function summarize(kind, ps, extra){
 function renderSum(){
   var kind = $('sPeriod').value, who = scope() || $('sPerson').value, extra = customMetrics();
   $('sPerson').hidden = !!scope();
-  var rows = summarize(kind, who ? [who] : allPeople(), extra.map(function(m){ return m.k; })).slice(0, 12);
+  var rows = summarize(kind, who ? [who] : recruiters(), extra.map(function(m){ return m.k; })).slice(0, 12);
   $('sTable').innerHTML = '<thead><tr><th>'+(kind === 'week' ? 'Неделя' : 'Месяц')+'</th><th>Дней с данными</th><th>Вакансии</th><th>Собес. назначено</th><th>Собес. факт</th><th>Доходимость</th><th>Выходы</th><th>Выходы / факт</th><th>Отказы</th><th>Увольнения</th>' +
     extra.map(function(m){ return '<th>'+esc(m.t)+'</th>'; }).join('') + '</tr></thead><tbody>' +
     (rows.length ? rows.map(function(r){
@@ -692,73 +701,76 @@ function shownSecret(login, pw){
 }
 function loginError(login){
   if(!LOGIN_RE.test(login)) return 'Логин — латиница, цифры, точка, дефис или подчёркивание; от 2 символов.';
-  if((admins && admins[login]) || Object.keys(team).some(function(p){ return team[p].login === login; })) return 'Логин «' + login + '» уже занят.';
+  if(Object.keys(team).some(function(p){ return team[p].login === login; })) return 'Логин «' + login + '» уже занят.';
   return '';
 }
+function roleText(t){ return t.admin && t.recruiter !== false ? 'администратор, вносит метрики' : t.admin ? 'администратор' : 'рекрутер'; }
 function renderTeam(){
-  $('tRec').innerHTML = '<thead><tr><th>Имя</th><th class="l">Фамилия</th><th class="l">Логин</th><th class="l">Статус</th><th></th></tr></thead><tbody>' +
-    (allPeople().length ? allPeople().map(function(p){
-      var t = team[p];
-      return '<tr class="'+(t.archived ? 'off' : '')+'"><td>'+esc(t.name)+'</td>' +
+  var act = allPeople().filter(function(p){ return !team[p].archived; }), arch = allPeople().filter(function(p){ return team[p].archived; });
+  $('tUsers').innerHTML = '<thead><tr><th>Имя</th><th class="l">Фамилия</th><th class="l">Логин</th><th class="l">Администратор</th><th class="l">Вносит метрики</th><th class="l">Вход</th><th></th></tr></thead><tbody>' +
+    act.map(function(p){
+      var t = team[p], self = session && session.id === p;
+      return '<tr><td>'+esc(t.name)+(self ? ' <span class="hint">(вы)</span>' : '')+'</td>' +
         '<td class="l"><input type="text" value="'+esc(t.surname||'')+'" data-p="'+p+'" data-f="surname" aria-label="Фамилия" size="12"></td>' +
-        '<td class="l"><input type="text" value="'+esc(t.login||'')+'" data-p="'+p+'" data-f="login" aria-label="Логин" size="12" autocapitalize="none" placeholder="задайте логин"></td>' +
-        '<td class="l"><span class="pill '+(t.archived ? '' : t.hash ? 'active' : 'long')+'">'+(t.archived ? 'убран' : t.hash ? 'есть вход' : 'нет пароля')+'</span></td>' +
-        '<td><div class="row-actions">'+(t.archived ? '<button class="btn ghost sm" data-act="restore" data-p="'+p+'">Вернуть</button>'
-          : '<button class="btn ghost sm" data-act="reset" data-p="'+p+'"'+(t.login ? '' : ' disabled title="Сначала задайте логин"')+'>'+(t.hash ? 'Новый пароль' : 'Выдать пароль')+'</button><button class="btn danger sm" data-act="archive" data-p="'+p+'">Убрать</button>')+'</div></td></tr>';
-    }).join('') : '<tr><td colspan="5" class="empty">Рекрутеров пока нет.</td></tr>') + '</tbody>';
-  var al = Object.keys(admins || {}).sort();
-  $('tAdm').innerHTML = '<thead><tr><th>Имя</th><th class="l">Логин</th><th></th></tr></thead><tbody>' + al.map(function(l){
-    var self = isAdmin() && session.id === l;
-    return '<tr><td>'+esc(admins[l].name)+(self ? ' <span class="hint">(вы)</span>' : '')+'</td><td class="l">'+esc(l)+'</td><td><div class="row-actions"><button class="btn ghost sm" data-act="areset" data-l="'+esc(l)+'">Новый пароль</button>'+
-      (self ? '' : '<button class="btn danger sm" data-act="aremove" data-l="'+esc(l)+'">Убрать</button>')+'</div></td></tr>';
-  }).join('') + '</tbody>';
+        '<td class="l"><input type="text" value="'+esc(t.login||'')+'" data-p="'+p+'" data-f="login" aria-label="Логин" size="14" autocapitalize="none" placeholder="задайте логин"></td>' +
+        '<td class="l"><input type="checkbox" data-p="'+p+'" data-f="admin" aria-label="Администратор"'+(t.admin ? ' checked' : '')+(self ? ' disabled title="Свои права снять нельзя"' : '')+'></td>' +
+        '<td class="l"><input type="checkbox" data-p="'+p+'" data-f="recruiter" aria-label="Вносит метрики"'+(t.recruiter !== false ? ' checked' : '')+'></td>' +
+        '<td class="l"><span class="pill '+(t.hash ? 'active' : 'long')+'">'+(t.hash ? 'есть пароль' : 'нет пароля')+'</span></td>' +
+        '<td><div class="row-actions"><button class="btn ghost sm" data-act="reset" data-p="'+p+'"'+(t.login ? '' : ' disabled title="Сначала задайте логин"')+'>'+(t.hash ? 'Новый пароль' : 'Выдать пароль')+'</button>' +
+          (self ? '' : '<button class="btn danger sm" data-act="archive" data-p="'+p+'">В архив</button>')+'</div></td></tr>';
+    }).join('') + '</tbody>';
+  $('tArchivePanel').hidden = !arch.length;
+  $('tArchive').innerHTML = '<thead><tr><th>Имя</th><th class="l">Логин</th><th class="l">Роль</th><th>Дней с метриками</th><th>В архиве с</th><th></th></tr></thead><tbody>' +
+    arch.map(function(p){
+      var t = team[p], n = dates().filter(function(d){ return byDate[d][p]; }).length;
+      return '<tr class="off"><td>'+esc(t.name)+'</td><td class="l">'+esc(t.login||'—')+'</td><td class="l">'+roleText(t)+'</td><td>'+n+'</td><td>'+shortDate(t.archivedAt)+'</td>' +
+        '<td><div class="row-actions"><button class="btn ghost sm" data-act="restore" data-p="'+p+'">Вернуть</button></div></td></tr>';
+    }).join('') + '</tbody>';
 }
 function saveTeam(next){ return db.doc('config/team').set({people:next}); }
-function saveAdmins(next){ return db.doc('config/admins').set({list:next}); }
 function tStat(html, err){ $('tStat').className = 'status' + (err ? ' err' : ''); $('tStat').innerHTML = html; }
+function patchUser(p, patch){ var next = Object.assign({}, team); next[p] = Object.assign({}, team[p], patch); return next; }
 function teamAction(e){
   var b = e.target.closest('button[data-act]'); if(!b || !db) return;
-  var act = b.dataset.act, p = b.dataset.p, l = b.dataset.l, pw = newPassword(), next;
+  var act = b.dataset.act, p = b.dataset.p, pw = newPassword(), name = team[p].name;
   function fail(err){ tStat(esc(writeError(err)), true); }
-  if(act === 'archive' || act === 'restore'){
-    next = Object.assign({}, team); next[p] = Object.assign({}, team[p], {archived: act === 'archive'});
-    saveTeam(next).then(function(){ tStat(esc(team[p].name) + (act === 'archive' ? ' — вход закрыт, внесённые цифры остаются в сводке.' : ' снова в команде.')); }, fail);
+  if(act === 'archive'){
+    if(team[p].admin && activeAdmins().length < 2 && activeAdmins()[0] === p){ tStat('Это последний администратор — сначала назначьте другого.', true); return; }
+    saveTeam(patchUser(p, {archived:true, archivedAt:today()})).then(function(){ tStat(esc(name) + ' в архиве: вход закрыт, цифры остаются в истории с пометкой «в архиве».'); }, fail);
   }
-  if(act === 'reset') withPassword(team[p], pw).then(function(rec){ next = Object.assign({}, team); next[p] = rec; return saveTeam(next); })
-    .then(function(){ tStat(esc(team[p].name) + ': ' + shownSecret(team[p].login, pw)); }, fail);
-  if(act === 'areset') withPassword(admins[l], pw).then(function(rec){ next = Object.assign({}, admins); next[l] = rec; return saveAdmins(next); })
-    .then(function(){ tStat(esc(admins[l].name) + ': ' + shownSecret(l, pw)); }, fail);
-  if(act === 'aremove'){
-    var name = admins[l].name; next = Object.assign({}, admins); delete next[l];
-    saveAdmins(next).then(function(){ tStat(esc(name) + ' больше не администратор.'); }, fail);
+  if(act === 'restore'){
+    var t = patchUser(p, {archived:false}); delete t[p].archivedAt;
+    saveTeam(t).then(function(){ tStat(esc(name) + ' снова в команде.'); }, fail);
   }
+  if(act === 'reset') withPassword(team[p], pw).then(function(rec){ var next = Object.assign({}, team); next[p] = rec; return saveTeam(next); })
+    .then(function(){ tStat(esc(name) + ': ' + shownSecret(team[p].login, pw)); }, fail);
 }
-// Фамилия и логин правятся прямо в таблице; логин проверяем на формат и занятость
+// Фамилия, логин и роли правятся прямо в таблице
 function teamEdit(e){
   var el = e.target, p = el.dataset.p, f = el.dataset.f; if(!p || !f || !db) return;
-  var v = f === 'login' ? norm(el.value) : el.value.trim();
-  if(v === (team[p][f] || '')) return;
-  if(f === 'login'){ var bad = loginError(v); if(bad){ tStat(esc(bad), true); el.value = team[p].login || ''; return; } }
-  var next = Object.assign({}, team); next[p] = Object.assign({}, team[p]); next[p][f] = v;
-  saveTeam(next).then(function(){ tStat(esc(team[p].name) + ': ' + (f === 'login' ? 'логин «' + esc(v) + '» сохранён.' + (team[p].hash ? '' : ' Теперь выдайте пароль.') : 'фамилия сохранена.')); },
-                     function(err){ tStat(esc(writeError(err)), true); });
+  var v, name = team[p].name;
+  if(el.type === 'checkbox'){
+    v = el.checked;
+    if(f === 'admin' && !v && activeAdmins().length < 2 && activeAdmins()[0] === p){ el.checked = true; tStat('Это последний администратор — сначала назначьте другого.', true); return; }
+  } else {
+    v = f === 'login' ? norm(el.value) : el.value.trim();
+    if(v === (team[p][f] || '')) return;
+    if(f === 'login'){ var bad = loginError(v); if(bad){ tStat(esc(bad), true); el.value = team[p].login || ''; return; } }
+  }
+  var patch = {}; patch[f] = v;
+  var msg = f === 'login' ? 'логин «' + esc(v) + '» сохранён.' + (team[p].hash ? '' : ' Теперь выдайте пароль.')
+          : f === 'surname' ? 'фамилия сохранена.' : f === 'admin' ? (v ? 'теперь администратор.' : 'больше не администратор.')
+          : (v ? 'вносит метрики.' : 'больше не вносит метрики — прошлые цифры остаются в истории.');
+  saveTeam(patchUser(p, patch)).then(function(){ tStat(esc(name) + ': ' + msg); }, function(err){ tStat(esc(writeError(err)), true); });
 }
-function addRecruiter(e){
+function addUser(e){
   e.preventDefault();
   var name = $('tName').value.trim(), login = norm($('tLogin').value), pw = newPassword(), bad = loginError(login);
   if(bad){ tStat(esc(bad), true); return; }
   var id = 'p' + Date.now().toString(36);
-  withPassword({name:name, surname:$('tSurname').value.trim(), login:login, order:allPeople().length + 1}, pw).then(function(rec){
-    var next = Object.assign({}, team); next[id] = rec; return saveTeam(next);
-  }).then(function(){ tStat('Добавлен(а) ' + esc(name) + ': ' + shownSecret(login, pw)); $('tRecForm').reset(); },
-          function(err){ tStat(esc(writeError(err)), true); });
-}
-function addAdmin(e){
-  e.preventDefault();
-  var name = $('aName').value.trim(), login = norm($('aLogin').value), pw = newPassword(), bad = loginError(login);
-  if(bad){ tStat(esc(bad), true); return; }
-  withPassword({name:name}, pw).then(function(rec){ var next = Object.assign({}, admins); next[login] = rec; return saveAdmins(next); })
-    .then(function(){ tStat('Новый администратор ' + esc(name) + ': ' + shownSecret(login, pw)); $('tAdmForm').reset(); },
+  var rec = {name:name, surname:$('tSurname').value.trim(), login:login, order:allPeople().length + 1, admin:$('tAdmin').checked, recruiter:$('tRecr').checked};
+  withPassword(rec, pw).then(function(r){ var next = Object.assign({}, team); next[id] = r; return saveTeam(next); })
+    .then(function(){ tStat('Добавлен(а) ' + esc(name) + ' (' + roleText(rec) + '): ' + shownSecret(login, pw)); $('tUserForm').reset(); },
           function(err){ tStat(esc(writeError(err)), true); });
 }
 
@@ -801,12 +813,9 @@ function login(e){
   err.textContent = '';
   if(!db){ err.textContent = 'База недоступна.'; return; }
   var pid = Object.keys(team).filter(function(p){ return team[p].login === l; })[0];
-  (admins[l] ? checkPassword(admins[l], pw).then(function(ok){ return ok ? {role:'admin', id:l} : null; }) : Promise.resolve(null)).then(function(s){
-    if(s || !pid) return s;
-    if(team[pid].archived) return 'archived';
-    return checkPassword(team[pid], pw).then(function(ok){ return ok ? {role:'rec', id:pid} : null; });
-  }).then(function(s){
-    if(s === 'archived'){ err.textContent = 'Учётная запись отключена — обратитесь к администратору.'; return; }
+  (!pid ? Promise.resolve(null) : team[pid].archived ? Promise.resolve('archived') :
+    checkPassword(team[pid], pw).then(function(ok){ return ok ? {id:pid} : null; })).then(function(s){
+    if(s === 'archived'){ err.textContent = 'Учётная запись в архиве — обратитесь к администратору.'; return; }
     if(!s){ err.textContent = 'Неверный логин или пароль.'; return; }
     $('lPass').value = '';
     startSession(s);
@@ -817,17 +826,16 @@ function bootstrap(e){
   var name = $('bName').value.trim(), l = norm($('bLogin').value), pw = $('bPass').value, err = $('bErr');
   if(!LOGIN_RE.test(l)){ err.textContent = 'Логин — латиница, цифры, точка, дефис или подчёркивание; от 2 символов.'; return; }
   if(pw.length < 6){ err.textContent = 'Пароль — не короче 6 символов.'; return; }
-  withPassword({name:name}, pw).then(function(rec){ var list = {}; list[l] = rec; return saveAdmins(list).then(function(){ admins = list; }); })
-    .then(function(){ startSession({role:'admin', id:l}); }, function(er){ err.textContent = writeError(er); });
+  if(loginError(l)){ err.textContent = loginError(l); return; }
+  var id = 'p' + Date.now().toString(36);
+  withPassword({name:name, login:l, admin:true, recruiter:false, order:allPeople().length + 1}, pw).then(function(rec){
+    var next = Object.assign({}, team); next[id] = rec; return saveTeam(next).then(function(){ team = next; });
+  }).then(function(){ startSession({id:id}); }, function(er){ err.textContent = writeError(er); });
 }
 function startSession(s){ session = s; store('hrSession', s); state.view = null; route(); }
 function logout(){ session = null; store('hrSession', null); state.view = null; route(); }
 // Сессия жива, пока учётная запись есть и не отключена
-function validSession(){
-  if(!session) return false;
-  if(session.role === 'admin') return !!admins[session.id];
-  return !!(team[session.id] && !team[session.id].archived && team[session.id].hash);
-}
+function validSession(){ var t = me(); return !!(t && !t.archived && t.hash); }
 
 // ---------- маршрутизация ----------
 var TABS = {
@@ -836,20 +844,21 @@ var TABS = {
 };
 var VIEWS = ['login','day','entry','sum','vac','team','metrics'];
 function route(){
-  if(admins === null || !teamLoaded) return;   // ждём базу
+  if(!teamLoaded) return;   // ждём базу
   if(session && !validSession()){ session = null; store('hrSession', null); }
   if(!session){
-    var none = !Object.keys(admins).length;
+    var none = !activeAdmins().length;
     $('loginForm').hidden = none; $('bootForm').hidden = !(none && isOwner); $('bootWait').hidden = !(none && !isOwner);
     $('tabs').innerHTML = ''; $('me').hidden = true;
     showView('login');
     return;
   }
-  var tabs = TABS[session.role];
+  var tabs = TABS[isAdmin() ? 'admin' : 'rec'];
   $('tabs').innerHTML = tabs.map(function(t){ return '<button role="tab" id="tab_'+t[0]+'" data-view="'+t[0]+'">'+t[1]+'</button>'; }).join('');
   $('me').hidden = false;
-  $('meName').textContent = session.role === 'admin' ? admins[session.id].name : team[session.id].name;
-  $('meRole').textContent = session.role === 'admin' ? 'администратор' : 'рекрутер';
+  $('meName').textContent = me().name;
+  $('meRole').textContent = isAdmin() ? 'администратор' : 'рекрутер';
+  fillPeople();
   $('fPersonWrap').hidden = !!scope();
   var want = state.view || load('hrView');
   showView(tabs.some(function(t){ return t[0] === want; }) ? want : 'day');
@@ -904,18 +913,17 @@ $('vForm').onsubmit = saveVac;
 $('vDelete').onclick = deleteVac;
 $('vTable').onclick = function(e){ if(e.target.closest('a')) return; var tr = e.target.closest('tr[data-id]'); if(tr) openVac(tr.dataset.id); };
 $('vTable').onkeydown = function(e){ var tr = e.target.closest('tr[data-id]'); if(tr && e.key === 'Enter') openVac(tr.dataset.id); };
-$('tRec').onclick = teamAction; $('tRec').onchange = teamEdit; $('tAdm').onclick = teamAction;
-$('tRecForm').onsubmit = addRecruiter; $('tAdmForm').onsubmit = addAdmin;
+$('tUsers').onclick = teamAction; $('tUsers').onchange = teamEdit; $('tArchive').onclick = teamAction;
+$('tUserForm').onsubmit = addUser;
 $('mTable').onclick = metricEdit; $('mTable').onchange = metricEdit;
 $('mForm').onsubmit = addMetric;
 
-function offline(){ $('offline').hidden = false; admins = admins || {}; teamLoaded = true; route(); }
+function offline(){ $('offline').hidden = false; teamLoaded = true; route(); }
 var api = window.claude;
 (api ? api.use('user') : Promise.resolve(null)).then(function(u){ return u ? u.isOwner() : false; }).then(function(o){ isOwner = !!o; route(); }, function(){});
 (api ? api.use('db') : Promise.resolve(null)).then(function(d){
   db = d;
   if(!db){ offline(); return; }
-  db.doc('config/admins').onSnapshot(function(s){ admins = (s.exists && s.data().list) || {}; route(); }, offline);
   db.doc('config/team').onSnapshot(function(s){ team = (s.exists && s.data().people) || {}; teamLoaded = true; fillPeople(); route(); }, offline);
   db.doc('config/metrics').onSnapshot(function(s){ metrics = (s.exists && s.data().list) || null; buildForm(); render(); }, function(){});
   db.collection('months').onSnapshot(ingest, offline);

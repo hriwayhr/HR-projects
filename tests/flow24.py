@@ -1,5 +1,5 @@
 # HR-метрики: первый администратор, команда и пароли, свои метрики, ввод за рекрутера,
-# кабинет рекрутера, вакансии и скорость закрытия, отключение рекрутера, телефон
+# кабинет рекрутера, вакансии и скорость закрытия, архив пользователя с историей, админ-рекрутер, телефон
 from playwright.sync_api import sync_playwright
 import pathlib, json, datetime as dt
 HERE = pathlib.Path(__file__).resolve().parent
@@ -38,8 +38,9 @@ with sync_playwright() as p:
     assert pg.is_visible('#bootForm') and not pg.is_visible('#loginForm'), pg.evaluate('[isOwner, JSON.stringify(admins), teamLoaded, !!db, $("bootForm").hidden, $("loginForm").hidden, $("viewLogin").hidden]')
     pg.fill('#bName', 'Юлия Немчинова'); pg.fill('#bLogin', 'Admin'); pg.fill('#bPass', 'secret1'); pg.click('#bootForm button[type=submit]'); pg.wait_for_timeout(400)
     assert pg.inner_text('#meRole') == 'администратор' and pg.is_visible('#tab_team')
-    st = pg.evaluate("window.__store['config/admins'].list.admin")
-    assert st['hash'] and 'secret1' not in json.dumps(st), st
+    st = [u for u in pg.evaluate("window.__store['config/team'].people").values() if u.get('login') == 'admin'][0]
+    assert st['hash'] and st['admin'] and st['recruiter'] is False and 'secret1' not in json.dumps(st), st
+    assert 'Юлия Немчинова' not in pg.inner_text('#dTable')   # администратор без метрик — не в таблице рекрутеров
 
     # 2. дашборд дня по команде
     pg.fill('#dDate', '2026-10-01'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
@@ -48,14 +49,21 @@ with sync_playwright() as p:
 
     # 3. команда: логин Анне, пароль; новый рекрутер
     pg.click('#tab_team')
-    pg.fill('#tRec input[data-p=anna][data-f=login]', 'yulia_x'); pg.dispatch_event('#tRec input[data-p=anna][data-f=login]', 'change'); pg.wait_for_timeout(200)
-    pg.fill('#tRec input[data-p=anna][data-f=login]', 'admin'); pg.dispatch_event('#tRec input[data-p=anna][data-f=login]', 'change'); pg.wait_for_timeout(200)
+    L = '#tUsers input[data-p=anna][data-f=login]'
+    pg.fill(L, 'yulia_x'); pg.dispatch_event(L, 'change'); pg.wait_for_timeout(200)
+    pg.fill(L, 'admin'); pg.dispatch_event(L, 'change'); pg.wait_for_timeout(200)
     assert 'занят' in pg.inner_text('#tStat'), pg.inner_text('#tStat')
     assert pg.evaluate("window.__store['config/team'].people.anna.login") == 'yulia_x'
-    pg.click('#tRec button[data-act=reset][data-p=anna]'); pg.wait_for_timeout(300)
+    pg.click('#tUsers button[data-act=reset][data-p=anna]'); pg.wait_for_timeout(300)
     anna_login, anna_pw = secret(pg)
-    pg.fill('#tName', 'Катя'); pg.fill('#tSurname', 'Шулятицкая'); pg.fill('#tLogin', 'katya'); pg.click('#tRecForm button[type=submit]'); pg.wait_for_timeout(300)
-    assert secret(pg)[0] == 'katya' and 'Катя' in pg.inner_text('#tRec')
+    pg.fill('#tName', 'Катя'); pg.fill('#tSurname', 'Шулятицкая'); pg.fill('#tLogin', 'katya'); pg.click('#tUserForm button[type=submit]'); pg.wait_for_timeout(300)
+    assert secret(pg)[0] == 'katya' and 'Катя' in pg.inner_text('#tUsers')
+    # свои права снять нельзя, кнопки «В архив» у себя нет
+    me_id = [k for k, u in pg.evaluate("window.__store['config/team'].people").items() if u.get('login') == 'admin'][0]
+    assert pg.is_disabled('#tUsers input[data-p=%s][data-f=admin]' % me_id) and not pg.query_selector('#tUsers button[data-act=archive][data-p=%s]' % me_id)
+    # Юля — администратор и рекрутер одновременно
+    pg.check('#tUsers input[data-p=yulia][data-f=admin]'); pg.wait_for_timeout(200)
+    assert pg.evaluate("window.__store['config/team'].people.yulia.admin") is True
 
     # 4. своя метрика и убранная встроенная
     pg.click('#tab_metrics'); pg.fill('#mName', 'Отклики hh'); pg.click('#mForm button[type=submit]'); pg.wait_for_timeout(300)
@@ -75,7 +83,6 @@ with sync_playwright() as p:
     pg.click('#vAdd'); pg.fill('#v_title', 'Тестировщик'); pg.fill('#v_manager', 'Шулятицкая'); pg.click('#vSave'); pg.wait_for_timeout(300)
     assert 'В работе\n2' in pg.inner_text('#vTiles')
     pg.screenshot(path=str(HERE / 'shots' / 'hr-vac.png'), full_page=True)
-    pg.click('#tab_team'); pg.screenshot(path=str(HERE / 'shots' / 'hr-team.png'), full_page=True)
     pg.click('#tab_metrics'); pg.screenshot(path=str(HERE / 'shots' / 'hr-metrics-admin.png'), full_page=True)
 
     # 7. кабинет рекрутера: Катя видит только себя и свои вакансии
@@ -94,20 +101,33 @@ with sync_playwright() as p:
     pg.click('#tab_vac'); pg.wait_for_timeout(100)
     assert 'Вакансий нет' in pg.inner_text('#vTable')   # у Анны нет фамилии — в «Ответственном» её нет
 
-    # 8. администратор отключает Анну — её сессия закрывается
-    pg.evaluate("var t = window.__store['config/team']; t.people.anna.archived = true; window.__notify()"); pg.wait_for_timeout(300)
-    assert pg.is_visible('#loginForm') and not pg.is_visible('#me')
+    # 8. администратор отправляет Анну в архив — её сессия закрывается, история остаётся с пометкой
+    pg.click('#logout'); pg.fill('#lLogin', 'admin'); pg.fill('#lPass', 'secret1'); pg.click('#lSubmit'); pg.wait_for_timeout(300)
+    pg.click('#tab_team'); pg.click('#tUsers button[data-act=archive][data-p=anna]'); pg.wait_for_timeout(300)
+    assert 'Анна' in pg.inner_text('#tArchive') and 'Анна' not in pg.inner_text('#tUsers')
+    assert pg.evaluate("window.__store['config/team'].people.anna.archivedAt")
+    pg.click('#tab_day'); pg.fill('#dDate', '2026-10-01'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
+    t = pg.inner_text('#dTable'); assert 'Анна\nв архиве' in t or 'Аннав архиве' in t.replace('\n', ''), t
+    assert 'Открытые вакансии\n14' in pg.inner_text('#dTiles')   # её цифры в итогах команды
+    pg.fill('#dDate', '2026-10-06'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
+    assert 'Анна' not in pg.inner_text('#dTable') and 'Анна' not in pg.inner_text('#dChips')   # на новых днях её нет
+    pg.click('#tab_sum'); assert 'Анна (в архиве)' in pg.inner_text('#sPerson')
+    pg.select_option('#sPerson', 'anna'); pg.wait_for_timeout(100); assert 'Пока нет' not in pg.inner_text('#sTable')
+    pg.click('#tab_entry'); assert 'Анна (в архиве)' in pg.inner_text('#fPerson')
+    pg.screenshot(path=str(HERE / 'shots' / 'hr-entry-admin.png'), full_page=True)
+    pg.click('#tab_team'); pg.screenshot(path=str(HERE / 'shots' / 'hr-team.png'), full_page=True)
+    pg.click('#logout')
     pg.fill('#lLogin', anna_login); pg.fill('#lPass', anna_pw); pg.click('#lSubmit'); pg.wait_for_timeout(200)
-    assert 'отключена' in pg.inner_text('#lErr')
+    assert 'в архиве' in pg.inner_text('#lErr')
     pg.close()
 
     # 9. Юля по логину видит свои вакансии по фамилии; телефон и тёмная тема
     pg = page(b, viewport={'width': 390, 'height': 900}, color_scheme='dark')
-    pg.add_init_script("window.__store['config/admins'] = {list: {boss: {name: 'Босс', salt: 's', hash: 'x'}}};")
+    pg.add_init_script("window.__store['config/team'].people.boss = {name: 'Босс', login: 'boss', admin: true, recruiter: false, salt: 's', hash: 'x'};")
     pg.goto('file://' + str(prev)); pg.wait_for_timeout(300)
     assert pg.is_visible('#loginForm') and not pg.is_visible('#bootForm')
     # сохранённая сессия рекрутера с паролем открывает кабинет сразу
-    pg.add_init_script("window.__store['config/team'].people.yulia.hash = 'h'; localStorage.setItem('hrSession', JSON.stringify({role:'rec', id:'yulia'}));")
+    pg.add_init_script("window.__store['config/team'].people.yulia.hash = 'h'; localStorage.setItem('hrSession', JSON.stringify({id:'yulia'}));")
     pg.reload(); pg.wait_for_timeout(400)
     assert pg.inner_text('#meName') == 'Юля'
     pg.click('#tab_vac'); pg.wait_for_timeout(100)
