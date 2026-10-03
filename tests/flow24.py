@@ -86,6 +86,14 @@ with sync_playwright() as p:
     pg.fill('#m_int_planned', '2'); pg.fill('#m_int_done', '2'); pg.fill('#m_' + custom, '7'); pg.click('#fSave'); pg.wait_for_timeout(300)
     day = pg.evaluate("window.__store['months/anna_2026-10'].days['2026-10-02']")
     assert day == {'vac_start': 5, 'int_planned': 2, 'int_done': 2, custom: 7}, day
+    # 5a. сводка: блок месяца по неделям, неделя 28.09–2.10 — в октябре (четверг 1.10), sum и CV %
+    pg.click('#tab_sum'); pg.wait_for_timeout(100)
+    blk = pg.inner_text('#sBlocks')
+    assert blk.startswith('Октябрь 2026') and '40\n28.09–2.10' in blk, blk[:200]
+    assert 'Назначенных собеседований\t8\t8' in blk and 'Собеседований (факт)\t6\t6' in blk, blk
+    assert 'Вакантных мест (на пятницу)\t—' in blk and 'Отклики hh\t7\t7' in blk, blk
+    assert '75%' in blk and '16,7%' in blk, blk
+    pg.screenshot(path=str(HERE / 'shots' / 'hr-sum.png'), full_page=True)
 
     # 6. вакансии: в работе 1 (нужно 2 человека), скорость (30+50)/2 = 40
     pg.click('#tab_vac'); pg.wait_for_timeout(200)
@@ -140,7 +148,7 @@ with sync_playwright() as p:
     pg.fill('#dDate', '2026-10-06'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
     assert 'Анна' not in pg.inner_text('#dTable') and 'Анна' not in pg.inner_text('#dChips')   # на новых днях её нет
     pg.click('#tab_sum'); assert 'Анна (архив)' in pg.inner_text('#sPerson')
-    pg.select_option('#sPerson', 'anna'); pg.wait_for_timeout(100); assert 'Пока нет' not in pg.inner_text('#sTable')
+    pg.select_option('#sPerson', 'anna'); pg.wait_for_timeout(100); assert 'Пока нет' not in pg.inner_text('#sBlocks')
     pg.click('#tab_entry'); assert 'Анна (архив)' in pg.inner_text('#fPerson')
     # Катя в архиве — в отчётах по вакансиям её имя с пометкой «(архив)»
     pg.click('#tab_team'); pg.click('#tUsers button[data-act=archive]:not([data-p=yulia])'); pg.wait_for_timeout(300)
