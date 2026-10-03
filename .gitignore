@@ -1,5 +1,6 @@
 # рабочие файлы тестов
 tests/preview.html
+tests/preview-hr.html
 tests/letter.html
 tests/stripped.html
 tests/shots/

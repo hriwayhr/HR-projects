@@ -37,7 +37,20 @@ window.claude = { use: function(name){
   if(name === 'db') return Promise.resolve({
     doc: function(path){ return {
       get: function(){ return Promise.resolve(snap(path)); },
+      onSnapshot: function(next){
+        var l = {coll: path, filters: [], cb: function(){ next(snap(path)); }};
+        window.__listeners.push(l); next(snap(path));
+        return function(){ window.__listeners = window.__listeners.filter(function(x){ return x !== l; }); };
+      },
       set: function(data){ window.__store[path] = JSON.parse(JSON.stringify(data)); notify(); return Promise.resolve(); },
+      update: function(data){
+        if(!window.__store[path]) return Promise.reject({code:'invalid_argument'});
+        (function merge(t, s){ Object.keys(s).forEach(function(k){
+          if(s[k] && typeof s[k] === 'object' && !Array.isArray(s[k]) && t[k] && typeof t[k] === 'object') merge(t[k], s[k]);
+          else t[k] = JSON.parse(JSON.stringify(s[k]));
+        }); })(window.__store[path], data);
+        notify(); return Promise.resolve();
+      },
       delete: function(){ delete window.__store[path]; notify(); return Promise.resolve(); }
     };},
     collection: function(coll){ return collRef(coll); }
