@@ -149,7 +149,10 @@
   #vSeats td{white-space:nowrap;}
   #vSeats input[type=text]{min-width:160px;}
   fieldset.links .stack{gap:8px; margin-bottom:10px;}
-  .link-row{display:flex; gap:8px; align-items:center;}
+  .link-row{display:flex; flex-wrap:wrap; gap:8px; align-items:end;}
+  .link-row input.v-link{min-width:240px;}
+  .link-row label.f{font-size:11px;}
+  input[readonly]{background:var(--paper); color:var(--ink-2);}
   .link-row input{flex:1;}
   .pubs{display:block; font-size:12px; margin-top:2px;}
   .pubs a{margin-right:8px;}
@@ -307,6 +310,7 @@
         <fieldset class="links"><legend>Публикации на hh.ru</legend>
           <div id="vLinks" class="stack"></div>
           <button type="button" class="btn ghost sm" id="vLinkAdd">+ Ещё публикация</button>
+          <p class="hint mt">По публикациям считаются «открытые вакансии» менеджера в метриках дня (с 5 октября 2026): открыта — с этого дня, снята — с этого дня уже не считается. «Кандидаты на вакансию» — сколько человек нужно (ставка или единицы в поиске).</p>
         </fieldset>
         <label class="f">Комментарий<textarea id="v_comment" rows="2"></textarea></label>
         <div class="actions">
@@ -425,7 +429,12 @@ var vacancies = {};                // id → вакансия
 var vacations = {};                // id пользователя → [{from, to}]
 var COLLECT_START = '2024-07-01';  // с июля 2024 метрики собираются в таблице
 var CHECK_FROM = '2026-09-28';     // неделя перехода: пустые дни раньше — отпуск («о» в таблице), пропуском не считаются
-var byDate = {};                   // 'YYYY-MM-DD' → pid → {метрика: число}
+var byDate = {};                   // 'YYYY-MM-DD' → pid → {метрика: число}: внесённое + посчитанное из «Вакансий»
+var entered = {};                  // только внесённое руками — по нему видно, внесён ли день
+var vacanciesLoaded = false;
+// С этого дня «вакансии», «кандидаты» и «новые вакансии» считаются из реестра вакансий; раньше — как вносили
+var SYNC_FROM = '2026-10-05';
+var SYNCED = ['vac_start', 'vac_end', 'cand_start', 'cand_end', 'vac_published'];
 var months = {};                   // id документа → документ
 var session = null;                // {id} — id пользователя в config/team
 var state = {view:null, date:null};
@@ -506,7 +515,7 @@ function weekKey(s){ var d = parse(s), wd = (d.getDay() + 6) % 7; d.setDate(d.ge
 function addDays(s, n){ var d = parse(s); d.setDate(d.getDate() + n); return iso(d); }
 function isWeekend(s){ var w = parse(s).getDay(); return w === 0 || w === 6; }
 function vacationOf(p, d){ return (vacations[p] || []).filter(function(v){ return v.from <= d && d <= v.to; })[0] || null; }
-function hasDay(p, d){ var m = (byDate[d] || {})[p]; return !!(m && Object.keys(m).length); }
+function hasDay(p, d){ var m = (entered[d] || {})[p]; return !!(m && Object.keys(m).length); }
 // Состояние дня рекрутера: ok — внесено, missing — надо внести, today — сегодня ещё не внесено,
 // vac — отпуск, off — выходной / до начала работы / в архиве / будущее
 function dayStatus(p, d){
@@ -701,7 +710,15 @@ function formPerson(){ return scope() || $('fPerson').value; }
 function loadForm(){
   var p = formPerson(), d = $('fDate').value, m = (byDate[d] || {})[p], hint = '';
   if(!p || !d) return;
-  document.querySelectorAll('#fGroups input').forEach(function(i){ i.value = m && num(m[i.dataset.k]) ? m[i.dataset.k] : ''; });
+  var own = (entered[d] || {})[p], sync = isSynced(d);
+  document.querySelectorAll('#fGroups input').forEach(function(i){ i.value = m && num(m[i.dataset.k]) ? m[i.dataset.k] : ''; i.readOnly = sync && SYNCED.indexOf(i.dataset.k) >= 0; });
+  if(sync){
+    var reg = registryDay(p, d);
+    SYNCED.forEach(function(k){ if($('m_'+k)) $('m_'+k).value = reg[k]; });
+    $('fStatus').className = 'status';
+    $('fStatus').textContent = (own ? 'День уже внесён — сохранение заменит значения. ' : '') + 'Вакансии, кандидаты и новые вакансии считаются из «Вакансий» — правьте их там.';
+    return;
+  }
   if(!m){
     var pd = dates().filter(function(x){ return x < d && byDate[x][p]; }).pop();
     if(pd){
@@ -722,6 +739,7 @@ function saveDay(e){
   // метрики, убранные из формы, сохраняем как были; остальное — из полей
   Object.keys(old).forEach(function(k){ if(!$('m_'+k)) vals[k] = old[k]; });
   document.querySelectorAll('#fGroups input').forEach(function(i){ var v = i.value.trim(); if(v !== '') vals[i.dataset.k] = Math.max(0, Math.round(+v)); });
+  if(isSynced(d)) SYNCED.forEach(function(k){ delete vals[k]; });   // эти цифры берутся из реестра, не храним копию
   var days = Object.assign({}, doc.days); days[d] = vals;
   $('fSave').disabled = true; st.className = 'status'; st.textContent = 'Сохраняю…';
   db.doc('months/' + id).set({person:p, month:d.slice(0, 7), days:days}).then(function(){
@@ -990,16 +1008,21 @@ function hiringReport(){
   return {html:html, text:text, count:act.length};
 }
 // Публикации: список ссылок; у старых вакансий из таблицы — одна в поле link
-function vacLinks(v){ return v.links || (v.link ? [v.link] : []); }
+// Публикация: {url, at — открыта, closedAt? — снята}; у старых — строка, открыта вместе с вакансией
+function linkObjs(v){ return (v.links || (v.link ? [v.link] : [])).map(function(l){ return typeof l === 'string' ? {url:l, at:vacStart(v)} : l; }); }
+function vacLinks(v){ return linkObjs(v).map(function(l){ return l.url; }); }
 function pubsHtml(v){
   var l = vacLinks(v); if(l.length < 2) return '';
   return '<span class="pubs">' + l.map(function(u, i){ return '<a href="'+esc(u)+'" target="_blank" rel="noopener">hh '+(i+1)+'</a>'; }).join('') + '</span>';
 }
-function linkRow(u){
-  return '<div class="link-row"><input type="url" class="v-link" value="'+esc(u || '')+'" placeholder="https://hh.ru/vacancy/…" aria-label="Ссылка на публикацию">' +
+function linkRow(l){
+  l = l || {at:today()};
+  return '<div class="link-row"><input type="url" class="v-link" value="'+esc(l.url || '')+'" placeholder="https://hh.ru/vacancy/…" aria-label="Ссылка на публикацию">' +
+    '<label class="f">открыта<input type="date" class="v-link-at" value="'+esc(l.at || '')+'"></label>' +
+    '<label class="f">снята<input type="date" class="v-link-closed" value="'+esc(l.closedAt || '')+'"></label>' +
     '<button type="button" class="btn danger sm" data-del-link aria-label="Убрать ссылку">×</button></div>';
 }
-function setLinks(list){ $('vLinks').innerHTML = (list.length ? list : ['']).map(linkRow).join(''); }
+function setLinks(list){ $('vLinks').innerHTML = (list.length ? list : [null]).map(linkRow).join(''); }
 function seatRow(x){
   x = x || {};
   return '<tr><td><input type="date" class="s-req" value="'+esc(x.requestedAt || '')+'" aria-label="Дата запроса"></td>' +
@@ -1037,13 +1060,51 @@ function toggleMulti(){
     setSeats(list);
   }
 }
+// Интервал [a, b): открыта в момент d — на конец дня (eod) или на начало (до изменений этого дня)
+function openOn(a, b, d, eod){ return !!a && (eod ? a <= d : a < d) && (!b || (eod ? b > d : b >= d)); }
+function vacSpan(v){
+  var s = vacStart(v);
+  return [s, isActive(v) ? null : (v.closedAt || v.startAt || v.archivedAt || (v.updatedAt || '').slice(0, 10) || s)];
+}
+// Цифры дня менеджера из реестра: вакансии = публикации на hh.ru, кандидаты = сколько человек нужно
+function registryDay(p, d){
+  var r = {vac_start:0, vac_end:0, cand_start:0, cand_end:0, vac_published:0};
+  Object.keys(vacancies).forEach(function(id){
+    var v = vacancies[id]; if(vacOwner(v) !== p) return;
+    var sp = vacSpan(v), links = linkObjs(v);
+    [true, false].forEach(function(eod){
+      if(!openOn(sp[0], sp[1], d, eod)) return;
+      var sfx = eod ? '_end' : '_start';
+      r['vac' + sfx] += links.filter(function(l){ return openOn(l.at || sp[0], l.closedAt, d, eod); }).length;
+      r['cand' + sfx] += isMulti(v) ? v.seats.filter(function(x){ return openOn(seatStart(v, x), x.startAt, d, eod); }).length : needOf(v);
+    });
+    links.forEach(function(l){ if((l.at || sp[0]) === d) r.vac_published++; });
+  });
+  return r;
+}
+function isSynced(d){ return d >= SYNC_FROM && vacanciesLoaded; }
+// byDate = внесённое + цифры из реестра на рабочие дни с SYNC_FROM по сегодня (и на любые внесённые)
+function rebuild(){
+  byDate = {};
+  Object.keys(entered).forEach(function(d){ byDate[d] = {}; Object.keys(entered[d]).forEach(function(p){ byDate[d][p] = Object.assign({}, entered[d][p]); }); });
+  if(!vacanciesLoaded) return;
+  for(var d = SYNC_FROM; d <= today(); d = addDays(d, 1)){
+    recruiters().forEach(function(p){
+      var t = team[p];
+      if((t.archived && (!t.archivedAt || d >= t.archivedAt)) || (t.since && d < t.since)) return;
+      if(isWeekend(d) && !hasDay(p, d)) return;
+      var row = byDate[d] || (byDate[d] = {});
+      row[p] = Object.assign(row[p] || {}, registryDay(p, d));
+    });
+  }
+}
 var editingVac = null;
 function openVac(id){
   var me = scope() && team[scope()];
   var v = id ? vacancies[id] : {status:'активна', publishedAt:today(), manager: me ? fullName(scope()) : ''};
   editingVac = id || null;
   VAC_FIELDS.forEach(function(f){ $('v_'+f).value = v[f] == null ? '' : v[f]; });
-  setLinks(vacLinks(v));
+  setLinks(linkObjs(v));
   $('v_multi').checked = isMulti(v);
   $('vSeats').innerHTML = '';
   if(isMulti(v)) setSeats(v.seats);
@@ -1059,8 +1120,10 @@ function saveVac(e){
   if(!db) return;
   var v = {};
   VAC_FIELDS.forEach(function(f){ var x = $('v_'+f).value.trim(); if(x !== '') v[f] = NUM_FIELDS[f] ? +x : x; });
-  var links = Array.prototype.map.call(document.querySelectorAll('#vLinks .v-link'), function(i){ return i.value.trim(); })
-    .filter(function(u, i, a){ return u && a.indexOf(u) === i; });
+  var seen = {}, links = Array.prototype.map.call(document.querySelectorAll('#vLinks .link-row'), function(r){
+      var l = {url:r.querySelector('.v-link').value.trim(), at:r.querySelector('.v-link-at').value || v.publishedAt || today()};
+      var c = r.querySelector('.v-link-closed').value; if(c) l.closedAt = c; return l;
+    }).filter(function(l){ if(!l.url || seen[l.url]) return false; seen[l.url] = 1; return true; });
   if(links.length) v.links = links;   // старое поле link не сохраняем — его заменяет список
   if($('v_multi').checked){
     var seats = readSeats().map(function(x){ if(!x.requestedAt) x.requestedAt = v.requestedAt || v.publishedAt || today(); return x; });
@@ -1269,11 +1332,12 @@ function render(){
 }
 function ingest(snap){
   var first = !Object.keys(months).length;
-  months = {}; byDate = {};
+  months = {}; entered = {};
   snap.docs.forEach(function(s){
     var d = s.data(); months[s.id] = d;
-    Object.keys(d.days || {}).forEach(function(day){ (byDate[day] || (byDate[day] = {}))[d.person] = d.days[day]; });
+    Object.keys(d.days || {}).forEach(function(day){ (entered[day] || (entered[day] = {}))[d.person] = d.days[day]; });
   });
+  rebuild();
   // в первый раз — последний внесённый день не позже сегодняшнего (выходные и пустые дни пропускаем)
   if(first && !byDate[state.date || today()]) state.date = dates().filter(function(x){ return x <= today(); }).pop() || today();
   render();
@@ -1314,7 +1378,7 @@ $('vSeatAdd').onclick = function(){
 };
 $('vSeats').onclick = function(e){ var b = e.target.closest('[data-del-seat]'); if(b){ b.closest('tr').remove(); seatSummary(); } };
 $('vSeats').onchange = seatSummary;
-$('vLinkAdd').onclick = function(){ $('vLinks').insertAdjacentHTML('beforeend', linkRow('')); $('vLinks').lastElementChild.querySelector('input').focus(); };
+$('vLinkAdd').onclick = function(){ $('vLinks').insertAdjacentHTML('beforeend', linkRow(null)); $('vLinks').lastElementChild.querySelector('input').focus(); };
 $('vLinks').onclick = function(e){ var b = e.target.closest('[data-del-link]'); if(!b) return; b.parentNode.remove(); if(!$('vLinks').children.length) setLinks([]); };
 $('vTable').onclick = function(e){ if(e.target.closest('a')) return; var tr = e.target.closest('tr[data-id]'); if(tr) openVac(tr.dataset.id); };
 $('vTable').onkeydown = function(e){ var tr = e.target.closest('tr[data-id]'); if(tr && e.key === 'Enter') openVac(tr.dataset.id); };
@@ -1331,10 +1395,10 @@ var api = window.claude;
 (api ? api.use('db') : Promise.resolve(null)).then(function(d){
   db = d;
   if(!db){ offline(); return; }
-  db.doc('config/team').onSnapshot(function(s){ team = (s.exists && s.data().people) || {}; teamLoaded = true; fillPeople(); route(); }, offline);
+  db.doc('config/team').onSnapshot(function(s){ team = (s.exists && s.data().people) || {}; teamLoaded = true; rebuild(); fillPeople(); route(); }, offline);
   db.doc('config/metrics').onSnapshot(function(s){ metrics = (s.exists && s.data().list) || null; buildForm(); render(); }, function(){});
   db.collection('months').onSnapshot(ingest, offline);
   db.collection('vacations').onSnapshot(function(s){ vacations = {}; s.docs.forEach(function(x){ vacations[x.id] = x.data().list || []; }); if(session) route(); }, function(){});
-  db.collection('vacancies').onSnapshot(function(s){ vacancies = {}; s.docs.forEach(function(x){ vacancies[x.id] = x.data(); }); if(state.view === 'vac') renderVac(); }, function(){});
+  db.collection('vacancies').onSnapshot(function(s){ vacancies = {}; s.docs.forEach(function(x){ vacancies[x.id] = x.data(); }); vacanciesLoaded = true; rebuild(); render(); }, function(){});
 }, offline);
 </script>
