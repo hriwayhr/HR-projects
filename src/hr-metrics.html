@@ -172,6 +172,9 @@
   .cv div{display:flex; justify-content:space-between; gap:12px; border-bottom:1px solid var(--line); padding-bottom:6px;}
   .cv b{font-size:18px;}
   .cv .lbl{font-size:12px; color:var(--ink-3); text-transform:uppercase; letter-spacing:.04em; border:0; padding:0;}
+  .wk-tot{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px 12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line);}
+  .wk-tot div{display:flex; justify-content:space-between; gap:8px; font-size:13px; color:var(--ink-3);}
+  .wk-tot b{color:var(--ink); font-size:15px;}
   .todo{margin-bottom:18px;}
   .todo.done{background:var(--tint); border-color:var(--tint); color:var(--good);}
   .todo-row{display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; padding-block:6px; border-bottom:1px solid var(--line);}
@@ -243,7 +246,7 @@
         <div class="scroll"><table id="dTable"></table></div>
       </div>
       <div class="panel">
-        <h3>Собеседования за 20 рабочих дней</h3>
+        <h3 id="dChartTitle">Рабочая неделя</h3>
         <div id="dChart"></div>
         <div class="legend"><span><i style="background:var(--muted-bar)"></i>назначено</span><span><i style="background:var(--accent)"></i>прошло</span></div>
       </div>
@@ -707,23 +710,38 @@ function renderDay(){
   $('dTable').innerHTML = '<thead><tr><th>Рекрутер</th>'+cols.map(function(c){ return '<th>'+esc(c[0])+'</th>'; }).join('')+'</tr></thead><tbody>'+body+'</tbody>'+foot;
   renderChart(day, ps);
 }
+// Рабочая неделя выбранного дня: собеседования по дням (назначено / прошло) и итоги недели
 function renderChart(day, ps){
-  var ds = dates().filter(function(d){ return d <= day && (num(sum(d, ps, 'int_planned')) || num(sum(d, ps, 'int_done'))); }).slice(-20);
-  if(!ds.length){ $('dChart').innerHTML = '<p class="hint">Нет данных до этой даты.</p>'; return; }
-  var W = 440, H = 190, L = 26, B = 22, T = 8;
-  var max = Math.max(4, Math.max.apply(null, ds.map(function(d){ return Math.max(sum(d, ps, 'int_planned')||0, sum(d, ps, 'int_done')||0); })));
+  var mon = weekKey(day), days = [0, 1, 2, 3, 4].map(function(i){ return addDays(mon, i); }), t = today();
+  var a = parse(mon), b = parse(days[4]);
+  $('dChartTitle').textContent = 'Неделя ' + isoWeekNo(mon) + ' · ' + a.getDate() + (a.getMonth() !== b.getMonth() ? ' ' + MONTHS_GEN[a.getMonth()] : '') + '–' + b.getDate() + ' ' + MONTHS_GEN[b.getMonth()];
+  var rows = days.map(function(d){ return {d:d, pl:sum(d, ps, 'int_planned'), dn:sum(d, ps, 'int_done'), future:d > t}; });
+  var max = Math.max(4, Math.max.apply(null, rows.map(function(r){ return Math.max(r.pl || 0, r.dn || 0); })));
   max = Math.ceil(max / 4) * 4;
-  var step = (W - L) / ds.length, bw = Math.min(22, Math.max(3, step * 0.62));
+  var W = 440, H = 200, L = 26, B = 34, T = 16, step = (W - L) / 5, bw = Math.min(26, step * 0.3), gap = 2;
   function y(v){ return T + (H - B - T) * (1 - v / max); }
-  var s = '<svg viewBox="0 0 '+W+' '+H+'" width="100%" role="img" aria-label="Собеседования по дням">';
+  var s = '<svg viewBox="0 0 '+W+' '+H+'" width="100%" role="img" aria-label="Собеседования за неделю по дням">';
   for(var i = 0; i <= 4; i++){ var v = max * i / 4; s += '<line x1="'+L+'" x2="'+W+'" y1="'+y(v)+'" y2="'+y(v)+'" stroke="var(--line)" stroke-width="1"/><text x="'+(L-6)+'" y="'+(y(v)+4)+'" text-anchor="end">'+v+'</text>'; }
-  ds.forEach(function(d, i){
-    var x = L + i * step + (step - bw) / 2, pl = sum(d, ps, 'int_planned')||0, dn = sum(d, ps, 'int_done')||0, cur = d === day;
-    s += '<rect x="'+x+'" y="'+y(pl)+'" width="'+bw+'" height="'+(y(0)-y(pl))+'" rx="2" fill="var(--muted-bar)"><title>'+human(d)+': назначено '+pl+', прошло '+dn+'</title></rect>';
-    s += '<rect x="'+(x+bw*0.2)+'" y="'+y(dn)+'" width="'+(bw*0.6)+'" height="'+(y(0)-y(dn))+'" rx="2" fill="var(--accent)" opacity="'+(cur ? 1 : .75)+'"/>';
-    if(cur || i === 0 || i % 5 === 0){ var p = parse(d); s += '<text x="'+(x+bw/2)+'" y="'+(H-6)+'" text-anchor="middle"'+(cur ? ' style="font-weight:700;fill:var(--ink)"' : '')+'>'+p.getDate()+'.'+String(p.getMonth()+1).padStart(2,'0')+'</text>'; }
+  rows.forEach(function(r, i){
+    var cx = L + i * step + step / 2, x1 = cx - bw - gap / 2, x2 = cx + gap / 2, p = parse(r.d), cur = r.d === day;
+    if(r.future || (r.pl === null && r.dn === null)){
+      s += '<text x="'+cx+'" y="'+(y(0) - 8)+'" text-anchor="middle"'+(r.future ? '' : ' style="fill:var(--warn-ink)"')+'>'+(r.future ? 'впереди' : 'не внесено')+'</text>';
+    } else {
+      [[x1, r.pl, 'var(--muted-bar)', 'назначено'], [x2, r.dn, 'var(--accent)', 'прошло']].forEach(function(m){
+        var v = m[1] || 0, h = y(0) - y(v);
+        s += '<rect x="'+m[0]+'" y="'+y(v)+'" width="'+bw+'" height="'+Math.max(h, 0)+'" rx="3" fill="'+m[2]+'"><title>'+human(r.d)+': '+m[3]+' '+(m[1] === null ? '— не внесено' : v)+'</title></rect>';
+        if(m[1] !== null) s += '<text x="'+(m[0] + bw / 2)+'" y="'+(y(v) - 4)+'" text-anchor="middle" style="fill:var(--ink-2)">'+v+'</text>';
+      });
+    }
+    s += '<text x="'+cx+'" y="'+(H - 16)+'" text-anchor="middle"'+(cur ? ' style="font-weight:700;fill:var(--ink)"' : '')+'>'+WD[p.getDay()]+'</text>' +
+         '<text x="'+cx+'" y="'+(H - 3)+'" text-anchor="middle"'+(cur ? ' style="font-weight:700;fill:var(--ink)"' : '')+'>'+p.getDate()+'.'+String(p.getMonth()+1).padStart(2,'0')+'</text>';
   });
-  $('dChart').innerHTML = s + '</svg>';
+  s += '</svg>';
+  var past = days.filter(function(d){ return d <= t; });
+  function tot(k){ return past.reduce(function(acc, d){ var v = sum(d, ps, k); return v === null ? acc : (acc || 0) + v; }, null); }
+  var pl = tot('int_planned'), dn = tot('int_done');
+  var items = [['Назначено', pl], ['Прошло', dn], ['Доходимость', num(dn) && pl ? Math.round(dn / pl * 100) + '%' : null], ['Выходы', tot('hires')], ['Звонки', tot('calls')], ['Отказы', tot('rejections')]];
+  $('dChart').innerHTML = s + '<div class="wk-tot">' + items.map(function(x){ return '<div><span>'+x[0]+'</span><b>'+(x[1] === null ? '—' : x[1])+'</b></div>'; }).join('') + '</div>';
 }
 
 // ---------- ввод дня ----------

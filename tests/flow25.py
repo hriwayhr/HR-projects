@@ -41,6 +41,11 @@ with sync_playwright() as p:
     assert pg.evaluate("window.__store['months/yulia_2026-10'].days['2026-10-06']") == {'int_planned': 3}
     pg.click('#tab_day'); pg.fill('#dDate', '2026-10-06'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
     t = pg.inner_text('#dTiles'); assert 'Открытые вакансии\n3' in t and 'Кандидаты на вакансию\n3' in t, t
+    # инфографика недели: 5–9 октября, среда и дальше — «впереди», понедельник без данных — «не внесено»
+    assert pg.inner_text('#dChartTitle') == 'Неделя 41 · 5–9 октября'
+    svg = pg.inner_html('#dChart svg')
+    assert svg.count('впереди') == 2 and 'не внесено' in svg, svg[:300]
+    assert 'Назначено\n3' in pg.inner_text('#dChart .wk-tot'), pg.inner_text('#dChart .wk-tot')
     # новая вакансия сегодня — сразу в ячейках сегодняшнего дня
     pg.click('#tab_vac'); pg.click('#vAdd'); pg.fill('#v_title', 'D'); pg.fill('#v_manager', 'Юлия Немчинова')
     pg.fill('#vLinks .v-link', 'https://hh.ru/5'); assert pg.input_value('#vLinks .v-link-at') == '2026-10-07'
