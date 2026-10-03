@@ -1094,7 +1094,13 @@ function renderVac(){
 
   function group(key){
     var g = {};
-    all.forEach(function(v){ var k = key === 'manager' ? managerLabel(v) : v[key] || '—'; (g[k] || (g[k] = [])).push(v); });
+    all.forEach(function(v){
+      var k = v[key] || '—';
+      if(key === 'manager'){   // только действующие: без архивных и без имён, которых нет в команде
+        var p = vacOwner(v); if(!p || team[p].archived) return; k = label(p);
+      }
+      (g[k] || (g[k] = [])).push(v);
+    });
     return Object.keys(g).map(function(k){ var s = vacStats(g[k]); s.k = k; return s; }).sort(function(a, b){ return b.active - a.active || b.closed - a.closed; });
   }
   function gtable(rows, title){

@@ -215,7 +215,7 @@ with sync_playwright() as p:
     # Катя в архиве — в отчётах по вакансиям её имя с пометкой «(архив)»
     pg.click('#tab_settings'); pg.click('#sub_team'); pg.click('#tUsers button[data-act=archive]:not([data-p=yulia])'); pg.wait_for_timeout(300)
     pg.click('#tab_vac'); pg.select_option('#vStatus', ''); pg.wait_for_timeout(100)
-    assert 'Катя Шулятицкая (архив)' in pg.inner_text('#vByMgr') and 'Катя Шулятицкая (архив)' in pg.inner_text('#vTable'), pg.inner_text('#vByMgr')
+    assert 'Катя Шулятицкая (архив)' in pg.inner_text('#vTable') and 'Катя' not in pg.inner_text('#vByMgr'), pg.inner_text('#vByMgr')   # архивных в «По ответственным» нет
     pg.screenshot(path=str(HERE / 'shots' / 'hr-entry-admin.png'), full_page=True)
     pg.click('#tab_settings'); pg.click('#sub_team'); pg.screenshot(path=str(HERE / 'shots' / 'hr-team.png'), full_page=True)
     pg.click('#logout')
