@@ -178,28 +178,6 @@
   .wk-tot{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px 12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line);}
   .wk-tot div{display:flex; justify-content:space-between; gap:8px; font-size:13px; color:var(--ink-3);}
   .wk-tot b{color:var(--ink); font-size:15px;}
-  .hero-panel{margin-bottom:18px; display:grid; gap:16px;}
-  .hero-head{display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px 16px; align-items:baseline;}
-  .hero-head h3{margin:0; font-size:18px;}
-  .goals{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px;}
-  @media (max-width:860px){ .goals{grid-template-columns:minmax(0,1fr);} }
-  .goal .k{font-size:13px; color:var(--ink-3);}
-  .goal .v{font-size:30px; font-weight:700; line-height:1.15;}
-  .goal .v small{font-size:15px; color:var(--ink-3); font-weight:600;}
-  .meter{position:relative; height:10px; border-radius:999px; background:var(--tint); margin:8px 0 6px; overflow:visible;}
-  .meter i{position:absolute; left:0; top:0; bottom:0; border-radius:999px; background:var(--accent);}
-  .meter i.over{background:var(--accent-deep);}
-  .meter b{position:absolute; top:-4px; bottom:-4px; width:2px; background:var(--ink-2); border-radius:1px;}
-  .goal .d{font-size:13px; color:var(--ink-2);}
-  .goal .d.up{color:var(--good); font-weight:600;}
-  .badge{display:inline-block; margin-left:6px; padding:1px 8px; border-radius:999px; background:var(--accent-deep); color:var(--accent-ink); font-size:11px; font-weight:700; vertical-align:middle;}
-  .wins{display:flex; flex-wrap:wrap; gap:8px;}
-  .win{background:var(--tint); color:var(--good); border-radius:10px; padding:6px 12px; font-size:13px;}
-  .win b{color:var(--ink);}
-  .contrib{display:grid; gap:6px;}
-  .contrib-row{display:grid; grid-template-columns:minmax(120px,200px) minmax(0,1fr) 90px; gap:12px; align-items:center; font-size:13px;}
-  .contrib-row .meter{margin:0;}
-  .contrib-row span:last-child{text-align:right; color:var(--ink-2);}
   .todo{margin-bottom:18px;}
   .todo.done{background:var(--tint); border-color:var(--tint); color:var(--good);}
   .todo-row{display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; padding-block:6px; border-bottom:1px solid var(--line);}
@@ -261,7 +239,6 @@
         <button class="icon" id="dNext" aria-label="Следующий день">›</button>
       </div>
     </div>
-    <div id="dHero"></div>
     <div id="dRemind"></div>
     <div class="panel todo" id="dTodo"></div>
     <div class="chips" id="dChips"></div>
@@ -607,80 +584,6 @@ function extendFromReminder(e){
   db.doc('vacancies/' + id).set(next).catch(function(err){ b.disabled = false; alertStatus(writeError(err)); });
 }
 function alertStatus(msg){ var s = document.querySelector('#vCopyStat'); if(s){ s.className = 'status err'; s.textContent = msg; } }
-// ---------- прогресс недели: цель — своя обычная неделя, серия, победы ----------
-function weekSum(mon, ps, k, upto){
-  var s = 0; for(var i = 0; i < 5; i++){ var d = addDays(mon, i); if(!upto || d <= upto) s += sum(d, ps, k) || 0; } return s;
-}
-// Обычная неделя — среднее за 8 последних прошедших недель, где что-то вносили; рекорд — лучшая неделя за всё время
-function weekNorm(mon, ps, k){
-  var weeks = {}, list;
-  dates().forEach(function(d){ if(d < mon && hasData(d, ps)) weeks[weekKey(d)] = 1; });
-  list = Object.keys(weeks).sort();
-  var last = list.slice(-8).map(function(w){ return weekSum(w, ps, k); });
-  return {norm:last.length ? Math.max(1, Math.round(last.reduce(function(a, b){ return a + b; }, 0) / last.length)) : null,
-          record:list.reduce(function(m, w){ return Math.max(m, weekSum(w, ps, k)); }, 0)};
-}
-// Серия: рабочие дни подряд со внесёнными данными (отмеченный отпуск и выходные не рвут), текущая и рекорд
-function streak(p){
-  var cur = 0, best = 0, run = 0, broken = false, d = today();
-  if(dayStatus(p, d) === 'today') d = addDays(d, -1);   // сегодняшний день ещё можно внести — серию не рвёт
-  for(var n = 0; n < 900 && d >= COLLECT_START; n++, d = addDays(d, -1)){
-    var st = dayStatus(p, d);
-    if(st === 'ok'){ run++; if(!broken) cur = run; }
-    // пропуск рвёт серию; пустые будни до недели перехода — тоже, если это не отмеченный отпуск
-    else if(st === 'missing' || (st === 'vac' && !vacationOf(p, d))){ best = Math.max(best, run); run = 0; broken = true; }
-  }
-  return {cur:cur, best:Math.max(best, run)};
-}
-function goalCard(title, done, info, pace, unit){
-  if(info.norm === null) return '<div class="goal"><div class="k">'+title+'</div><div class="v">'+done+'</div><div class="d">Цель появится после первой полной недели.</div></div>';
-  var g = info.norm, pct = Math.min(100, done / g * 100), left = g - done, expect = Math.min(g, Math.round(g * pace.elapsed / 5));
-  var note = done >= g ? '<span class="up">Обычная неделя ('+g+') уже есть' + (done > g ? ' · +' + (done - g) + ' сверху' : '') + '</span>'
-    : pace.left > 0 ? (done >= expect ? '<span class="up">Опережаете темп.</span> ' : '') + 'До обычной недели — ' + left + (pace.left > 1 ? ', это ~' + Math.ceil(left / pace.left) + ' в день' : ' — сегодня') + '.'
-    : 'Неделя закрыта: ' + Math.round(done / g * 100) + '% от обычной.';
-  var rec = done > 0 && done > info.record ? '<span class="badge">рекорд</span>' : '';
-  return '<div class="goal"><div class="k">'+title+'</div><div class="v">'+done+' <small>из '+g+unit+'</small>'+rec+'</div>' +
-    '<div class="meter" title="Цель — ваша обычная неделя: среднее за 8 прошлых недель. Черта — где нужно быть к сегодняшнему дню."><i class="'+(done >= g ? 'over' : '')+'" style="width:'+pct+'%"></i>' +
-    (pace.left > 0 && done < g ? '<b style="left:'+(expect / g * 100)+'%"></b>' : '') + '</div><div class="d">'+note+'</div></div>';
-}
-function weekWins(mon, ps){
-  var end = addDays(mon, 4), out = [];
-  Object.keys(vacancies).forEach(function(id){
-    var v = vacancies[id], p = vacOwner(v); if(ps.indexOf(p) < 0) return;
-    if(isMulti(v)) v.seats.forEach(function(x){ if(x.startAt && x.startAt >= mon && x.startAt <= end) out.push({d:x.startAt, who:x.person, title:v.title}); });
-    else if(CLOSED[v.status] && vacEnd(v) >= mon && vacEnd(v) <= end) out.push({d:vacEnd(v), title:v.title});
-  });
-  return out.sort(function(a, b){ return a.d.localeCompare(b.d); });
-}
-function renderHero(day){
-  var ps = visiblePeople(), mon = weekKey(day), t = today(), cur = mon === weekKey(t);
-  var upto = cur ? t : null, elapsed = 0, leftDays = 0;
-  for(var i = 0; i < 5; i++){ var d = addDays(mon, i); if(!cur || d < t) elapsed++; else leftDays++; }
-  var pace = {elapsed:elapsed, left:cur ? leftDays : 0};
-  var done = weekSum(mon, ps, 'int_done', upto), hires = weekSum(mon, ps, 'hires', upto);
-  var cards = goalCard('Собеседования прошли', done, weekNorm(mon, ps, 'int_done'), pace, '') + goalCard('Выходы новых сотрудников', hires, weekNorm(mon, ps, 'hires'), pace, '');
-  if(scope()){
-    var st = streak(scope());
-    cards += '<div class="goal"><div class="k">Серия</div><div class="v">'+st.cur+' <small>'+plural(st.cur, 'рабочий день', 'рабочих дня', 'рабочих дней')+' подряд</small>'+(st.cur && st.cur >= st.best ? '<span class="badge">рекорд</span>' : '')+'</div>' +
-      '<div class="d">'+(st.cur ? 'Все дни внесены — так держать.' : 'Внесите сегодняшний день — и серия начнётся.')+' Рекорд: '+st.best+'.</div></div>';
-  } else {
-    var dn = activePeople().map(function(p){ return [p, streak(p).cur]; });
-    cards += '<div class="goal"><div class="k">Серии без пропусков</div><div class="d" style="display:grid;gap:4px;margin-top:6px">' +
-      dn.map(function(x){ return '<span>'+esc(fullName(x[0]))+' — <b>'+x[1]+'</b> '+plural(x[1], 'день', 'дня', 'дней')+'</span>'; }).join('') + '</div></div>';
-  }
-  var wins = weekWins(mon, ps), best = null;
-  for(var j = 0; j < 5; j++){ var dd = addDays(mon, j), v = sum(dd, ps, 'int_done'); if(v && (!best || v > best.v)) best = {d:dd, v:v}; }
-  var winsHtml = wins.map(function(w){ return '<span class="win">Вышел(а) '+(w.who ? '<b>'+esc(w.who)+'</b> ' : '')+'на «'+esc(w.title)+'» · '+shortDate(w.d).slice(0, 5)+'</span>'; }).join('') +
-    (best ? '<span class="win">Лучший день — <b>'+WD[parse(best.d).getDay()]+'</b>: '+best.v+' '+plural(best.v, 'собеседование', 'собеседования', 'собеседований')+'</span>' : '');
-  var contrib = scope() || activePeople().length < 2 ? '' : '<div><div class="k hint" style="margin-bottom:6px">Вклад каждого — к своей обычной неделе (собеседования)</div><div class="contrib">' +
-    activePeople().map(function(p){
-      var dn = weekSum(mon, [p], 'int_done', upto), n = weekNorm(mon, [p], 'int_done').norm || 0;
-      return '<div class="contrib-row"><span>'+esc(fullName(p))+'</span><div class="meter"><i class="'+(n && dn >= n ? 'over' : '')+'" style="width:'+(n ? Math.min(100, dn / n * 100) : 0)+'%"></i></div><span>'+dn+(n ? ' из '+n : '')+'</span></div>';
-    }).join('') + '</div></div>';
-  $('dHero').innerHTML = '<div class="panel hero-panel"><div class="hero-head"><h3>'+(scope() ? 'Ваша неделя' : 'Неделя команды')+' · '+isoWeekNo(mon)+'</h3>' +
-    '<span class="hint">'+(cur && leftDays ? 'идёт: осталось '+leftDays+' '+plural(leftDays, 'рабочий день', 'рабочих дня', 'рабочих дней') : 'неделя закрыта')+'</span></div>' +
-    '<div class="goals">'+cards+'</div>' + (winsHtml ? '<div class="wins">'+winsHtml+'</div>' : '<div class="hint">Выходов на этой неделе пока нет — каждое собеседование приближает первый.</div>') + contrib + '</div>';
-}
 function renderTodo(){
   var ps = scope() ? [scope()] : activePeople(), box = $('dTodo');
   var miss = ps.map(function(p){ return [p, missingDays(p)]; }).filter(function(x){ return x[1].length; });
@@ -778,7 +681,6 @@ function renderDay(){
   $('dNext').disabled = !nextDate(day, ps) && day >= today();
 
   var rows = dayPeople(day);
-  renderHero(day);
   renderTodo();
   $('dChips').innerHTML = scope() ? '' : rows.map(function(p){
     var st = dayStatus(p, day), cls = st === 'ok' ? ' ok' : st === 'vac' || st === 'off' ? ' vac' : '';
