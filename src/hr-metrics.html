@@ -145,7 +145,9 @@
   .wk th.now,.wk td.now{background:var(--paper);}
   .wk td.sum,.wk th.sum{background:var(--tint); color:var(--good); font-weight:700;}
   .wk tbody td:first-child{white-space:normal; min-width:200px;}
-  fieldset.links{padding:10px 14px 14px;}
+  fieldset.links,fieldset.seats{padding:10px 14px 14px;}
+  #vSeats td{white-space:nowrap;}
+  #vSeats input[type=text]{min-width:160px;}
   fieldset.links .stack{gap:8px; margin-bottom:10px;}
   .link-row{display:flex; gap:8px; align-items:center;}
   .link-row input{flex:1;}
@@ -285,7 +287,7 @@
           <label class="f">Отдел<input type="text" id="v_dept" list="deptList"></label>
           <label class="f">Статус<select id="v_status"></select></label>
           <label class="f">Ответственный менеджер<input type="text" id="v_manager" list="mgrList"></label>
-          <label class="f">Ставка (сколько нужно человек)<input type="number" min="0" step="0.5" id="v_rate"></label>
+          <label class="f" id="vRateWrap">Ставка (сколько нужно человек)<input type="number" min="0" step="0.5" id="v_rate"></label>
           <label class="f">Заказчик (кто запросил вакансию)<input type="text" id="v_customer" list="custList" placeholder="Имя сотрудника"></label>
           <label class="f">Дата запроса<input type="date" id="v_requestedAt"></label>
           <label class="f">Дата публикации<input type="date" id="v_publishedAt"></label>
@@ -296,6 +298,12 @@
           <label class="f">Офферов отправлено<input type="number" min="0" step="1" id="v_offersSent"></label>
           <label class="f">Офферов принято<input type="number" min="0" step="1" id="v_offersAccepted"></label>
         </div>
+        <label class="check"><input type="checkbox" id="v_multi"> Требуется несколько ставок — вести каждую единицу отдельно</label>
+        <fieldset class="seats" id="vSeatsBox" hidden><legend>Единицы найма</legend>
+          <div class="scroll"><table id="vSeats"></table></div>
+          <div class="actions mt"><button type="button" class="btn ghost sm" id="vSeatAdd">+ Ещё человек</button><span class="hint" id="vSeatSum"></span></div>
+          <p class="hint mt">Руководитель просит «+1» — добавьте единицу с датой запроса. Человек вышел — поставьте дату выхода: единица закрыта, «нужно людей» уменьшается. Скорость закрытия считается по каждой единице: от её запроса до выхода.</p>
+        </fieldset>
         <fieldset class="links"><legend>Публикации на hh.ru</legend>
           <div id="vLinks" class="stack"></div>
           <button type="button" class="btn ghost sm" id="vLinkAdd">+ Ещё публикация</button>
@@ -312,7 +320,7 @@
     </div>
     <div class="panel mt">
       <div class="scroll"><table id="vTable"></table></div>
-      <p class="hint">Ответственный привязан к пользователю из «Команды» по фамилии (если её нет — по имени): «Шулятицкая» и «Анна Шулятицкая» — один человек. Дней в работе — от публикации (если её нет — от запроса) до закрытия, у активных — до сегодня. Скорость закрытия — среднее по вакансиям «выход сотрудника» и «архив», у которых есть дата закрытия или выхода; «не актуальна» в расчёт не входит.</p>
+      <p class="hint">Ответственный привязан к пользователю из «Команды» по фамилии (если её нет — по имени): «Шулятицкая» и «Анна Шулятицкая» — один человек. Дней в работе — от публикации (если её нет — от запроса) до закрытия, у активных — до сегодня. Скорость закрытия — среднее по вакансиям «выход сотрудника» и «архив», у которых есть дата закрытия или выхода; «не актуальна» в расчёт не входит. У вакансии с несколькими ставками каждая вышедшая единица считается отдельно: от её даты запроса до даты выхода, а «нужно людей» — это единицы, которые ещё в поиске.</p>
     </div>
     <div class="grid2 mt">
       <div class="panel"><h3>По ответственным</h3><div class="scroll"><table id="vByMgr"></table></div></div>
@@ -858,8 +866,23 @@ function vacStart(v){ return v.publishedAt || v.requestedAt || null; }
 function vacEnd(v){ return v.closedAt || v.startAt || null; }
 function isActive(v){ return v.status === 'активна'; }
 function isClosed(v){ return !!CLOSED[v.status] && !!vacEnd(v) && !!vacStart(v); }
+// Несколько ставок: seats = [{requestedAt, startAt?, person?}], единица закрыта датой выхода
+function isMulti(v){ return !!(v.multi && v.seats); }
+function openSeats(v){ return v.seats.filter(function(x){ return !x.startAt; }); }
+function seatStart(v, x){ return x.requestedAt || vacStart(v); }
+function needOf(v){ return isMulti(v) ? openSeats(v).length : (num(v.rate) ? v.rate : 1); }
+// Закрытые единицы для скорости закрытия: у обычной вакансии — она сама, у многоставочной — каждая вышедшая
+function closedUnits(v){
+  if(isMulti(v)) return v.seats.filter(function(x){ return x.startAt && seatStart(v, x); })
+    .map(function(x){ return {end:x.startAt, days:Math.max(0, daysBetween(seatStart(v, x), x.startAt))}; });
+  return isClosed(v) ? [{end:vacEnd(v), days:closeDays(v)}] : [];
+}
 function daysInWork(v){
   var s = vacStart(v); if(!s) return null;
+  if(isMulti(v) && isActive(v)){   // у многоставочной — с самого старого незакрытого запроса
+    var o = openSeats(v).map(function(x){ return seatStart(v, x); }).filter(Boolean).sort()[0];
+    if(o) s = o;
+  }
   if(isActive(v)) return Math.max(0, daysBetween(s, today()));
   var e = vacEnd(v) || v.archivedAt; return e ? Math.max(0, daysBetween(s, e)) : null;
 }
@@ -877,11 +900,11 @@ function mine(v, p){ return vacOwner(v) === p; }
 function managerLabel(v){ var p = vacOwner(v); return p ? label(p) : (v.manager || '—'); }
 function visibleVacancies(){ var p = scope(); return Object.keys(vacancies).map(function(id){ return Object.assign({id:id}, vacancies[id]); }).filter(function(v){ return !p || mine(v, p); }); }
 function vacStats(list){
-  var active = list.filter(isActive), cd = list.filter(isClosed).map(closeDays);
+  var active = list.filter(isActive), units = [].concat.apply([], list.map(closedUnits)), cd = units.map(function(u){ return u.days; });
   var since = new Date(); since.setDate(since.getDate() - 90); since = iso(since);
-  return {active:active.length, need:active.reduce(function(s, v){ return s + (num(v.rate) ? v.rate : 1); }, 0),
+  return {active:active.length, need:active.reduce(function(s, v){ return s + needOf(v); }, 0),
           mean:mean(cd), median:median(cd), closed:cd.length,
-          recent:list.filter(function(v){ return isClosed(v) && vacEnd(v) >= since; }).length,
+          recent:units.filter(function(u){ return u.end >= since; }).length,
           oldest:active.reduce(function(m, v){ var d = daysInWork(v); return d !== null && d > m ? d : m; }, 0)};
 }
 function renderVac(){
@@ -901,11 +924,11 @@ function renderVac(){
   }).sort(function(a, b){
     return (isActive(a) ? 0 : 1) - (isActive(b) ? 0 : 1) || (vacStart(b) || '').localeCompare(vacStart(a) || '');
   });
-  $('vTable').innerHTML = '<thead><tr><th>Вакансия</th><th class="l">Отдел</th><th class="l">Заказчик</th><th class="l">Статус</th><th class="l">Ответственный</th><th>Ставка</th><th>Публикация</th><th>Закрытие</th><th>Дней в работе</th><th>Продлений</th><th>Офферы</th></tr></thead><tbody>' +
+  $('vTable').innerHTML = '<thead><tr><th>Вакансия</th><th class="l">Отдел</th><th class="l">Заказчик</th><th class="l">Статус</th><th class="l">Ответственный</th><th>Нужно людей</th><th>Публикация</th><th>Закрытие</th><th>Дней в работе</th><th>Продлений</th><th>Офферы</th></tr></thead><tbody>' +
     (list.length ? list.map(function(v){
       var d = daysInWork(v), cls = isActive(v) ? 'active' : CLOSED[v.status] ? 'hire' : '';
       return '<tr class="click" data-id="'+esc(v.id)+'" tabindex="0"><td class="wrapc">'+(vacLinks(v).length ? '<a href="'+esc(vacLinks(v)[0])+'" target="_blank" rel="noopener">'+esc(v.title)+'</a>' : esc(v.title))+pubsHtml(v)+'</td><td class="l">'+esc(v.dept||'—')+'</td><td class="l">'+esc(v.customer||'—')+'</td>' +
-        '<td class="l"><span class="pill '+cls+'">'+esc(v.status||'без статуса')+'</span></td><td class="l">'+esc(managerLabel(v))+'</td><td>'+(num(v.rate) ? v.rate : '—')+'</td>' +
+        '<td class="l"><span class="pill '+cls+'">'+esc(v.status||'без статуса')+'</span></td><td class="l">'+esc(managerLabel(v))+'</td><td>'+(isMulti(v) ? needOf(v)+' из '+v.seats.length : num(v.rate) ? v.rate : '—')+'</td>' +
         '<td>'+shortDate(vacStart(v))+'</td><td>'+shortDate(vacEnd(v))+'</td><td>'+(d === null ? '—' : (isActive(v) && d > 60 ? '<span class="pill long">'+d+'</span>' : d))+'</td>' +
         '<td>'+(num(v.extensions) ? v.extensions : '—')+'</td><td>'+(num(v.offersSent) ? (v.offersAccepted||0)+' из '+v.offersSent : '—')+'</td></tr>';
     }).join('') : '<tr><td colspan="11" class="empty">Вакансий нет. Добавьте первую кнопкой «Новая вакансия».</td></tr>') + '</tbody>';
@@ -937,11 +960,11 @@ function hiringReport(){
   var act = visibleVacancies().filter(isActive), groups = {};
   act.forEach(function(v){ var k = managerLabel(v); (groups[k] || (groups[k] = [])).push(v); });
   var names = Object.keys(groups).sort(function(a, b){ return groups[b].length - groups[a].length || a.localeCompare(b); });
-  function need(list){ return list.reduce(function(s, v){ return s + (num(v.rate) ? v.rate : 1); }, 0); }
+  function need(list){ return list.reduce(function(s, v){ return s + needOf(v); }, 0); }
   function fmt(n){ return String(n).replace('.', ','); }
   var d = parse(today()), date = d.getDate() + ' ' + MONTHS_GEN[d.getMonth()] + ' ' + d.getFullYear();
   var cols = ['Вакансия', 'Отдел', 'Заказчик', 'Нужно людей', 'В работе с', 'Дней в работе', 'Офферы', 'Комментарий'];
-  function cells(v){ return [v.title, v.dept || '—', v.customer || '—', fmt(num(v.rate) ? v.rate : 1), shortDate(vacStart(v)), daysInWork(v) === null ? '—' : daysInWork(v),
+  function cells(v){ return [v.title, v.dept || '—', v.customer || '—', fmt(needOf(v)) + (isMulti(v) ? ' из ' + v.seats.length : ''), shortDate(vacStart(v)), daysInWork(v) === null ? '—' : daysInWork(v),
     num(v.offersSent) ? (v.offersAccepted || 0) + ' из ' + v.offersSent : '—', v.comment || '']; }
   function sortByAge(list){ return list.slice().sort(function(a, b){ return (daysInWork(b) || 0) - (daysInWork(a) || 0); }); }
   var title = 'Текущий найм на ' + date + (scope() ? ' — ' + fullName(scope()) : '');
@@ -977,6 +1000,43 @@ function linkRow(u){
     '<button type="button" class="btn danger sm" data-del-link aria-label="Убрать ссылку">×</button></div>';
 }
 function setLinks(list){ $('vLinks').innerHTML = (list.length ? list : ['']).map(linkRow).join(''); }
+function seatRow(x){
+  x = x || {};
+  return '<tr><td><input type="date" class="s-req" value="'+esc(x.requestedAt || '')+'" aria-label="Дата запроса"></td>' +
+    '<td><input type="date" class="s-start" value="'+esc(x.startAt || '')+'" aria-label="Дата выхода"></td>' +
+    '<td><input type="text" class="s-person" value="'+esc(x.person || '')+'" placeholder="Кто вышел" aria-label="Кто вышел"></td>' +
+    '<td><span class="pill '+(x.startAt ? 'hire' : 'active')+'">'+(x.startAt ? 'закрыта' : 'в поиске')+'</span></td>' +
+    '<td><button type="button" class="btn danger sm" data-del-seat aria-label="Убрать единицу">×</button></td></tr>';
+}
+function readSeats(){
+  return Array.prototype.map.call(document.querySelectorAll('#vSeats tbody tr'), function(tr){
+    var x = {}, r = tr.querySelector('.s-req').value, st = tr.querySelector('.s-start').value, pn = tr.querySelector('.s-person').value.trim();
+    if(r) x.requestedAt = r; if(st) x.startAt = st; if(pn) x.person = pn; return x;
+  });
+}
+function setSeats(list){
+  $('vSeats').innerHTML = '<thead><tr><th class="l">Запрос</th><th class="l">Выход</th><th class="l">Сотрудник</th><th class="l">Статус</th><th></th></tr></thead><tbody>' + list.map(seatRow).join('') + '</tbody>';
+  seatSummary();
+}
+function seatSummary(){
+  var all = readSeats(), open = all.filter(function(x){ return !x.startAt; }).length;
+  $('vSeatSum').textContent = 'Всего ' + all.length + ', в поиске ' + open + ', закрыто ' + (all.length - open);
+  document.querySelectorAll('#vSeats tbody tr').forEach(function(tr){
+    var done = !!tr.querySelector('.s-start').value, pill = tr.querySelector('.pill');
+    pill.className = 'pill ' + (done ? 'hire' : 'active'); pill.textContent = done ? 'закрыта' : 'в поиске';
+  });
+}
+// Галка «несколько ставок»: из ставки получаются единицы (закрытая вакансия — уже закрытыми)
+function toggleMulti(){
+  var on = $('v_multi').checked;
+  $('vSeatsBox').hidden = !on; $('vRateWrap').hidden = on;
+  if(on && !document.querySelector('#vSeats tbody tr')){
+    var n = Math.max(1, Math.round(+$('v_rate').value || 1)), req = $('v_requestedAt').value || $('v_publishedAt').value || today();
+    var end = CLOSED[$('v_status').value] ? ($('v_closedAt').value || $('v_startAt').value) : '';
+    var list = []; for(var i = 0; i < n; i++) list.push(end ? {requestedAt:req, startAt:end} : {requestedAt:req});
+    setSeats(list);
+  }
+}
 var editingVac = null;
 function openVac(id){
   var me = scope() && team[scope()];
@@ -984,6 +1044,10 @@ function openVac(id){
   editingVac = id || null;
   VAC_FIELDS.forEach(function(f){ $('v_'+f).value = v[f] == null ? '' : v[f]; });
   setLinks(vacLinks(v));
+  $('v_multi').checked = isMulti(v);
+  $('vSeats').innerHTML = '';
+  if(isMulti(v)) setSeats(v.seats);
+  toggleMulti();
   $('vEdTitle').textContent = id ? 'Вакансия' : 'Новая вакансия';
   $('vDelete').hidden = !id || !isAdmin();
   $('vStat').textContent = '';
@@ -998,6 +1062,15 @@ function saveVac(e){
   var links = Array.prototype.map.call(document.querySelectorAll('#vLinks .v-link'), function(i){ return i.value.trim(); })
     .filter(function(u, i, a){ return u && a.indexOf(u) === i; });
   if(links.length) v.links = links;   // старое поле link не сохраняем — его заменяет список
+  if($('v_multi').checked){
+    var seats = readSeats().map(function(x){ if(!x.requestedAt) x.requestedAt = v.requestedAt || v.publishedAt || today(); return x; });
+    if(!seats.length){ $('vStat').className = 'status err'; $('vStat').textContent = 'Добавьте хотя бы одну единицу или снимите галку «несколько ставок».'; return; }
+    var open = seats.filter(function(x){ return !x.startAt; }).length;
+    v.multi = true; v.seats = seats; v.rate = open;
+    // статус следует за единицами: все закрыты — «выход сотрудника», появилась новая — снова «активна»
+    if(!open && v.status === 'активна'){ v.status = 'выход сотрудника'; v.closedAt = seats.map(function(x){ return x.startAt; }).sort().pop(); }
+    if(open && v.status === 'выход сотрудника'){ v.status = 'активна'; delete v.closedAt; }
+  }
   v.updatedAt = new Date().toISOString();
   var ref = editingVac ? db.doc('vacancies/' + editingVac) : db.collection('vacancies').doc();
   $('vSave').disabled = true; $('vStat').className = 'status'; $('vStat').textContent = 'Сохраняю…';
@@ -1234,6 +1307,13 @@ $('vCopy').onclick = function(){
 $('vCancel').onclick = function(){ $('vEditor').hidden = true; editingVac = null; };
 $('vForm').onsubmit = saveVac;
 $('vDelete').onclick = deleteVac;
+$('v_multi').onchange = toggleMulti;
+$('vSeatAdd').onclick = function(){
+  if(!document.querySelector('#vSeats tbody')) setSeats([]);
+  document.querySelector('#vSeats tbody').insertAdjacentHTML('beforeend', seatRow({requestedAt:today()})); seatSummary();
+};
+$('vSeats').onclick = function(e){ var b = e.target.closest('[data-del-seat]'); if(b){ b.closest('tr').remove(); seatSummary(); } };
+$('vSeats').onchange = seatSummary;
 $('vLinkAdd').onclick = function(){ $('vLinks').insertAdjacentHTML('beforeend', linkRow('')); $('vLinks').lastElementChild.querySelector('input').focus(); };
 $('vLinks').onclick = function(e){ var b = e.target.closest('[data-del-link]'); if(!b) return; b.parentNode.remove(); if(!$('vLinks').children.length) setLinks([]); };
 $('vTable').onclick = function(e){ if(e.target.closest('a')) return; var tr = e.target.closest('tr[data-id]'); if(tr) openVac(tr.dataset.id); };

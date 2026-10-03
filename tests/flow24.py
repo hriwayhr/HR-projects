@@ -141,6 +141,32 @@ with sync_playwright() as p:
     pg.click('#vCopy'); pg.wait_for_timeout(200)
     html_, text_ = pg.evaluate('window.__clip')
     assert 'Заказчик' in text_ and 'Дмитрий Васильевич' in text_ and 'hh 2</a>' in html_, text_
+    # несколько ставок: «Бронирование 2/2» — единица на поиск, «+1» от руководителя, выход по единице
+    pg.click('#vAdd'); pg.fill('#v_title', 'Менеджер отдела бронирования 2/2'); pg.fill('#v_manager', 'Немчинова')
+    pg.fill('#v_publishedAt', ago(30)); pg.check('#v_multi'); pg.wait_for_timeout(100)
+    assert pg.is_visible('#vSeatsBox') and not pg.is_visible('#vRateWrap')
+    assert pg.input_value('#vSeats .s-req') == ago(30), pg.input_value('#vSeats .s-req')
+    pg.click('#vSeatAdd'); pg.click('#vSeatAdd')                       # руководитель попросил ещё двоих
+    assert 'Всего 3, в поиске 3' in pg.inner_text('#vSeatSum')
+    pg.fill('#vSeats tbody tr:nth-child(1) .s-start', ago(10)); pg.fill('#vSeats tbody tr:nth-child(1) .s-person', 'Иванова')
+    pg.click('#vSeats tbody tr:nth-child(3) [data-del-seat]')          # одну «+1» отменили
+    pg.dispatch_event('#vSeats tbody tr:nth-child(1) .s-start', 'change')
+    assert 'Всего 2, в поиске 1, закрыто 1' in pg.inner_text('#vSeatSum'), pg.inner_text('#vSeatSum')
+    pg.click('#vSave'); pg.wait_for_timeout(300)
+    vid = [k for k, v in pg.evaluate('window.__store').items() if k.startswith('vacancies/') and v.get('title', '').startswith('Менеджер отдела бронирования')][0]
+    v = pg.evaluate("window.__store['%s']" % vid)
+    assert v['multi'] and v['rate'] == 1 and v['status'] == 'активна' and v['seats'][0] == {'requestedAt': ago(30), 'startAt': ago(10), 'person': 'Иванова'} and v['seats'][1] == {'requestedAt': dt.date.today().isoformat()}, v
+    row = pg.inner_text('#vTable tr[data-id=%s]' % vid.split('/')[1]); assert '1 из 2' in row, row
+    vt = pg.inner_text('#vTiles')
+    assert 'Скорость закрытия\n33' in vt and 'закрыто 3' in vt, vt                # (30 + 50 + 20) / 3: единица считается отдельно
+    # вторая единица закрыта — вакансия сама уходит в «выход сотрудника»; новая «+1» — снова «активна»
+    pg.fill('#vSeats tbody tr:nth-child(2) .s-start', dt.date.today().isoformat()); pg.click('#vSave'); pg.wait_for_timeout(300)
+    v = pg.evaluate("window.__store['%s']" % vid)
+    assert v['status'] == 'выход сотрудника' and v['rate'] == 0 and v['closedAt'] == dt.date.today().isoformat(), v
+    pg.click('#vSeatAdd'); pg.click('#vSave'); pg.wait_for_timeout(300)
+    v = pg.evaluate("window.__store['%s']" % vid)
+    assert v['status'] == 'активна' and v['rate'] == 1 and 'closedAt' not in v and len(v['seats']) == 3, v
+    pg.click('#vCancel')
     pg.screenshot(path=str(HERE / 'shots' / 'hr-vac.png'), full_page=True)
     pg.click('#tab_metrics'); pg.screenshot(path=str(HERE / 'shots' / 'hr-metrics-admin.png'), full_page=True)
 
