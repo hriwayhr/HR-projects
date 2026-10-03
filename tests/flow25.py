@@ -72,13 +72,14 @@ with sync_playwright() as p:
         .then(function(v){ window.__clip = v; }); }}});""")
     pg.click('#tab_vac'); pg.click('#vCopy'); pg.wait_for_timeout(200)
     clip = pg.evaluate('window.__clip')
-    assert 'hh 1: в архиве с 05.10.26' in clip[1] and '#B4321F' in clip[0], clip[1]   # в отчёте по найму — подсвечено
+    assert 'hh.ru p.1: в архиве с 05.10.26' in clip[1] and '#B4321F' in clip[0], clip[1]   # в отчёте по найму — подсвечено
     # «Не продлеваем»: снятая публикация не напоминает, но остаётся в истории и не считается
     pg.evaluate("""window.__store['vacancies/g'] = {title: 'G', status: 'активна', manager: 'Немчинова', publishedAt: '2026-09-01', rate: 1,
         links: [{url: 'https://hh.ru/8', at: '2026-09-01', closedAt: '2026-10-01'}]}; window.__notify();"""); pg.wait_for_timeout(200)
     pg.click('#vRemind button[data-stop=g]'); pg.wait_for_timeout(300)
     assert pg.evaluate("window.__store['vacancies/g'].links[0].stopped") is True and 'hh.ru/8' not in pg.inner_html('#vRemind')
     assert 'снята с 01.10.26' in pg.inner_text('#vTable tr[data-id=g]')
+    assert 'hh.ru p.1 · снята с 01.10.26' in pg.inner_text('#vTable tr[data-id=g]') and 'hh 1' not in pg.inner_text('#vTable')
     pg.click('#vTable tr[data-id=g] td:nth-child(2)'); pg.click('#vSave'); pg.wait_for_timeout(300)
     assert pg.evaluate("window.__store['vacancies/g'].links[0].stopped") is True   # пересохранение карточки отметку не теряет
     pg.click('#vCancel')

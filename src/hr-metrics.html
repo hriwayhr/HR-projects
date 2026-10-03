@@ -559,7 +559,7 @@ function remindersHtml(){
   return '<div class="panel todo remind"><h3>Публикации на hh.ru: ' + [ex ? 'в архиве ' + ex : '', soon ? 'продлить в ближайшие ' + REMIND_DAYS + ' дней ' + soon : '', nd ? 'без даты архивации ' + nd : ''].filter(Boolean).join(', ') + '</h3>' +
     list.map(function(r){
       return '<div class="todo-row"><span class="pill pub-'+r.st+'">'+esc(linkNote(r.l))+'</span><b>'+esc(r.v.title)+'</b>' +
-        '<a href="'+esc(r.l.url)+'" target="_blank" rel="noopener">hh '+(r.i+1)+'</a>' + (scope() ? '' : '<span class="hint">'+esc(managerLabel(r.v))+'</span>') +
+        '<a href="'+esc(r.l.url)+'" target="_blank" rel="noopener">'+pubLabel(r.i)+'</a>' + (scope() ? '' : '<span class="hint">'+esc(managerLabel(r.v))+'</span>') +
         (r.st === 'nodate' ? '<button class="btn ghost sm" data-open-vac="'+r.id+'">Указать дату</button>' : '<button class="btn sm" data-extend="'+r.id+'" data-i="'+r.i+'">Продлить на месяц</button>') +
         (r.st === 'expired' ? '<button class="btn ghost sm" data-stop="'+r.id+'" data-i="'+r.i+'" title="Публикация остаётся в истории как снятая и больше не напоминает">Не продлеваем</button>' : '') + '</div>';
     }).join('') + '<p class="hint">Публикация в архиве не считается открытой вакансией в метриках дня. Продление — от даты архивации, если срок уже вышел — с сегодня.</p></div>';
@@ -1028,7 +1028,7 @@ function hiringReport(){
   var cols = ['Вакансия', 'Отдел', 'Заказчик', 'Нужно людей', 'В работе с', 'Дней в работе', 'Публикации', 'Офферы', 'Комментарий'];
   var RIGHT = {3:1, 4:1, 5:1, 7:1};
   function cells(v){ return [v.title, v.dept || '—', v.customer || '—', fmt(needOf(v)) + (isMulti(v) ? ' из ' + v.seats.length : ''), shortDate(vacStart(v)), daysInWork(v) === null ? '—' : daysInWork(v),
-    linkObjs(v).map(function(l, j){ return 'hh ' + (j+1) + ': ' + linkNote(l); }).join('; ') || 'нет', num(v.offersSent) ? (v.offersAccepted || 0) + ' из ' + v.offersSent : '—', v.comment || '']; }
+    linkObjs(v).map(function(l, j){ return pubLabel(j) + ': ' + linkNote(l); }).join('; ') || 'нет', num(v.offersSent) ? (v.offersAccepted || 0) + ' из ' + v.offersSent : '—', v.comment || '']; }
   function sortByAge(list){ return list.slice().sort(function(a, b){ return (daysInWork(b) || 0) - (daysInWork(a) || 0); }); }
   var title = 'Текущий найм на ' + date + (scope() ? ' — ' + fullName(scope()) : '');
   var summary = 'В работе ' + act.length + ' ' + plural(act.length, 'вакансия', 'вакансии', 'вакансий') + ', нужно ' + fmt(need(act)) + ' ' + plural(Math.round(need(act)), 'человек', 'человека', 'человек') + '.';
@@ -1042,7 +1042,7 @@ function hiringReport(){
           return '<tr>' + cells(v).map(function(c, i){
             var lo = linkObjs(v), inner = i === 0 && lo.length ? '<a href="'+esc(lo[0].url)+'" style="color:#007026">'+esc(c)+'</a>'
               : i === 6 && lo.length ? lo.map(function(l, j){ var st = linkState(l);
-                  return '<a href="'+esc(l.url)+'" style="color:'+(st === 'expired' ? '#B4321F;font-weight:bold' : st === 'soon' || st === 'nodate' ? '#7A5310' : '#007026')+'">hh '+(j+1)+'</a> '+esc(linkNote(l)); }).join('<br>') : esc(c);
+                  return '<a href="'+esc(l.url)+'" style="color:'+(st === 'expired' ? '#B4321F;font-weight:bold' : st === 'soon' || st === 'nodate' ? '#7A5310' : '#007026')+'">'+pubLabel(j)+'</a> '+esc(linkNote(l)); }).join('<br>') : esc(c);
             return '<td style="'+td+(RIGHT[i] ? 'text-align:right;white-space:nowrap;' : '')+(i === 6 ? 'white-space:nowrap;' : '')+(i === 5 && daysInWork(v) > 60 ? 'background:#FBF0DA;font-weight:bold;' : '')+'">'+inner+'</td>';
           }).join('') + '</tr>';
         }).join('') + '</table>';
@@ -1063,6 +1063,8 @@ function linkObjs(v){
     return typeof l === 'string' ? {url:l, at:vacStart(v), closedAt:v.archivedAt || '', ext:num(v.extensions) ? v.extensions : 0} : l;
   });
 }
+// Подпись публикации на hh.ru: «hh.ru p.1», «hh.ru p.2» — p = публикация
+function pubLabel(i){ return 'hh.ru p.' + (i + 1); }
 function vacLinks(v){ return linkObjs(v).map(function(l){ return l.url; }); }
 function addMonths(s, n){
   var d = parse(s), day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + n);
@@ -1092,7 +1094,7 @@ function pubsHtml(v){
   var l = linkObjs(v); if(!l.length) return '';
   return '<span class="pubs">' + l.map(function(x, i){
     var st = isActive(v) ? linkState(x) : 'ok';
-    return '<a href="'+esc(x.url)+'" target="_blank" rel="noopener" class="pub-'+st+'" title="'+esc(linkNote(x))+'">hh '+(i+1)+(isActive(v) ? ' · '+esc(linkNote(x)) : '')+'</a>';
+    return '<a href="'+esc(x.url)+'" target="_blank" rel="noopener" class="pub-'+st+'" title="'+esc(linkNote(x))+'">'+pubLabel(i)+(isActive(v) ? ' · '+esc(linkNote(x)) : '')+'</a>';
   }).join('') + '</span>';
 }
 function linkRow(l){
