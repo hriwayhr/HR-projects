@@ -35,7 +35,11 @@ def metric_key(label):
     return next((k for p, k in METRICS if s.startswith(p)), None)
 
 
-def parse_sheet(ws):
+OFF_MARKS = {'о', 'o', 'отпуск', 'в', 'выходной'}   # «о» — отпуск, «в» — выходной
+
+
+def parse_sheet(ws, off=None):
+    """Метрики по дням; даты с отметками отпуска/выходного складываются в множество off."""
     out = {}
     year, month, dates = 2024, None, {}
     for row in ws.iter_rows(values_only=True):
@@ -65,6 +69,11 @@ def parse_sheet(ws):
             continue
         for i, day in dates.items():
             v = row[i] if i < len(row) else None
+            if off is not None and isinstance(v, str) and v.strip().lower() in OFF_MARKS:
+                try:
+                    off.add(dt.date(year, month, day).isoformat())
+                except ValueError:
+                    pass
             if isinstance(v, (int, float)) and not isinstance(v, bool):
                 try:
                     iso = dt.date(year, month, day).isoformat()
@@ -134,9 +143,28 @@ def parse_vacancies(ws):
     return docs
 
 
+def periods(days):
+    """Даты → отрезки {from, to}; выходные между днями отпуска не рвут отрезок."""
+    out = []
+    for d in sorted(dt.date.fromisoformat(x) for x in days):
+        if out and (d - dt.date.fromisoformat(out[-1]['to'])).days <= 3 and all(
+                (dt.date.fromisoformat(out[-1]['to']) + dt.timedelta(i)).weekday() >= 5
+                for i in range(1, (d - dt.date.fromisoformat(out[-1]['to'])).days)):
+            out[-1]['to'] = d.isoformat()
+        else:
+            out.append({'from': d.isoformat(), 'to': d.isoformat()})
+    return out
+
+
 def main(path):
     wb = openpyxl.load_workbook(path)
-    docs = to_docs({p: parse_sheet(wb[p]) for p in PEOPLE})
+    off = {p: set() for p in PEOPLE}
+    data = {p: parse_sheet(wb[p], off[p]) for p in PEOPLE}
+    docs = to_docs(data)
+    for name, pid in PEOPLE.items():
+        days = {d for d in off[name] if not data[name].get(d)}   # день с цифрами — рабочий, даже если где-то «о»
+        if days:
+            docs[f'vacations/{pid}'] = {'list': periods(days)}
     docs.update(parse_vacancies(wb['вакансии в работе']))
     json.dump(docs, sys.stdout, ensure_ascii=False)
 

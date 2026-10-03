@@ -136,6 +136,25 @@
   .pill.active{background:var(--tint); color:var(--good);}
   .pill.hire{background:var(--accent-deep); color:var(--accent-ink);}
   .pill.long{background:var(--warn-bg); color:var(--warn-ink);}
+  .pill.vac{background:var(--off-bg); color:var(--ink-2);}
+  .todo{margin-bottom:18px;}
+  .todo.done{background:var(--tint); border-color:var(--tint); color:var(--good);}
+  .todo-row{display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; padding-block:6px; border-bottom:1px solid var(--line);}
+  .todo-row:last-of-type{border-bottom:0;}
+  .todo-row b{min-width:150px;}
+  .miss{border:1px solid var(--warn-ink); background:var(--warn-bg); color:var(--warn-ink); border-radius:999px; padding:2px 10px; font-size:13px; font-weight:600;}
+  .chip.vac{background:var(--off-bg); color:var(--ink-2);}
+  .cal{border-collapse:separate; border-spacing:3px; width:auto; margin-top:10px;}
+  .cal th,.cal td{border:0; padding:0; text-align:center;}
+  .cal thead th{font-size:10px; letter-spacing:0; text-transform:none; min-width:26px;}
+  .cal td.n{text-align:left; padding-right:8px; font-size:13px; white-space:nowrap;}
+  .cal button{width:26px; height:24px; border-radius:6px; border:0; padding:0; font-size:11px; font-weight:700; background:var(--off-bg); color:var(--ink-3);}
+  .cal .ok{background:var(--accent); color:var(--accent-ink);}
+  .cal .missing{background:var(--warn-bg); color:var(--warn-ink); box-shadow:inset 0 0 0 1.5px var(--warn-ink);}
+  .cal .today{background:var(--surface); box-shadow:inset 0 0 0 1.5px var(--ink-3);}
+  .cal .vac{background:var(--off-bg); color:var(--ink-2);}
+  .cal .off{background:none;}
+  .cal .cur{outline:2px solid var(--ink); outline-offset:1px;}
 </style>
 
 <div class="wrap">
@@ -179,6 +198,7 @@
         <button class="icon" id="dNext" aria-label="Следующий день">›</button>
       </div>
     </div>
+    <div class="panel todo" id="dTodo"></div>
     <div class="chips" id="dChips"></div>
     <div class="tiles" id="dTiles"></div>
     <div class="grid2">
@@ -276,6 +296,28 @@
     </div>
   </section>
 
+  <!-- Отпуск -->
+  <section id="viewVacation" hidden>
+    <div class="bar"><h2 id="oTitle">Отпуск</h2><span class="sub">Дни отпуска не считаются пропусками и не подсвечиваются на дашборде.</span></div>
+    <div class="stack">
+      <div class="panel">
+        <p id="oNow" class="mt" style="margin-top:0"></p>
+        <form class="who mt" id="oForm" autocomplete="off">
+          <label class="f" id="oPersonWrap">Сотрудник<select id="oPerson"></select></label>
+          <label class="f">С<input type="date" id="oFrom" required></label>
+          <label class="f">По<input type="date" id="oTo" required></label>
+          <button class="btn" type="submit">Поставить «в отпуске»</button>
+          <span class="status" id="oStat" role="status"></span>
+        </form>
+      </div>
+      <div class="panel">
+        <h3>Отпуска</h3>
+        <div class="scroll"><table id="oTable"></table></div>
+        <p class="hint mt">Отпуска до 28 сентября 2026 перенесены из таблицы (отметки «о», «отпуск», «в»). Пустые дни до этой даты тоже считаются отпуском — их не нужно вносить.</p>
+      </div>
+    </div>
+  </section>
+
   <!-- Команда (администратор) -->
   <section id="viewTeam" hidden>
     <div class="bar"><h2>Команда</h2><span class="sub">Каждый входит по своему логину и паролю. Администратор видит всю команду и настройки, рекрутер — только себя.</span></div>
@@ -348,6 +390,9 @@ var db = null, isOwner = false;
 var team = {}, teamLoaded = false; // id → {name, surname, login, salt, hash, order, admin, recruiter, archived}
 var metrics = null;                // [{k, t, g, off, custom}] из config/metrics; null — встроенный набор
 var vacancies = {};                // id → вакансия
+var vacations = {};                // id пользователя → [{from, to}]
+var COLLECT_START = '2024-07-01';  // с июля 2024 метрики собираются в таблице
+var CHECK_FROM = '2026-09-28';     // неделя перехода: пустые дни раньше — отпуск («о» в таблице), пропуском не считаются
 var byDate = {};                   // 'YYYY-MM-DD' → pid → {метрика: число}
 var months = {};                   // id документа → документ
 var session = null;                // {id} — id пользователя в config/team
@@ -426,6 +471,107 @@ function sum(day, ps, k){
 function pct(a, b){ return num(a) && b ? Math.round(a / b * 100) + '%' : '—'; }
 function weekKey(s){ var d = parse(s), wd = (d.getDay() + 6) % 7; d.setDate(d.getDate() - wd); return iso(d); }
 
+// ---------- пропуски и отпуска ----------
+function addDays(s, n){ var d = parse(s); d.setDate(d.getDate() + n); return iso(d); }
+function isWeekend(s){ var w = parse(s).getDay(); return w === 0 || w === 6; }
+function vacationOf(p, d){ return (vacations[p] || []).filter(function(v){ return v.from <= d && d <= v.to; })[0] || null; }
+function hasDay(p, d){ var m = (byDate[d] || {})[p]; return !!(m && Object.keys(m).length); }
+// Состояние дня рекрутера: ok — внесено, missing — надо внести, today — сегодня ещё не внесено,
+// vac — отпуск, off — выходной / до начала работы / в архиве / будущее
+function dayStatus(p, d){
+  var t = team[p];
+  if(hasDay(p, d)) return 'ok';
+  if(vacationOf(p, d)) return 'vac';
+  if(isWeekend(d) || d < COLLECT_START || (t.since && d < t.since) || d > today()) return 'off';
+  if(t.archived && (!t.archivedAt || d >= t.archivedAt)) return 'off';
+  if(d < CHECK_FROM) return 'vac';
+  return d === today() ? 'today' : 'missing';
+}
+function missingDays(p){
+  var out = [], from = CHECK_FROM > (team[p].since || '') ? CHECK_FROM : team[p].since;
+  for(var d = from; d < today(); d = addDays(d, 1)) if(dayStatus(p, d) === 'missing') out.push(d);
+  return out;
+}
+var STATUS_TEXT = {ok:'внесено', missing:'нужно внести', today:'сегодня ещё не внесено', vac:'отпуск', off:'выходной'};
+function openEntry(p, d){ showView('entry'); if(!scope()) $('fPerson').value = p; $('fDate').value = d; loadForm(); $('fGroups').querySelector('input') && $('fGroups').querySelector('input').focus(); }
+function renderTodo(){
+  var ps = scope() ? [scope()] : activePeople(), box = $('dTodo');
+  var miss = ps.map(function(p){ return [p, missingDays(p)]; }).filter(function(x){ return x[1].length; });
+  var head = miss.length
+    ? '<h3>Нужно внести: ' + miss.reduce(function(s, x){ return s + x[1].length; }, 0) + ' ' + plural(miss.reduce(function(s, x){ return s + x[1].length; }, 0), 'день', 'дня', 'дней') + '</h3>' +
+      miss.map(function(x){
+        return '<div class="todo-row"><b>'+esc(label(x[0]))+'</b>' + x[1].map(function(d){
+          var p = parse(d); return '<button class="miss" data-p="'+x[0]+'" data-d="'+d+'" title="Внести '+human(d)+'">'+p.getDate()+'.'+String(p.getMonth()+1).padStart(2,'0')+' '+WD[p.getDay()]+'</button>';
+        }).join('') + '</div>';
+      }).join('')
+    : '<h3>Все рабочие дни внесены</h3><p class="hint">Проверяются будни с ' + human(CHECK_FROM) + '; отпуск и выходные не в счёт.</p>';
+  // сетка последних 15 рабочих дней: видно, что внесено, что нет, где отпуск
+  var days = [], d = today();
+  while(days.length < 15){ if(!isWeekend(d)) days.unshift(d); d = addDays(d, -1); }
+  var grid = '<div class="scroll"><table class="cal"><thead><tr><th></th>' + days.map(function(x){ var p = parse(x); return '<th>'+WD[p.getDay()]+'<br>'+p.getDate()+'</th>'; }).join('') + '</tr></thead><tbody>' +
+    ps.map(function(p){
+      return '<tr><td class="n">'+esc(label(p))+'</td>' + days.map(function(x){
+        var st = dayStatus(p, x);
+        return '<td><button class="'+st+(x === state.date ? ' cur' : '')+'" data-p="'+p+'" data-d="'+x+'" data-st="'+st+'" title="'+esc(team[p].name)+', '+human(x)+': '+STATUS_TEXT[st]+'">'+(st === 'vac' ? 'О' : st === 'missing' ? '!' : '')+'</button></td>';
+      }).join('') + '</tr>';
+    }).join('') + '</tbody></table></div>' +
+    '<div class="legend"><span><i style="background:var(--accent)"></i>внесено</span><span><i style="background:var(--warn-bg);box-shadow:inset 0 0 0 1.5px var(--warn-ink)"></i>нужно внести</span><span><i style="background:var(--off-bg)"></i>О — отпуск</span></div>';
+  box.className = 'panel todo' + (miss.length ? '' : ' done');
+  box.innerHTML = head + (ps.length ? grid : '');
+}
+function todoClick(e){
+  var b = e.target.closest('button[data-d]'); if(!b) return;
+  if(b.classList.contains('miss') || b.dataset.st === 'missing' || b.dataset.st === 'today') openEntry(b.dataset.p, b.dataset.d);
+  else { state.date = b.dataset.d; renderDay(); }
+}
+function plural(n, one, few, many){
+  var m10 = n % 10, m100 = n % 100;
+  return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20) ? few : many;
+}
+
+// ---------- отпуск ----------
+function workdays(a, b){ var n = 0; for(var d = a; d <= b; d = addDays(d, 1)) if(!isWeekend(d)) n++; return n; }
+function renderVacation(){
+  var p = scope(), ps = p ? [p] : activePeople();
+  $('oTitle').textContent = p ? 'Мой отпуск' : 'Отпуска';
+  $('oPersonWrap').hidden = !!p;
+  var cur = $('oPerson').value;
+  $('oPerson').innerHTML = ps.map(function(x){ return '<option value="'+x+'">'+esc(label(x))+'</option>'; }).join('');
+  if(ps.indexOf(cur) >= 0) $('oPerson').value = cur;
+  if(!$('oFrom').value){ $('oFrom').value = today(); $('oTo').value = today(); }
+  var now = ps.map(function(x){ var v = vacationOf(x, today()); return v ? esc(fullName(x)) + ' — в отпуске до ' + shortDate(v.to) : null; }).filter(Boolean);
+  $('oNow').innerHTML = now.length ? '<span class="pill vac">сейчас</span> ' + now.join('; ') : (p ? 'Сейчас вы работаете — статус «в отпуске» не стоит.' : 'Сейчас в отпуске никого нет.');
+  var rows = [];
+  (p ? [p] : recruiters()).forEach(function(x){ (vacations[x] || []).forEach(function(v, i){ rows.push({p:x, i:i, v:v}); }); });
+  rows.sort(function(a, b){ return b.v.from.localeCompare(a.v.from); });
+  var t = today();
+  $('oTable').innerHTML = '<thead><tr>'+(p ? '' : '<th>Сотрудник</th>')+'<th class="l">С</th><th class="l">По</th><th>Рабочих дней</th><th class="l">Статус</th><th></th></tr></thead><tbody>' +
+    (rows.length ? rows.slice(0, 40).map(function(r){
+      var st = r.v.to < t ? 'прошёл' : r.v.from > t ? 'впереди' : 'идёт';
+      return '<tr'+(st === 'прошёл' ? ' class="off"' : '')+'>'+(p ? '' : '<td>'+esc(label(r.p))+'</td>')+'<td class="l">'+shortDate(r.v.from)+'</td><td class="l">'+shortDate(r.v.to)+'</td><td>'+workdays(r.v.from, r.v.to)+'</td>' +
+        '<td class="l"><span class="pill '+(st === 'идёт' ? 'vac' : st === 'впереди' ? 'active' : '')+'">'+st+'</span></td>' +
+        '<td><div class="row-actions">'+(r.v.to >= CHECK_FROM ? '<button class="btn danger sm" data-p="'+r.p+'" data-i="'+r.i+'">Убрать</button>' : '')+'</div></td></tr>';
+    }).join('') : '<tr><td colspan="6" class="empty">Отпусков нет.</td></tr>') + '</tbody>';
+}
+function saveVacations(p, list, msg){
+  $('oStat').className = 'status';
+  list = list.slice().sort(function(a, b){ return a.from.localeCompare(b.from); });
+  return db.doc('vacations/' + p).set({list:list}).then(function(){ $('oStat').textContent = msg; },
+    function(err){ $('oStat').className = 'status err'; $('oStat').textContent = writeError(err); });
+}
+function addVacation(e){
+  e.preventDefault();
+  var p = scope() || $('oPerson').value, from = $('oFrom').value, to = $('oTo').value;
+  if(!db || !p) return;
+  if(to < from){ $('oStat').className = 'status err'; $('oStat').textContent = '«По» раньше, чем «С».'; return; }
+  saveVacations(p, (vacations[p] || []).concat([{from:from, to:to}]), fullName(p) + ': в отпуске с ' + shortDate(from) + ' по ' + shortDate(to) + '.');
+}
+function removeVacation(e){
+  var b = e.target.closest('button[data-i]'); if(!b || !db) return;
+  var p = b.dataset.p, list = (vacations[p] || []).slice(), v = list.splice(+b.dataset.i, 1)[0];
+  saveVacations(p, list, 'Отпуск ' + shortDate(v.from) + '–' + shortDate(v.to) + ' убран — эти дни снова нужно вносить.');
+}
+
 // ---------- дашборд дня ----------
 function tile(k, v, prev, opts){
   opts = opts || {};
@@ -444,9 +590,10 @@ function renderDay(){
   $('dNext').disabled = !nextDate(day, ps) && day >= today();
 
   var rows = dayPeople(day);
+  renderTodo();
   $('dChips').innerHTML = scope() ? '' : rows.map(function(p){
-    var ok = row[p] && Object.keys(row[p]).length;
-    return '<span class="chip'+(ok ? ' ok' : '')+'">'+esc(label(p))+(ok ? ' — внесено' : ' — нет данных')+'</span>';
+    var st = dayStatus(p, day), cls = st === 'ok' ? ' ok' : st === 'vac' || st === 'off' ? ' vac' : '';
+    return '<span class="chip'+cls+'">'+esc(label(p))+' — '+STATUS_TEXT[st]+'</span>';
   }).join('');
 
   var pl = sum(day, ps, 'int_planned'), dn = sum(day, ps, 'int_done');
@@ -773,7 +920,7 @@ function addUser(e){
   var name = $('tName').value.trim(), login = norm($('tLogin').value), pw = newPassword(), bad = loginError(login);
   if(bad){ tStat(esc(bad), true); return; }
   var id = 'p' + Date.now().toString(36);
-  var rec = {name:name, surname:$('tSurname').value.trim(), login:login, order:allPeople().length + 1, admin:$('tAdmin').checked, recruiter:$('tRecr').checked};
+  var rec = {name:name, surname:$('tSurname').value.trim(), login:login, order:allPeople().length + 1, admin:$('tAdmin').checked, recruiter:$('tRecr').checked, since:today()};
   withPassword(rec, pw).then(function(r){ var next = Object.assign({}, team); next[id] = r; return saveTeam(next); })
     .then(function(){ tStat('Добавлен(а) ' + esc(name) + ' (' + roleText(rec) + '): ' + shownSecret(login, pw)); $('tUserForm').reset(); },
           function(err){ tStat(esc(writeError(err)), true); });
@@ -844,10 +991,10 @@ function validSession(){ var t = me(); return !!(t && !t.archived && t.hash); }
 
 // ---------- маршрутизация ----------
 var TABS = {
-  admin: [['day','Дашборд дня'], ['entry','Внести день'], ['sum','Сводка'], ['vac','Вакансии'], ['team','Команда'], ['metrics','Метрики']],
-  rec:   [['day','Мой день'], ['entry','Внести день'], ['sum','Моя сводка'], ['vac','Мои вакансии']]
+  admin: [['day','Дашборд дня'], ['entry','Внести день'], ['sum','Сводка'], ['vac','Вакансии'], ['vacation','Отпуска'], ['team','Команда'], ['metrics','Метрики']],
+  rec:   [['day','Мой день'], ['entry','Внести день'], ['sum','Моя сводка'], ['vac','Мои вакансии'], ['vacation','Мой отпуск']]
 };
-var VIEWS = ['login','day','entry','sum','vac','team','metrics'];
+var VIEWS = ['login','day','entry','sum','vac','vacation','team','metrics'];
 function route(){
   if(!teamLoaded) return;   // ждём базу
   if(session && !validSession()){ session = null; store('hrSession', null); }
@@ -862,7 +1009,7 @@ function route(){
   $('tabs').innerHTML = tabs.map(function(t){ return '<button role="tab" id="tab_'+t[0]+'" data-view="'+t[0]+'">'+t[1]+'</button>'; }).join('');
   $('me').hidden = false;
   $('meName').textContent = fullName(session.id);
-  $('meRole').textContent = isAdmin() ? 'администратор' : 'рекрутер';
+  $('meRole').textContent = (isAdmin() ? 'администратор' : 'рекрутер') + (vacationOf(session.id, today()) ? ' · в отпуске' : '');
   fillPeople();
   $('fPersonWrap').hidden = !!scope();
   var want = state.view || load('hrView');
@@ -877,7 +1024,7 @@ function showView(view){
   if(view === 'entry' && changed) loadForm();
   render();
 }
-var RENDER = {day:renderDay, sum:renderSum, vac:renderVac, team:renderTeam, metrics:renderMetrics};
+var RENDER = {day:renderDay, sum:renderSum, vac:renderVac, vacation:renderVacation, team:renderTeam, metrics:renderMetrics};
 function render(){
   if(!state.date) state.date = today();
   if(state.view && RENDER[state.view]) RENDER[state.view]();
@@ -923,6 +1070,8 @@ $('tUsers').onclick = teamAction; $('tUsers').onchange = teamEdit; $('tArchive')
 $('tUserForm').onsubmit = addUser;
 $('mTable').onclick = metricEdit; $('mTable').onchange = metricEdit;
 $('mForm').onsubmit = addMetric;
+$('dTodo').onclick = todoClick;
+$('oForm').onsubmit = addVacation; $('oTable').onclick = removeVacation;
 
 function offline(){ $('offline').hidden = false; teamLoaded = true; route(); }
 var api = window.claude;
@@ -933,6 +1082,7 @@ var api = window.claude;
   db.doc('config/team').onSnapshot(function(s){ team = (s.exists && s.data().people) || {}; teamLoaded = true; fillPeople(); route(); }, offline);
   db.doc('config/metrics').onSnapshot(function(s){ metrics = (s.exists && s.data().list) || null; buildForm(); render(); }, function(){});
   db.collection('months').onSnapshot(ingest, offline);
+  db.collection('vacations').onSnapshot(function(s){ vacations = {}; s.docs.forEach(function(x){ vacations[x.id] = x.data().list || []; }); if(session) route(); }, function(){});
   db.collection('vacancies').onSnapshot(function(s){ vacancies = {}; s.docs.forEach(function(x){ vacancies[x.id] = x.data(); }); if(state.view === 'vac') renderVac(); }, function(){});
 }, offline);
 </script>

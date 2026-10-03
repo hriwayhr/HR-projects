@@ -47,6 +47,17 @@ with sync_playwright() as p:
     tiles = pg.inner_text('#dTiles')
     for want in ('3 из 4', '+25 п.п.', 'Открытые вакансии\n14', '+11', 'Чаты\n3'): assert want in tiles, (want, tiles)
 
+    # 2a. пропуски: будни с 28.09 без цифр подсвечены, клик ведёт в форму на этот день
+    todo = pg.inner_text('#dTodo')
+    assert 'Нужно внести' in todo and '28.09 пн' in todo and '30.09 ср' in todo, todo
+    assert pg.evaluate("dayStatus('yulia', '2026-09-30')") == 'ok' and pg.evaluate("dayStatus('yulia', '2026-09-25')") == 'vac'   # до недели перехода — отпуск
+    assert pg.evaluate("dayStatus('yulia', '2026-09-27')") == 'off'   # воскресенье
+    pg.click('#dTodo button.miss[data-p=anna][data-d="2026-09-28"]'); pg.wait_for_timeout(200)
+    assert pg.is_visible('#viewEntry') and pg.input_value('#fPerson') == 'anna' and pg.input_value('#fDate') == '2026-09-28'
+    pg.screenshot(path=str(HERE / 'shots' / 'hr-todo-entry.png'))
+    pg.click('#tab_day'); pg.wait_for_timeout(100)
+    pg.screenshot(path=str(HERE / 'shots' / 'hr-day-todo.png'), full_page=True)
+
     # 3. команда: логин Анне, пароль; новый рекрутер
     pg.click('#tab_team')
     L = '#tUsers input[data-p=anna][data-f=login]'
@@ -107,7 +118,16 @@ with sync_playwright() as p:
     t = pg.inner_text('#dTiles'); assert 'Открытые вакансии\n5' in t, t   # только Анна, без Юли
     assert pg.inner_text('#dChips') == ''
     pg.click('#tab_vac'); pg.wait_for_timeout(100)
-    assert 'Вакансий нет' in pg.inner_text('#vTable')   # у Анны нет фамилии — в «Ответственном» её нет
+    assert 'Вакансий нет' in pg.inner_text('#vTable')
+    # «Мой отпуск»: отпуск убирает дни из пропусков и ставит статус
+    pg.click('#tab_vacation'); assert not pg.is_visible('#oPerson')
+    pg.fill('#oFrom', '2026-09-28'); pg.fill('#oTo', '2030-01-01'); pg.click('#oForm button[type=submit]'); pg.wait_for_timeout(300)
+    assert pg.evaluate("window.__store['vacations/anna'].list") == [{'from': '2026-09-28', 'to': '2030-01-01'}]
+    assert 'в отпуске' in pg.inner_text('#meRole') and 'идёт' in pg.inner_text('#oTable')
+    pg.click('#tab_day'); pg.wait_for_timeout(100)
+    assert 'Все рабочие дни внесены' in pg.inner_text('#dTodo'), pg.inner_text('#dTodo')
+    pg.click('#tab_vacation'); pg.click('#oTable button[data-i="0"]'); pg.wait_for_timeout(300)
+    assert pg.evaluate("window.__store['vacations/anna'].list") == []   # у Анны нет фамилии — в «Ответственном» её нет
 
     # 8. администратор отправляет Анну в архив — её сессия закрывается, история остаётся с пометкой
     pg.click('#logout'); pg.fill('#lLogin', 'admin'); pg.fill('#lPass', 'secret1'); pg.click('#lSubmit'); pg.wait_for_timeout(300)
