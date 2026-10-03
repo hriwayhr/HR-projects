@@ -145,6 +145,8 @@
   .wk th.now,.wk td.now{background:var(--paper);}
   .wk td.sum,.wk th.sum{background:var(--tint); color:var(--good); font-weight:700;}
   .wk tbody td:first-child{white-space:normal; min-width:200px;}
+  .month-head{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; margin-bottom:12px;}
+  .month-head h3{margin:0;}
   .cv{display:grid; gap:10px; font-size:14px;}
   .cv div{display:flex; justify-content:space-between; gap:12px; border-bottom:1px solid var(--line); padding-bottom:6px;}
   .cv b{font-size:18px;}
@@ -739,7 +741,49 @@ function weeklyTotals(ps, extra){
   });
   return out;
 }
+var sumReports = {};
+// Отчёт для письма: таблица со встроенными стилями (почтовики не читают <style>) и текст через табуляцию для Excel
+function reportHtml(r){
+  var td = 'border:1px solid #C9D3C3;padding:4px 10px;font:14px Arial,sans-serif;white-space:nowrap;';
+  return '<p style="font:bold 16px Arial,sans-serif;margin:0 0 8px">HR-метрики: ' + esc(r.title) + '</p>' +
+    '<table cellspacing="0" cellpadding="0" style="border-collapse:collapse">' +
+    '<tr><th style="'+td+'text-align:left;background:#E4F1E8">Показатель</th>' + r.heads.map(function(h){ return '<th style="'+td+'text-align:right;background:#E4F1E8">'+esc(h[0])+'<br><span style="font-weight:normal;font-size:12px">'+esc(h[1])+'</span></th>'; }).join('') +
+    '<th style="'+td+'text-align:right;background:#007026;color:#FFFFFF">Итого</th></tr>' +
+    r.rows.map(function(row){
+      return '<tr>' + row.map(function(c, i){ var last = i === row.length - 1;
+        return '<td style="'+td+(i ? 'text-align:right;' : '')+(last ? 'font-weight:bold;background:#E4F1E8;' : '')+'">'+esc(c)+'</td>'; }).join('') + '</tr>';
+    }).join('') + '</table>' +
+    '<p style="font:14px Arial,sans-serif;margin:10px 0 0">' + r.cv.map(function(c){ return esc(c[0]) + ': <b>' + esc(c[1]) + '</b>'; }).join('<br>') + '</p>';
+}
+function reportText(r){
+  return 'HR-метрики: ' + r.title + '\n' + ['Показатель'].concat(r.heads.map(function(h){ return h[0] + ' (' + h[1] + ')'; }), ['Итого']).join('\t') + '\n' +
+    r.rows.map(function(row){ return row.join('\t'); }).join('\n') + '\n\n' + r.cv.map(function(c){ return c[0] + ': ' + c[1]; }).join('\n');
+}
+function copyReport(e){
+  var b = e.target.closest('button[data-copy]'); if(!b) return;
+  var r = sumReports[b.dataset.copy], st = b.nextElementSibling, html = reportHtml(r), text = reportText(r);
+  function done(){ st.className = 'status'; st.textContent = 'Скопировано — вставьте в письмо или в Excel.'; setTimeout(function(){ st.textContent = ''; }, 4000); }
+  function legacy(){
+    var holder = document.createElement('div');
+    holder.setAttribute('contenteditable', 'true');
+    holder.style.cssText = 'position:fixed; left:-10000px; top:0;';
+    holder.innerHTML = html; document.body.appendChild(holder);
+    var range = document.createRange(); range.selectNodeContents(holder);
+    var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    var ok = false; try{ ok = document.execCommand('copy'); }catch(err){}
+    sel.removeAllRanges(); document.body.removeChild(holder);
+    if(ok) done(); else { st.className = 'status err'; st.textContent = 'Браузер не дал скопировать — выделите таблицу мышью и нажмите Ctrl+C.'; }
+  }
+  try{
+    if(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write){
+      navigator.clipboard.write([new ClipboardItem({'text/html': new Blob([html], {type:'text/html'}), 'text/plain': new Blob([text], {type:'text/plain'})})]).then(done, legacy);
+      return;
+    }
+  }catch(err){}
+  legacy();
+}
 function renderSum(){
+  sumReports = {};
   var who = scope() || $('sPerson').value, extra = customMetrics();
   $('sPerson').hidden = !!scope();
   var weeks = weeklyTotals(who ? [who] : recruiters(), extra.map(function(m){ return m.k; }));
@@ -766,6 +810,18 @@ function renderSum(){
       var a = parse(k), b = parse(addDays(k, 4));
       return '<th'+(k === curWeek ? ' class="now"' : '')+'>'+isoWeekNo(k)+'<small>'+a.getDate()+'.'+String(a.getMonth()+1).padStart(2,'0')+'–'+b.getDate()+'.'+String(b.getMonth()+1).padStart(2,'0')+(k === curWeek ? ', идёт' : '')+'</small></th>';
     }).join('') + '<th class="sum">sum</th></tr></thead>';
+    var lines = [['Вакантных мест (на пятницу)', function(r){ return r.vacs; }, false], ['Новых вакансий', function(r){ return r.pub; }, true],
+      ['Назначенных собеседований', function(r){ return r.planned; }, true], ['Собеседований (факт)', function(r){ return r.done; }, true],
+      ['Выходов новых сотрудников', function(r){ return r.hires; }, true], ['Уволенных сотрудников', function(r){ return r.dis; }, true],
+      ['Отказов', function(r){ return r.rej; }, true]]
+      .concat(extra.map(function(x){ return [x.t, function(r){ return num(r.x[x.k]) ? r.x[x.k] : null; }, true]; }));
+    sumReports[m] = {
+      title: MONTHS[+m.slice(5) - 1] + ' ' + m.slice(0, 4) + ' — ' + (who ? fullName(who) : 'вся команда'),
+      heads: wk.map(function(k){ var a = parse(k), b = parse(addDays(k, 4)); return ['Неделя ' + isoWeekNo(k), a.getDate()+'.'+String(a.getMonth()+1).padStart(2,'0')+'–'+b.getDate()+'.'+String(b.getMonth()+1).padStart(2,'0') + (k === curWeek ? ', идёт' : '')]; }),
+      rows: lines.map(function(l){ var vals = W.map(function(r){ var v = l[1](r); return v === null || v === undefined ? '—' : v; });
+        return [l[0]].concat(vals, [l[2] ? total(function(r){ return l[1](r) || 0; }) : '']); }),
+      cv: [['Вакантных мест в среднем', avgVac === null ? '—' : String(avgVac).replace('.', ',')], ['Доходимость', pctFine(done, planned)], ['Выходы', pctFine(hires, done)]]
+    };
     var body = row('Вакантных мест (на пятницу)', function(r){ return r.vacs; }, false) +
       row('Новых вакансий', function(r){ return r.pub; }, true) +
       row('Назначенных собеседований', function(r){ return r.planned; }, true) +
@@ -774,7 +830,8 @@ function renderSum(){
       row('Уволенных сотрудников', function(r){ return r.dis; }, true) +
       row('Отказов', function(r){ return r.rej; }, true) +
       extra.map(function(x){ return row(esc(x.t), function(r){ return num(r.x[x.k]) ? r.x[x.k] : null; }, true); }).join('');
-    return '<div class="panel"><h3>'+MONTHS[+m.slice(5) - 1]+' '+m.slice(0, 4)+'</h3><div class="month-block">' +
+    return '<div class="panel"><div class="month-head"><h3>'+MONTHS[+m.slice(5) - 1]+' '+m.slice(0, 4)+'</h3>' +
+      '<button class="btn ghost sm" data-copy="'+m+'">Скопировать для отчёта</button><span class="status" role="status"></span></div><div class="month-block">' +
       '<div class="scroll"><table class="wk">'+head+'<tbody>'+body+'</tbody></table></div>' +
       '<div class="cv"><div><span>Вакантных мест в среднем</span><b>'+(avgVac === null ? '—' : String(avgVac).replace('.', ','))+'</b></div>' +
       '<div class="lbl">CV %</div><div><span>Доходимость</span><b>'+pctFine(done, planned)+'</b></div><div><span>Выходы</span><b>'+pctFine(hires, done)+'</b></div></div>' +
@@ -1102,7 +1159,7 @@ $('dPrev').onclick = function(){ var p = prevDate(state.date, visiblePeople()); 
 $('dNext').onclick = function(){ state.date = nextDate(state.date, visiblePeople()) || today(); renderDay(); };
 $('fPerson').onchange = loadForm; $('fDate').onchange = loadForm;
 $('dayForm').onsubmit = saveDay;
-$('sYear').onchange = renderSum; $('sPerson').onchange = renderSum;
+$('sYear').onchange = renderSum; $('sPerson').onchange = renderSum; $('sBlocks').onclick = copyReport;
 $('vSearch').oninput = renderVac; $('vStatus').onchange = renderVac; $('vManager').onchange = renderVac;
 $('vAdd').onclick = function(){ openVac(null); };
 $('vCancel').onclick = function(){ $('vEditor').hidden = true; editingVac = null; };

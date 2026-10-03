@@ -93,6 +93,15 @@ with sync_playwright() as p:
     assert 'Назначенных собеседований\t8\t8' in blk and 'Собеседований (факт)\t6\t6' in blk, blk
     assert 'Вакантных мест (на пятницу)\t—' in blk and 'Отклики hh\t7\t7' in blk, blk
     assert '75%' in blk and '16,7%' in blk, blk
+    # копирование для отчёта: в буфер уходят HTML-таблица и текст через табуляцию
+    pg.evaluate("""window.__clip = null; Object.defineProperty(navigator, 'clipboard', {configurable: true, value: {write: function(items){
+      return Promise.all(['text/html', 'text/plain'].map(function(t){ return items[0].getType(t).then(function(b){ return b.text(); }); }))
+        .then(function(v){ window.__clip = v; }); }}});""")
+    pg.click('#sBlocks button[data-copy="2026-10"]'); pg.wait_for_timeout(200)
+    html_, text_ = pg.evaluate('window.__clip')
+    assert '<table' in html_ and 'Неделя 40<br>' in html_ and '28.09–2.10' in html_ and 'Итого' in html_, html_[:300]
+    assert text_.startswith('HR-метрики: Октябрь 2026 — вся команда') and 'Неделя 40 (28.09–2.10' in text_ and 'Назначенных собеседований\t8\t8' in text_ and 'Доходимость: 75%' in text_, text_
+    assert 'Скопировано' in pg.inner_text('#sBlocks')
     pg.screenshot(path=str(HERE / 'shots' / 'hr-sum.png'), full_page=True)
 
     # 6. вакансии: в работе 1 (нужно 2 человека), скорость (30+50)/2 = 40
