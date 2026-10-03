@@ -25,6 +25,7 @@ function collRef(coll, filters){
     where: function(f, op, v){ return collRef(coll, filters.concat([[f, op, v]])); },
     limit: function(){ return collRef(coll, filters); },
     get: function(){ return query(coll, filters); },
+    doc: function(id){ return window.__db.doc(coll + '/' + (id || 'auto' + Math.random().toString(36).slice(2, 10))); },
     onSnapshot: function(next){
       var l = {coll: coll, filters: filters, cb: next};
       window.__listeners.push(l);
@@ -34,8 +35,9 @@ function collRef(coll, filters){
   };
 }
 window.claude = { use: function(name){
-  if(name === 'db') return Promise.resolve({
+  if(name === 'db') return Promise.resolve(window.__db = {
     doc: function(path){ return {
+      id: path.split('/').pop(),
       get: function(){ return Promise.resolve(snap(path)); },
       onSnapshot: function(next){
         var l = {coll: path, filters: [], cb: function(){ next(snap(path)); }};
