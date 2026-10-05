@@ -85,6 +85,8 @@ h1{font:clamp(26px,4vw,40px)/1.05 var(--f-display);margin:0;letter-spacing:.01em
 .ring .t{position:absolute;inset:0;display:grid;place-items:center;font:40px/1 var(--f-display);font-variant-numeric:tabular-nums}
 .ring.out .t{color:var(--bad)}
 .timer .row{display:flex;gap:8px}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:6px;width:100%}
+.modes .opt{padding:6px}
 .timer small{color:var(--muted);font-size:12px;text-align:center}
 
 .score-panel{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:12px}
@@ -158,7 +160,7 @@ h1{font:clamp(26px,4vw,40px)/1.05 var(--f-display);margin:0;letter-spacing:.01em
 <div class="screen" id="rulesScreen" hidden><div class="screen-in rules">
   <div class="case-head"><span class="chip">Правила</span><button class="btn" data-close>Закрыть</button></div>
   <h2>Как играем</h2>
-  <p>Игра для отработки алгоритма действий отдела контроля по предотвращению неподач в рамках политики Zero No Show. Три игрока, 9 кейсов, до 1,5 часов. Ведущий следит за ходом игры, эксперт оценивает полноту ответа и присваивает очки. На кейс — 5 минут.</p>
+  <p>Игра для отработки алгоритма действий отдела контроля по предотвращению неподач в рамках политики Zero No Show. Три игрока, 9 кейсов, до 1,5 часов. Ведущий следит за ходом игры, эксперт оценивает полноту ответа и присваивает очки. На ответ — 3 минуты, на добивку — 1 минута.</p>
   <h3>Ход игры</h3>
   <ol>
     <li>Первым начинает игрок, сидящий посередине. Он выбирает категорию и кейс.</li>
@@ -178,7 +180,8 @@ h1{font:clamp(26px,4vw,40px)/1.05 var(--f-display);margin:0;letter-spacing:.01em
 <div class="confirm" id="confirm" hidden><div><span id="confirmText"></span><div class="row"><button class="btn" id="confirmNo">Отмена</button><button class="btn primary" id="confirmYes">Да</button></div></div></div>
 
 <script>
-const TIME = 300, PRICE = 300;
+const MODES = { answer: 180, extra: 60 }, PRICE = 300;
+let TIME = MODES.answer;
 const CATS = [
   { name: "Согласования", cases: [3, 6, 7] },
   { name: "Задержки", cases: [2, 4, 5] },
@@ -255,7 +258,7 @@ function drawTimer() {
   const C = 2 * Math.PI * 52;
   r.querySelector(".bar").style.strokeDashoffset = C * (1 - left / TIME);
   r.querySelector(".t").textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
-  r.classList.toggle("low", left <= 60 && left > 0); r.classList.toggle("out", left === 0);
+  r.classList.toggle("low", left <= TIME / 3 && left > 0); r.classList.toggle("out", left === 0);
   $("#tGo").textContent = tick ? "Пауза" : left === TIME ? "Старт" : left ? "Дальше" : "Время вышло";
   $("#tGo").disabled = !left;
 }
@@ -269,6 +272,11 @@ function toggleTimer() {
   drawTimer();
 }
 function resetTimer() { clearInterval(tick); tick = null; left = TIME; drawTimer(); }
+function setMode(m) {
+  TIME = MODES[m];
+  document.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.mode === m));
+  resetTimer();
+}
 
 /* ---------- case screen ---------- */
 let open = null;
@@ -291,11 +299,12 @@ function openCase(n, skipBag) {
       <div class="case-text">${c.text.map((t) => `<p>${esc(t)}</p>`).join("")}<p class="task">${esc(c.task)}</p>
         ${c.qs.length ? `<ul class="qs">${c.qs.map((q) => `<li>${esc(q)}</li>`).join("")}</ul>` : ""}</div>
       <aside class="timer"><div class="ring" id="ring"><svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="52"/><circle class="bar" cx="60" cy="60" r="52" stroke-dasharray="${C}"/></svg><span class="t"></span></div>
-        <div class="row"><button class="btn primary" id="tGo"></button><button class="btn" id="tReset">Сброс</button></div><small>5 минут на кейс · пробел — старт/пауза</small></aside>
+        <div class="modes"><button class="opt" data-mode="answer"><b>3:00</b>Ответ</button><button class="opt" data-mode="extra"><b>1:00</b>Добивка</button></div>
+        <div class="row"><button class="btn primary" id="tGo"></button><button class="btn" id="tReset">Сброс</button></div><small>пробел — старт/пауза</small></aside>
     </div>
     <div class="score-panel"><h3>Очки — отмечает эксперт</h3><div class="awards" id="awards"></div>
       <div class="finish"><span class="hint">После завершения ход перейдёт к игроку по часовой стрелке.</span><button class="btn primary" id="done">Завершить кейс</button></div></div>`;
-  resetTimer(); drawAwards();
+  setMode("answer"); drawAwards();
 }
 function drawAwards() {
   const a = S.awards[open] || {};
@@ -341,6 +350,7 @@ document.addEventListener("click", (e) => {
   else if (t.id === "bagGo") openCase(BAG, true);
   else if (t.id === "tGo") toggleTimer();
   else if (t.id === "tReset") resetTimer();
+  else if (t.dataset.mode) setMode(t.dataset.mode);
   else if (t.id === "done") finishCase();
   else if (t.id === "rulesBtn") $("#rulesScreen").hidden = false;
   else if (t.id === "newBtn") ask("Начать новую игру? Очки и сыгранные кейсы обнулятся, имена игроков останутся.", () => { S = { ...fresh(), names: S.names }; render(); });
