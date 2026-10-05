@@ -96,6 +96,9 @@ h1{font:clamp(26px,4vw,40px)/1.05 var(--f-display);margin:0;letter-spacing:.01em
 .aw .who span:first-child{overflow-wrap:anywhere;min-width:0}
 .aw .got{font-family:var(--f-display);color:var(--gold);font-variant-numeric:tabular-nums;white-space:nowrap}
 .opts{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.own{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.own .inp{padding:6px 8px;flex:1;min-width:0}
+.own .inp.on{border-color:var(--gold);color:var(--gold)}
 .opt{border:1px solid var(--line);background:transparent;border-radius:6px;padding:8px 6px;font-size:13px;line-height:1.2;text-align:center}
 .opt b{display:block;font:16px/1.2 var(--f-display)}
 .opt:hover{border-color:var(--gold)}
@@ -368,6 +371,7 @@ function vSetup() {
     <div class="actions"><button class="btn primary" id="startBtn"${pickId ? "" : " disabled"}>Начать игру</button><span class="sub" id="setupMsg"></span></div>`;
 }
 
+const sign = (v) => (v > 0 ? "+" + v : String(v));
 const total = (p) => Object.values(S.awards).reduce((s, a) => s + (a[p] || 0), 0);
 const allKeys = () => S.game.cats.flatMap((c, ci) => c.cases.map((_, k) => `${ci}-${k}`));
 
@@ -380,7 +384,7 @@ function vBoard() {
     <main class="board" style="--n:${n}" aria-label="Игровое поле">${S.game.cats.map((c, ci) => `<div class="cat">${esc(c.name)}</div>` + c.cases.map((cs, k) => {
       const key = `${ci}-${k}`;
       if (!S.played[key]) return `<button class="cell" data-case="${key}" aria-label="${esc(c.name)}, ${cs.price}">${cs.price}</button>`;
-      const a = S.awards[key] || {}, who = [0, 1, 2].filter((p) => a[p]).map((p) => `${esc(S.names[p])} +${a[p]}`);
+      const a = S.awards[key] || {}, who = [0, 1, 2].filter((p) => a[p]).map((p) => `${esc(S.names[p])} ${sign(a[p])}`);
       return `<button class="cell done" data-case="${key}" title="Открыть снова"><b>${esc(c.name)} · ${cs.price}</b>${who.join("<br>") || "без очков"}</button>`;
     }).join("") + `<div aria-hidden="true" style="grid-column:span ${n - c.cases.length}"></div>`.repeat(n > c.cases.length ? 1 : 0)).join("")}</main>
     <section class="players" aria-label="Игроки">${S.names.map((nm, p) => `<div class="pl${S.turn === p ? " turn" : ""}">
@@ -539,8 +543,9 @@ function openCase(key, skipBag) {
 function drawAwards() {
   const a = S.awards[open] || {}, price = caseAt(open)[1].price;
   const opts = [[price, "Полный ответ"], [Math.round(price / 2), "Половина"], [50, "Дополнение"], [0, "Неверно"]];
-  $("#awards").innerHTML = S.names.map((nm, p) => `<div class="aw"><div class="who"><span>${esc(nm)}${S.turn === p ? " · выбирал" : ""}</span><span class="got">${a[p] != null ? "+" + a[p] : "—"}</span></div>
-    <div class="opts">${opts.map(([v, l]) => `<button class="opt" data-p="${p}" data-v="${v}" aria-pressed="${a[p] === v}"><b>${v ? "+" + v : "0"}</b>${l}</button>`).join("")}</div></div>`).join("");
+  $("#awards").innerHTML = S.names.map((nm, p) => `<div class="aw"><div class="who"><span>${esc(nm)}${S.turn === p ? " · выбирал" : ""}</span><span class="got">${a[p] != null ? sign(a[p]) : "—"}</span></div>
+    <div class="opts">${opts.map(([v, l]) => `<button class="opt" data-p="${p}" data-v="${v}" aria-pressed="${a[p] === v}"><b>${sign(v)}</b>${l}</button>`).join("")}</div>
+    <label class="own">Своё значение<input class="inp${a[p] != null && !opts.some(([v]) => v === a[p]) ? " on" : ""}" type="number" step="10" inputmode="numeric" id="own${p}" data-own="${p}" placeholder="например, 100" value="${a[p] != null && !opts.some(([v]) => v === a[p]) ? a[p] : ""}"></label></div>`).join("");
 }
 function closeScreens() {
   clearInterval(tick); tick = null; open = null;
@@ -652,6 +657,11 @@ document.addEventListener("input", (e) => {
 });
 document.addEventListener("change", async (e) => {
   const el = e.target, path = el.dataset.upload;
+  if (el.dataset.own != null) {
+    const a = (S.awards[open] ||= {}), p = +el.dataset.own, v = parseInt(el.value, 10);
+    if (Number.isFinite(v)) a[p] = v; else delete a[p];
+    saveS(); drawAwards(); return;
+  }
   if (!path || !el.files[0]) return;
   try {
     const id = await uploadMedia(el.files[0], (i, n) => { busy = `Загружаю файл: ${i} из ${n}…`; const st = $(".savebar .st"); if (st) st.textContent = busy; });
