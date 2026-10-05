@@ -1,0 +1,356 @@
+<title>Миссия выполнима</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Russo+One&family=Golos+Text:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: TV-studio board — game grid in the middle, three player podiums below, case opens as a full-screen "screen". Single dark theme by choice. */
+:root{
+  --bg:#06210F;          /* studio green */
+  --bg-2:#0B3419;
+  --tile:#C9CCCF;        /* grey "Своя игра" tile */
+  --tile-ink:#0E1410;
+  --tile-done:#123A1F;
+  --gold:#FFE019;        /* yellow tile from the logo */
+  --ink:#ECF5EE;
+  --muted:#9DB8A4;
+  --line:#2A5A37;
+  --ok:#3FD06B; --warn:#FFB020; --bad:#FF6B5B;
+  --f-display:"Russo One","Arial Black",system-ui,sans-serif;
+  --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{background:var(--bg) radial-gradient(120% 80% at 70% 0%,#0F4A22 0%,var(--bg) 60%) fixed;color:var(--ink);font:16px/1.5 var(--f-body);padding-inline:16px;box-sizing:border-box}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,[contenteditable]:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.wrap{max-width:1180px;margin:0 auto;padding-block:20px 28px;display:flex;flex-direction:column;gap:20px;min-height:100%}
+
+header{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.logo{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;width:92px;flex:none}
+.logo span{background:var(--tile);color:var(--tile-ink);font:13px/1 var(--f-display);text-align:center;padding:4px 0;border-radius:2px}
+.logo span:first-child{background:var(--gold)}
+h1{font:clamp(26px,4vw,40px)/1.05 var(--f-display);margin:0;letter-spacing:.01em;text-wrap:balance}
+.sub{color:var(--muted);font-size:14px}
+.tools{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.btn{background:transparent;border:1px solid var(--line);border-radius:8px;padding:8px 14px;font-size:14px;font-weight:600}
+.btn:hover{border-color:var(--gold);color:var(--gold)}
+.btn.primary{background:var(--gold);color:var(--tile-ink);border-color:var(--gold)}
+.btn.primary:hover{filter:brightness(1.05);color:var(--tile-ink)}
+
+/* board */
+.board{display:grid;grid-template-columns:minmax(150px,1.3fr) repeat(3,1fr);gap:10px}
+.cat{display:flex;align-items:center;padding:0 16px;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;font:clamp(15px,1.8vw,20px)/1.2 var(--f-display);text-transform:uppercase;letter-spacing:.04em;min-height:96px}
+.cell{position:relative;border:0;border-radius:6px;min-height:96px;background:linear-gradient(180deg,#D8DBDD 0 50%,var(--tile) 50% 100%);color:var(--tile-ink);font:clamp(28px,4vw,46px)/1 var(--f-display);transition:transform .15s,box-shadow .15s}
+.cell:hover{transform:translateY(-2px);box-shadow:0 0 0 3px var(--gold),0 10px 30px #0008}
+.cell.cat-bag::after{content:"кот в мешке";position:absolute;left:0;right:0;bottom:8px;font:600 11px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase;opacity:0}
+.cell.done{background:var(--tile-done);color:var(--muted);font-size:14px;font-family:var(--f-body);box-shadow:none;transform:none;border:1px dashed var(--line)}
+.cell.done b{display:block;font:20px/1.2 var(--f-display);color:var(--ink);margin-bottom:2px}
+
+/* players */
+.players{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:auto}
+.pl{background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:2px;min-width:0;position:relative}
+.pl.turn{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
+.pl .turn-tag{position:absolute;top:-10px;left:14px;background:var(--gold);color:var(--tile-ink);font:700 11px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase;padding:4px 8px;border-radius:4px}
+.pl .name{font-weight:600;font-size:17px;min-width:0;overflow-wrap:anywhere;border-radius:4px;padding:0 2px;margin-left:-2px}
+.pl .name:hover{background:#ffffff10}
+.pl .score{font:clamp(30px,4vw,44px)/1.1 var(--f-display);font-variant-numeric:tabular-nums}
+.pl .seat{color:var(--muted);font-size:12px}
+.pl .giveturn{position:absolute;right:10px;top:10px;font-size:12px;padding:4px 8px}
+.pl.turn .giveturn{display:none}
+
+/* overlay screens */
+.screen{position:fixed;inset:0;background:var(--bg);z-index:10;overflow:auto;padding:calc(env(safe-area-inset-top,0px) + 20px) 16px calc(env(safe-area-inset-bottom,0px) + 20px)}
+.screen-in{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:20px;min-height:100%}
+.case-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.chip.price{background:var(--gold);color:var(--tile-ink);border-color:var(--gold);font-family:var(--f-display);letter-spacing:0}
+.case-head .btn{margin-left:auto}
+.case-body{display:grid;grid-template-columns:1fr 260px;gap:24px;align-items:start}
+.case-text{font-size:clamp(19px,2.2vw,26px);line-height:1.45;min-width:0}
+.case-text p{margin:0 0 .7em;max-width:52ch}
+.task{color:var(--gold);font-weight:600}
+.qs{list-style:none;padding:0;margin:.4em 0 0;display:grid;gap:8px;font-size:.82em}
+.qs li{padding-left:22px;position:relative;color:#D3E4D7}
+.qs li::before{content:"?";position:absolute;left:0;color:var(--gold);font-family:var(--f-display)}
+
+.timer{background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;align-items:center;gap:12px}
+.ring{position:relative;width:180px;max-width:100%;aspect-ratio:1}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring circle{fill:none;stroke-width:8}
+.ring .track{stroke:var(--line)}
+.ring .bar{stroke:var(--ok);stroke-linecap:round;transition:stroke-dashoffset .3s linear,stroke .3s}
+.ring.low .bar{stroke:var(--warn)} .ring.out .bar{stroke:var(--bad)}
+.ring .t{position:absolute;inset:0;display:grid;place-items:center;font:40px/1 var(--f-display);font-variant-numeric:tabular-nums}
+.ring.out .t{color:var(--bad)}
+.timer .row{display:flex;gap:8px}
+.timer small{color:var(--muted);font-size:12px;text-align:center}
+
+.score-panel{border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:12px}
+.score-panel h3{margin:0;font:15px/1 var(--f-display);letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.awards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.aw{background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.aw .who{display:flex;justify-content:space-between;gap:8px;font-weight:600;min-width:0}
+.aw .who span:first-child{overflow-wrap:anywhere;min-width:0}
+.aw .got{font-family:var(--f-display);color:var(--gold);font-variant-numeric:tabular-nums;white-space:nowrap}
+.opts{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.opt{border:1px solid var(--line);background:transparent;border-radius:6px;padding:8px 6px;font-size:13px;line-height:1.2;text-align:center}
+.opt b{display:block;font:16px/1.2 var(--f-display)}
+.opt:hover{border-color:var(--gold)}
+.opt[aria-pressed="true"]{background:var(--gold);color:var(--tile-ink);border-color:var(--gold)}
+.finish{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;align-items:center}
+.finish .hint{color:var(--muted);font-size:13px;margin-right:auto}
+
+/* cat in bag splash */
+.splash{display:grid;place-items:center;text-align:center;flex:1;gap:20px;align-content:center}
+.splash .big{font:clamp(44px,9vw,110px)/1 var(--f-display);color:var(--gold);animation:pop .6s cubic-bezier(.2,1.6,.4,1)}
+.splash p{font-size:20px;max-width:34ch;margin:0}
+@keyframes pop{from{transform:scale(.4);opacity:0}to{transform:none;opacity:1}}
+
+.rules{max-width:70ch;font-size:16px}
+.rules h2{font:28px/1.1 var(--f-display);margin:0 0 12px}
+.rules h3{font:16px/1.2 var(--f-display);text-transform:uppercase;letter-spacing:.04em;color:var(--gold);margin:22px 0 8px}
+.rules ol,.rules ul{padding-left:1.3em;margin:0;display:grid;gap:6px}
+.rules table{border-collapse:collapse;font-variant-numeric:tabular-nums}
+.rules td{padding:4px 12px 4px 0;border-bottom:1px solid var(--line)}
+
+.final{text-align:center;display:flex;flex-direction:column;align-items:center;gap:18px;flex:1;justify-content:center}
+.final .big{font:clamp(36px,7vw,80px)/1 var(--f-display);color:var(--gold)}
+.podium{display:grid;gap:10px;width:min(520px,100%)}
+.podium div{display:flex;justify-content:space-between;gap:10px;background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:12px 16px;font-size:18px}
+.podium div:first-child{border-color:var(--gold)}
+.podium b{font-family:var(--f-display);font-variant-numeric:tabular-nums}
+
+.confirm{position:fixed;inset:0;background:#000a;z-index:20;display:grid;place-items:center;padding:16px}
+.confirm div{background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:22px;max-width:380px;display:grid;gap:16px}
+.confirm .row{display:flex;gap:8px;justify-content:flex-end}
+
+@media (max-width:760px){
+  .board{grid-template-columns:repeat(3,1fr)}
+  .cat{grid-column:1/-1;min-height:0;padding:10px 12px}
+  .cell{min-height:72px}
+  .case-body{grid-template-columns:1fr}
+  .timer{flex-direction:row;flex-wrap:wrap;justify-content:center}
+  .ring{width:120px}.ring .t{font-size:28px}
+  .awards,.players{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="logo" aria-hidden="true"><span>С</span><span>В</span><span>О</span><span>Я</span><span>И</span><span>Г</span><span>Р</span><span>А</span></div>
+    <div>
+      <h1>Миссия выполнима</h1>
+      <div class="sub">Zero No Show · отдел контроля · <span id="left"></span></div>
+    </div>
+    <div class="tools">
+      <button class="btn" id="rulesBtn">Правила</button>
+      <button class="btn" id="newBtn">Новая игра</button>
+    </div>
+  </header>
+  <main class="board" id="board" aria-label="Игровое поле"></main>
+  <section class="players" id="players" aria-label="Игроки"></section>
+</div>
+
+<div class="screen" id="caseScreen" hidden><div class="screen-in" id="caseIn"></div></div>
+<div class="screen" id="rulesScreen" hidden><div class="screen-in rules">
+  <div class="case-head"><span class="chip">Правила</span><button class="btn" data-close>Закрыть</button></div>
+  <h2>Как играем</h2>
+  <p>Игра для отработки алгоритма действий отдела контроля по предотвращению неподач в рамках политики Zero No Show. Три игрока, 9 кейсов, до 1,5 часов. Ведущий следит за ходом игры, эксперт оценивает полноту ответа и присваивает очки. На кейс — 5 минут.</p>
+  <h3>Ход игры</h3>
+  <ol>
+    <li>Первым начинает игрок, сидящий посередине. Он выбирает категорию и кейс.</li>
+    <li>Игрок решает кейс вслух, проговаривая каждый шаг своих действий за отведённое время.</li>
+    <li>За правильно решённый кейс — 300 очков.</li>
+    <li>Ответ частично верный — половина или полная стоимость, на усмотрение эксперта. Право дополнить ответ переходит другим игрокам.</li>
+    <li>Игрок не знает ответа или ответил неверно — вопрос переходит другим игрокам, очки не начисляются. Отвечает тот, кто первым поднял руку: полный верный ответ — полная стоимость, дополнение — 50 очков.</li>
+    <li>После ответа ход переходит следующему игроку по часовой стрелке.</li>
+    <li>Игра заканчивается, когда разыграны все кейсы.</li>
+  </ol>
+  <h3>Кот в мешке</h3>
+  <p>Один из кейсов спрятан. Когда он выпадает, игрок передаёт его любому сопернику.</p>
+  <h3>Очки в этом интерфейсе</h3>
+  <table><tr><td>Полный ответ</td><td>300</td></tr><tr><td>Частично (половина)</td><td>150</td></tr><tr><td>Дополнение</td><td>50</td></tr><tr><td>Неверно / не отвечал</td><td>0</td></tr></table>
+  <p class="sub">Сыгранный кейс можно открыть снова и поправить очки. Пробел — старт/пауза таймера, Esc — закрыть.</p>
+</div></div>
+<div class="confirm" id="confirm" hidden><div><span id="confirmText"></span><div class="row"><button class="btn" id="confirmNo">Отмена</button><button class="btn primary" id="confirmYes">Да</button></div></div></div>
+
+<script>
+const TIME = 300, PRICE = 300;
+const CATS = [
+  { name: "Согласования", cases: [3, 6, 7] },
+  { name: "Задержки", cases: [2, 4, 5] },
+  { name: "Форс-мажоры", cases: [1, 8, 9] },
+];
+const BAG = 2; // кот в мешке
+const CASES = {
+  1: { text: ["Трансфер в г. Москва от аэропорта Шереметьево до отеля «Азимут». Рейс прилёта был перенаправлен во Внуково и НЕ будет возвращён обратно. Водитель, назначенный на поездку, не успеет приехать вовремя."],
+       task: "Опиши алгоритм дальнейших действий.",
+       qs: ["Как поступаем в данной ситуации?", "Вызываем ли пассажирам резервное авто?", "Если да, то необходимо ли согласование оплаты?", "Отпускаем водителя со штрафом или без?"] },
+  2: { text: ["Трансфер в г. Москва от аэропорта Внуково в 10:00 (по мск). Нам звонит водитель в 9:30 (по мск) и сообщает, что он перепроверил рейс, и этот рейс всегда по расписанию прибывает в аэропорт Шереметьево в 10:00 (по мск). Водитель может приехать, но только если мы согласуем доплату."],
+       task: "Опиши порядок действий.",
+       qs: ["Необходимо ли согласовывать доплату для водителя в таком случае?", "При отказе водителя от выполнения поездки вызываем ли пассажирам резервное авто?", "Если да, то необходимо ли согласование оплаты?", "При отказе водителя от выполнения поездки без оплаты отпускаем водителя со штрафом или без?"] },
+  3: { text: ["Звонит водитель в 20:55 (по местному времени) и просит согласовать ожидание по данному трансферу. Рейс прилетел вовремя. Заказчик — ЭЙПИСИДЖИ. Трэвел-политика «требует согласования»."],
+       task: "Опиши подробно порядок действий при согласовании ожидания.", qs: [] },
+  4: { text: ["Поездка «город – аэропорт». Исполнитель в момент поездки нам написал, что пассажиры хотят корректировку на 1,5 часа позже."],
+       task: "Опиши порядок дальнейших действий.", qs: [] },
+  5: { text: ["Трансфер от ж/д вокзала Омск-Пассажирский. Звонит водитель поставщика и сообщает, что пассажир передал ему информацию, что поезд задержится на 30 минут. Водитель выполнить поездку не может, так как у него есть следующие заказы."],
+       task: "Опиши порядок дальнейших действий.",
+       qs: ["Где можно отследить задержку поезда?", "Необходимо ли согласовывать дополнительное ожидание?", "При отказе водителя от выполнения поездки снимаем ли мы его со штрафом или без?"] },
+  6: { text: ["Трансфер из аэропорта, рейс прилетает в 11:00. Но в поездке стоит время встречи 12:00, так как пассажиры указали время подачи автомобиля с учётом буферного времени. Звонит водитель и сообщает, что рейс прилетает с задержкой в 13:00."],
+       task: "Опиши порядок дальнейших действий.",
+       qs: ["Во сколько водителю необходимо подавать автомобиль?", "Отслеживаем ли мы задержку рейса, если в заказе проставлено буферное время?"] },
+  7: { text: ["Трансфер в Сицилии от отеля в аэропорт. У нас там есть только один поставщик, но он не согласен выполнять поездку за прайсовую стоимость. Согласен только за 400 евро, маржа будет −30%. ДО не отвечает, логистов нет."],
+       task: "Опиши порядок дальнейших действий.", qs: [] },
+  8: { text: ["Трансфер межгород. Водитель — женщина. Пассажир отказывается ехать, так как водитель женщина. Трансфер был забронирован онлайн."],
+       task: "Опиши алгоритм дальнейших действий.", qs: [] },
+  9: { text: ["Водитель сообщил, что во время поездки с пассажиром он попал в ДТП. Пострадавших нет."],
+       task: "Опиши порядок действий в данной ситуации.", qs: [] },
+};
+const OPTS = [[PRICE, "Полный ответ"], [PRICE / 2, "Половина"], [50, "Дополнение"], [0, "Неверно"]];
+const SEATS = ["слева", "посередине", "справа"];
+
+const fresh = () => ({ names: ["Игрок 1", "Игрок 2", "Игрок 3"], turn: 1, awards: {}, played: {} });
+let S;
+try { S = JSON.parse(localStorage.getItem("mi-game")) || fresh(); } catch { S = fresh(); }
+const hot = window.claude?.hot;
+if (hot?.data?.S) S = hot.data.S;
+hot?.snapshot?.(() => ({ S }));
+const save = () => { try { localStorage.setItem("mi-game", JSON.stringify(S)); } catch {} };
+
+const $ = (s) => document.querySelector(s);
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const total = (p) => Object.values(S.awards).reduce((s, a) => s + (a[p] || 0), 0);
+const catOf = (n) => CATS.find((c) => c.cases.includes(n)).name;
+
+function render() {
+  const left = 9 - Object.keys(S.played).length;
+  $("#left").textContent = left ? `осталось кейсов: ${left} из 9` : "все кейсы разыграны";
+  $("#board").innerHTML = CATS.map((c) => `<div class="cat">${c.name}</div>` + c.cases.map((n) => {
+    if (!S.played[n]) return `<button class="cell" data-case="${n}" aria-label="${c.name}, ${PRICE}">${PRICE}</button>`;
+    const a = S.awards[n] || {}, who = [0, 1, 2].filter((p) => a[p]).map((p) => `${esc(S.names[p])} +${a[p]}`);
+    return `<button class="cell done" data-case="${n}" title="Открыть снова"><b>Кейс ${n}</b>${who.join("<br>") || "без очков"}</button>`;
+  }).join("")).join("");
+  $("#players").innerHTML = S.names.map((nm, p) => `<div class="pl${S.turn === p ? " turn" : ""}">
+    ${S.turn === p ? '<span class="turn-tag">Выбирает</span>' : `<button class="btn giveturn" data-turn="${p}">Передать ход</button>`}
+    <span class="name" contenteditable="plaintext-only" spellcheck="false" data-name="${p}" aria-label="Имя игрока">${esc(nm)}</span>
+    <span class="score">${total(p)}</span><span class="seat">сидит ${SEATS[p]}</span></div>`).join("");
+  save();
+}
+
+/* ---------- timer ---------- */
+let left = TIME, tick = null, audio;
+function beep(f, d) {
+  try {
+    audio ||= new AudioContext();
+    const o = audio.createOscillator(), g = audio.createGain();
+    o.frequency.value = f; o.type = "square"; g.gain.value = .08;
+    o.connect(g).connect(audio.destination); o.start(); o.stop(audio.currentTime + d);
+  } catch {}
+}
+function drawTimer() {
+  const r = $("#ring"); if (!r) return;
+  const C = 2 * Math.PI * 52;
+  r.querySelector(".bar").style.strokeDashoffset = C * (1 - left / TIME);
+  r.querySelector(".t").textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+  r.classList.toggle("low", left <= 60 && left > 0); r.classList.toggle("out", left === 0);
+  $("#tGo").textContent = tick ? "Пауза" : left === TIME ? "Старт" : left ? "Дальше" : "Время вышло";
+  $("#tGo").disabled = !left;
+}
+function toggleTimer() {
+  if (tick) { clearInterval(tick); tick = null; }
+  else if (left) tick = setInterval(() => {
+    left--; if (left <= 5 && left) beep(880, .08);
+    if (!left) { clearInterval(tick); tick = null; beep(220, .9); }
+    drawTimer();
+  }, 1000);
+  drawTimer();
+}
+function resetTimer() { clearInterval(tick); tick = null; left = TIME; drawTimer(); }
+
+/* ---------- case screen ---------- */
+let open = null;
+function openCase(n, skipBag) {
+  open = n;
+  $("#caseScreen").hidden = false;
+  if (n === BAG && !skipBag && !S.played[n]) {
+    $("#caseIn").innerHTML = `<div class="splash"><div class="big">Кот в мешке!</div>
+      <p>${esc(S.names[S.turn])} передаёт этот кейс любому из соперников. Кейс решает тот, кому его отдали.</p>
+      <button class="btn primary" id="bagGo">Показать кейс</button></div>`;
+    beep(660, .15); setTimeout(() => beep(990, .2), 160);
+    $("#bagGo").focus();
+    return;
+  }
+  const c = CASES[n], C = 2 * Math.PI * 52;
+  $("#caseIn").innerHTML = `
+    <div class="case-head"><span class="chip">${catOf(n)}</span><span class="chip price">${PRICE}</span><span class="chip">Кейс ${n}${n === BAG ? " · кот в мешке" : ""}</span>
+      <button class="btn" data-close>К полю</button></div>
+    <div class="case-body">
+      <div class="case-text">${c.text.map((t) => `<p>${esc(t)}</p>`).join("")}<p class="task">${esc(c.task)}</p>
+        ${c.qs.length ? `<ul class="qs">${c.qs.map((q) => `<li>${esc(q)}</li>`).join("")}</ul>` : ""}</div>
+      <aside class="timer"><div class="ring" id="ring"><svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="52"/><circle class="bar" cx="60" cy="60" r="52" stroke-dasharray="${C}"/></svg><span class="t"></span></div>
+        <div class="row"><button class="btn primary" id="tGo"></button><button class="btn" id="tReset">Сброс</button></div><small>5 минут на кейс · пробел — старт/пауза</small></aside>
+    </div>
+    <div class="score-panel"><h3>Очки — отмечает эксперт</h3><div class="awards" id="awards"></div>
+      <div class="finish"><span class="hint">После завершения ход перейдёт к игроку по часовой стрелке.</span><button class="btn primary" id="done">Завершить кейс</button></div></div>`;
+  resetTimer(); drawAwards();
+}
+function drawAwards() {
+  const a = S.awards[open] || {};
+  $("#awards").innerHTML = S.names.map((nm, p) => `<div class="aw"><div class="who"><span>${esc(nm)}${S.turn === p ? " · выбирал" : ""}</span><span class="got">${a[p] != null ? "+" + a[p] : "—"}</span></div>
+    <div class="opts">${OPTS.map(([v, l]) => `<button class="opt" data-p="${p}" data-v="${v}" aria-pressed="${a[p] === v}"><b>${v ? "+" + v : "0"}</b>${l}</button>`).join("")}</div></div>`).join("");
+}
+function closeScreens() {
+  clearInterval(tick); tick = null; open = null;
+  document.querySelectorAll(".screen").forEach((s) => (s.hidden = true));
+  render();
+}
+function finishCase() {
+  const first = !S.played[open];
+  S.played[open] = true;
+  if (first) S.turn = (S.turn + 1) % 3;
+  closeScreens();
+  if (Object.keys(S.played).length === 9 && first) showFinal();
+}
+function showFinal() {
+  const order = [0, 1, 2].sort((a, b) => total(b) - total(a));
+  $("#caseScreen").hidden = false;
+  $("#caseIn").innerHTML = `<div class="final"><span class="chip">Игра окончена</span><div class="big">${esc(S.names[order[0]])}</div>
+    <div class="podium">${order.map((p, i) => `<div><span>${i + 1}. ${esc(S.names[p])}</span><b>${total(p)}</b></div>`).join("")}</div>
+    <button class="btn" data-close>К полю</button></div>`;
+  [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, .18), i * 170));
+}
+
+function ask(text, yes) {
+  $("#confirmText").textContent = text; $("#confirm").hidden = false; $("#confirmYes").focus();
+  $("#confirmYes").onclick = () => { $("#confirm").hidden = true; yes(); };
+}
+
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.case) openCase(+t.dataset.case);
+  else if (t.dataset.turn) { S.turn = +t.dataset.turn; render(); }
+  else if (t.dataset.close != null) closeScreens();
+  else if (t.dataset.p) {
+    const a = (S.awards[open] ||= {}), p = +t.dataset.p, v = +t.dataset.v;
+    if (a[p] === v) delete a[p]; else a[p] = v;
+    save(); drawAwards();
+  }
+  else if (t.id === "bagGo") openCase(BAG, true);
+  else if (t.id === "tGo") toggleTimer();
+  else if (t.id === "tReset") resetTimer();
+  else if (t.id === "done") finishCase();
+  else if (t.id === "rulesBtn") $("#rulesScreen").hidden = false;
+  else if (t.id === "newBtn") ask("Начать новую игру? Очки и сыгранные кейсы обнулятся, имена игроков останутся.", () => { S = { ...fresh(), names: S.names }; render(); });
+  else if (t.id === "confirmNo") $("#confirm").hidden = true;
+});
+document.addEventListener("input", (e) => { const p = e.target.dataset.name; if (p != null) { S.names[p] = e.target.textContent.trim() || `Игрок ${+p + 1}`; save(); } });
+document.addEventListener("keydown", (e) => {
+  if (e.target.isContentEditable) { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } return; }
+  if (e.key === "Escape") { if (!$("#confirm").hidden) $("#confirm").hidden = true; else closeScreens(); }
+  if (e.key === " " && $("#ring") && !$("#caseScreen").hidden) { e.preventDefault(); toggleTimer(); }
+});
+render();
+</script>
