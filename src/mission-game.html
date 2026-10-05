@@ -40,11 +40,10 @@ h1{font:clamp(26px,4vw,40px)/1.05 var(--f-display);margin:0;letter-spacing:.01em
 .btn.primary:hover{filter:brightness(1.05);color:var(--tile-ink)}
 
 /* board */
-.board{display:grid;grid-template-columns:minmax(150px,1.3fr) repeat(3,1fr);gap:10px}
+.board{display:grid;grid-template-columns:minmax(150px,1.3fr) repeat(var(--n,3),1fr);gap:10px}
 .cat{display:flex;align-items:center;padding:0 16px;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;font:clamp(15px,1.8vw,20px)/1.2 var(--f-display);text-transform:uppercase;letter-spacing:.04em;min-height:96px}
 .cell{position:relative;border:0;border-radius:6px;min-height:96px;background:linear-gradient(180deg,#D8DBDD 0 50%,var(--tile) 50% 100%);color:var(--tile-ink);font:clamp(28px,4vw,46px)/1 var(--f-display);transition:transform .15s,box-shadow .15s}
 .cell:hover{transform:translateY(-2px);box-shadow:0 0 0 3px var(--gold),0 10px 30px #0008}
-.cell.cat-bag::after{content:"кот в мешке";position:absolute;left:0;right:0;bottom:8px;font:600 11px/1 var(--f-body);letter-spacing:.08em;text-transform:uppercase;opacity:0}
 .cell.done{background:var(--tile-done);color:var(--muted);font-size:14px;font-family:var(--f-body);box-shadow:none;transform:none;border:1px dashed var(--line)}
 .cell.done b{display:block;font:20px/1.2 var(--f-display);color:var(--ink);margin-bottom:2px}
 
@@ -129,7 +128,7 @@ h1{font:clamp(26px,4vw,40px)/1.05 var(--f-display);margin:0;letter-spacing:.01em
 .confirm .row{display:flex;gap:8px;justify-content:flex-end}
 
 @media (max-width:760px){
-  .board{grid-template-columns:repeat(3,1fr)}
+  .board{grid-template-columns:repeat(var(--n,3),1fr)}
   .cat{grid-column:1/-1;min-height:0;padding:10px 12px}
   .cell{min-height:72px}
   .case-body{grid-template-columns:1fr}
@@ -138,113 +137,336 @@ h1{font:clamp(26px,4vw,40px)/1.05 var(--f-display);margin:0;letter-spacing:.01em
   .awards,.players{grid-template-columns:1fr}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------- start page, setup, rating, admin ---------- */
+.top{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.top h2{font:clamp(22px,3vw,30px)/1.1 var(--f-display);margin:0}
+.top .tools{margin-left:auto}
+.home{display:grid;grid-template-columns:1.1fr 1fr;gap:40px;align-items:center;flex:1}
+.hero{display:flex;flex-direction:column;gap:18px}
+.hero .logo{width:min(320px,100%);gap:6px}
+.hero .logo span{font-size:clamp(28px,5vw,48px);padding:8px 0;border-radius:4px}
+.hero h1{font-size:clamp(34px,6vw,64px)}
+.hero p{margin:0;color:var(--muted);max-width:42ch}
+.menu{display:grid;gap:12px}
+.mi{display:grid;grid-template-columns:auto 1fr;gap:2px 16px;align-items:center;text-align:left;background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+.mi:hover{border-color:var(--gold)}
+.mi .ic{grid-row:span 2;width:44px;height:44px;border-radius:8px;display:grid;place-items:center;background:var(--tile);color:var(--tile-ink);font:22px/1 var(--f-display)}
+.mi b{font:20px/1.2 var(--f-display)}
+.mi small{color:var(--muted);font-size:14px}
+.mi.go{border-color:var(--gold)}
+.mi.go .ic{background:var(--gold)}
+.note{color:var(--muted);font-size:14px;border:1px dashed var(--line);border-radius:8px;padding:10px 14px}
+.note.err{color:var(--bad);border-color:var(--bad)}
+
+.step{display:flex;flex-direction:column;gap:12px}
+.step h3{margin:0;font:15px/1 var(--f-display);letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.picks{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.pick{text-align:left;background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}
+.pick b{font:20px/1.2 var(--f-display)}
+.pick small{color:var(--muted)}
+.pick[aria-pressed="true"]{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
+.tag{align-self:flex-start;background:var(--gold);color:var(--tile-ink);font:700 11px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;border-radius:4px}
+.names{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.fld{display:flex;flex-direction:column;gap:6px;min-width:0}
+.fld>span{font-size:13px;color:var(--muted)}
+.inp{width:100%;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;padding:9px 11px;color:var(--ink);font:inherit}
+.inp:focus{outline:none;border-color:var(--gold)}
+textarea.inp{resize:vertical;min-height:84px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table.rt{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+.rt th,.rt td{padding:10px 14px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+.rt th:nth-child(-n+2),.rt td:nth-child(-n+2){text-align:left}
+.rt th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--bg-2)}
+.rt td.tot{font-family:var(--f-display);color:var(--gold)}
+.rt tr.top3 td:first-child{color:var(--gold);font-family:var(--f-display)}
+.rt tr:last-child td{border-bottom:0}
+
+.login{max-width:360px;display:flex;flex-direction:column;gap:14px}
+.adm{display:grid;grid-template-columns:230px 1fr;gap:24px;align-items:start}
+.glist{display:flex;flex-direction:column;gap:8px}
+.ed{display:flex;flex-direction:column;gap:18px;min-width:0}
+.ed-cat{border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;background:#0B341980}
+.ed-cat>.row{display:flex;gap:10px;align-items:end}
+.ed-cat>.row .fld{flex:1}
+.ed-case{background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:14px;display:grid;grid-template-columns:repeat(4,auto) 1fr;gap:12px;align-items:end}
+.ed-case .wide{grid-column:1/-1}
+.ed-case .del{justify-self:end}
+.ed-case h4{margin:0;font:16px/1 var(--f-display);align-self:center}
+.chk{display:flex;gap:8px;align-items:center;font-size:14px}
+.media-box{display:flex;gap:12px;align-items:center;flex-wrap:wrap;border:1px dashed var(--line);border-radius:6px;padding:10px}
+.media-box img{max-height:120px;border-radius:4px}
+.savebar{position:sticky;bottom:0;background:var(--bg);border-top:1px solid var(--line);padding:12px 0 calc(env(safe-area-inset-bottom,0px) + 12px);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.savebar .st{color:var(--muted);font-size:14px;margin-right:auto}
+.savebar .st.dirty{color:var(--warn)}
+.res{background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.res .when{color:var(--muted);font-size:13px;min-width:150px}
+.res .who{flex:1;min-width:0}
+.btn.danger:hover{border-color:var(--bad);color:var(--bad)}
+
+.call{display:flex;flex-direction:column;gap:10px;background:var(--bg-2);border:1px solid var(--gold);border-radius:10px;padding:14px 16px;margin-bottom:.9em}
+.call b{font:18px/1 var(--f-display);color:var(--gold)}
+.call audio{width:100%}
+.case-img{max-width:100%;max-height:55vh;border-radius:8px;border:1px solid var(--line);margin-bottom:.8em;display:block}
+.chip.callchip{border-color:var(--gold);color:var(--gold)}
+
+@media (max-width:760px){
+  .home,.adm{grid-template-columns:1fr;gap:24px}
+  .names{grid-template-columns:1fr}
+  .ed-case{grid-template-columns:1fr 1fr}
+}
 </style>
 
-<div class="wrap">
-  <header>
-    <div class="logo" aria-hidden="true"><span>С</span><span>В</span><span>О</span><span>Я</span><span>И</span><span>Г</span><span>Р</span><span>А</span></div>
-    <div>
-      <h1>Миссия выполнима</h1>
-      <div class="sub">Zero No Show · отдел контроля · <span id="left"></span></div>
-    </div>
-    <div class="tools">
-      <button class="btn" id="rulesBtn">Правила</button>
-      <button class="btn" id="newBtn">Новая игра</button>
-    </div>
-  </header>
-  <main class="board" id="board" aria-label="Игровое поле"></main>
-  <section class="players" id="players" aria-label="Игроки"></section>
-</div>
+<div class="wrap" id="app"></div>
+<datalist id="known"></datalist>
 
 <div class="screen" id="caseScreen" hidden><div class="screen-in" id="caseIn"></div></div>
 <div class="screen" id="rulesScreen" hidden><div class="screen-in rules">
   <div class="case-head"><span class="chip">Правила</span><button class="btn" data-close>Закрыть</button></div>
   <h2>Как играем</h2>
-  <p>Игра для отработки алгоритма действий отдела контроля по предотвращению неподач в рамках политики Zero No Show. Три игрока, 9 кейсов, до 1,5 часов. Ведущий следит за ходом игры, эксперт оценивает полноту ответа и присваивает очки. На ответ — 3 минуты, на добивку — 1 минута.</p>
+  <p>Игра для отработки алгоритма действий отдела контроля по предотвращению неподач в рамках политики Zero No Show. Три игрока, до 1,5 часов. Ведущий следит за ходом игры, эксперт оценивает полноту ответа и присваивает очки. На ответ — 3 минуты, на добивку — 1 минута.</p>
   <h3>Ход игры</h3>
   <ol>
     <li>Первым начинает игрок, сидящий посередине. Он выбирает категорию и кейс.</li>
     <li>Игрок решает кейс вслух, проговаривая каждый шаг своих действий за отведённое время.</li>
-    <li>За правильно решённый кейс — 300 очков.</li>
+    <li>За правильно решённый кейс игрок получает его полную стоимость.</li>
     <li>Ответ частично верный — половина или полная стоимость, на усмотрение эксперта. Право дополнить ответ переходит другим игрокам.</li>
     <li>Игрок не знает ответа или ответил неверно — вопрос переходит другим игрокам, очки не начисляются. Отвечает тот, кто первым поднял руку: полный верный ответ — полная стоимость, дополнение — 50 очков.</li>
     <li>После ответа ход переходит следующему игроку по часовой стрелке.</li>
-    <li>Игра заканчивается, когда разыграны все кейсы.</li>
+    <li>Игра заканчивается, когда разыграны все кейсы. Очки попадают в рейтинг.</li>
   </ol>
   <h3>Кот в мешке</h3>
-  <p>Один из кейсов спрятан. Когда он выпадает, игрок передаёт его любому сопернику.</p>
-  <h3>Очки в этом интерфейсе</h3>
-  <table><tr><td>Полный ответ</td><td>300</td></tr><tr><td>Частично (половина)</td><td>150</td></tr><tr><td>Дополнение</td><td>50</td></tr><tr><td>Неверно / не отвечал</td><td>0</td></tr></table>
+  <p>Когда выпадает такой кейс, игрок передаёт его любому сопернику.</p>
+  <h3>Кейс — звонок</h3>
+  <p>Ситуация дана аудиозаписью. Ведущий включает её, игрок решает кейс как обычно.</p>
   <p class="sub">Сыгранный кейс можно открыть снова и поправить очки. Пробел — старт/пауза таймера, Esc — закрыть.</p>
 </div></div>
 <div class="confirm" id="confirm" hidden><div><span id="confirmText"></span><div class="row"><button class="btn" id="confirmNo">Отмена</button><button class="btn primary" id="confirmYes">Да</button></div></div></div>
 
 <script>
-const MODES = { answer: 180, extra: 60 }, PRICE = 300;
-let TIME = MODES.answer;
-const CATS = [
-  { name: "Согласования", cases: [3, 6, 7] },
-  { name: "Задержки", cases: [2, 4, 5] },
-  { name: "Форс-мажоры", cases: [1, 8, 9] },
-];
-const BAG = 2; // кот в мешке
-const CASES = {
-  1: { text: ["Трансфер в г. Москва от аэропорта Шереметьево до отеля «Азимут». Рейс прилёта был перенаправлен во Внуково и НЕ будет возвращён обратно. Водитель, назначенный на поездку, не успеет приехать вовремя."],
-       task: "Опиши алгоритм дальнейших действий.",
-       qs: ["Как поступаем в данной ситуации?", "Вызываем ли пассажирам резервное авто?", "Если да, то необходимо ли согласование оплаты?", "Отпускаем водителя со штрафом или без?"] },
-  2: { text: ["Трансфер в г. Москва от аэропорта Внуково в 10:00 (по мск). Нам звонит водитель в 9:30 (по мск) и сообщает, что он перепроверил рейс, и этот рейс всегда по расписанию прибывает в аэропорт Шереметьево в 10:00 (по мск). Водитель может приехать, но только если мы согласуем доплату."],
-       task: "Опиши порядок действий.",
-       qs: ["Необходимо ли согласовывать доплату для водителя в таком случае?", "При отказе водителя от выполнения поездки вызываем ли пассажирам резервное авто?", "Если да, то необходимо ли согласование оплаты?", "При отказе водителя от выполнения поездки без оплаты отпускаем водителя со штрафом или без?"] },
-  3: { text: ["Звонит водитель в 20:55 (по местному времени) и просит согласовать ожидание по данному трансферу. Рейс прилетел вовремя. Заказчик — ЭЙПИСИДЖИ. Трэвел-политика «требует согласования»."],
-       task: "Опиши подробно порядок действий при согласовании ожидания.", qs: [] },
-  4: { text: ["Поездка «город – аэропорт». Исполнитель в момент поездки нам написал, что пассажиры хотят корректировку на 1,5 часа позже."],
-       task: "Опиши порядок дальнейших действий.", qs: [] },
-  5: { text: ["Трансфер от ж/д вокзала Омск-Пассажирский. Звонит водитель поставщика и сообщает, что пассажир передал ему информацию, что поезд задержится на 30 минут. Водитель выполнить поездку не может, так как у него есть следующие заказы."],
-       task: "Опиши порядок дальнейших действий.",
-       qs: ["Где можно отследить задержку поезда?", "Необходимо ли согласовывать дополнительное ожидание?", "При отказе водителя от выполнения поездки снимаем ли мы его со штрафом или без?"] },
-  6: { text: ["Трансфер из аэропорта, рейс прилетает в 11:00. Но в поездке стоит время встречи 12:00, так как пассажиры указали время подачи автомобиля с учётом буферного времени. Звонит водитель и сообщает, что рейс прилетает с задержкой в 13:00."],
-       task: "Опиши порядок дальнейших действий.",
-       qs: ["Во сколько водителю необходимо подавать автомобиль?", "Отслеживаем ли мы задержку рейса, если в заказе проставлено буферное время?"] },
-  7: { text: ["Трансфер в Сицилии от отеля в аэропорт. У нас там есть только один поставщик, но он не согласен выполнять поездку за прайсовую стоимость. Согласен только за 400 евро, маржа будет −30%. ДО не отвечает, логистов нет."],
-       task: "Опиши порядок дальнейших действий.", qs: [] },
-  8: { text: ["Трансфер межгород. Водитель — женщина. Пассажир отказывается ехать, так как водитель женщина. Трансфер был забронирован онлайн."],
-       task: "Опиши алгоритм дальнейших действий.", qs: [] },
-  9: { text: ["Водитель сообщил, что во время поездки с пассажиром он попал в ДТП. Пострадавших нет."],
-       task: "Опиши порядок действий в данной ситуации.", qs: [] },
-};
-const OPTS = [[PRICE, "Полный ответ"], [PRICE / 2, "Половина"], [50, "Дополнение"], [0, "Неверно"]];
+const MODES = { answer: 180, extra: 60 };
 const SEATS = ["слева", "посередине", "справа"];
-
-const fresh = () => ({ names: ["Игрок 1", "Игрок 2", "Игрок 3"], turn: 1, awards: {}, played: {} });
-let S;
-try { S = JSON.parse(localStorage.getItem("mi-game")) || fresh(); } catch { S = fresh(); }
-const hot = window.claude?.hot;
-if (hot?.data?.S) S = hot.data.S;
-hot?.snapshot?.(() => ({ S }));
-const save = () => { try { localStorage.setItem("mi-game", JSON.stringify(S)); } catch {} };
+const KINDS = { text: "Текст", call: "Кейс — звонок (аудио)", image: "Текст + картинка" };
+const ADMIN = { login: "admin", pass: "12345" }; // ponytail: client-side gate only — db rules, not this, protect the data
+const CHUNK = 200000, MAX_FILE = 8 * 1024 * 1024; // ponytail: media lives in db chunks (assets has no audio type); replaced files stay as orphans
 
 const $ = (s) => document.querySelector(s);
-const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const total = (p) => Object.values(S.awards).reduce((s, a) => s + (a[p] || 0), 0);
-const catOf = (n) => CATS.find((c) => c.cases.includes(n)).name;
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const norm = (n) => String(n).trim().replace(/\s+/g, " ");
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const ls = {
+  get: (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+const isAdmin = () => { try { return sessionStorage.getItem("mi-admin") === "1"; } catch { return adminMem; } };
+let adminMem = false;
+const setAdmin = (v) => { adminMem = v; try { v ? sessionStorage.setItem("mi-admin", "1") : sessionStorage.removeItem("mi-admin"); } catch {} };
 
-function render() {
-  const left = 9 - Object.keys(S.played).length;
-  $("#left").textContent = left ? `осталось кейсов: ${left} из 9` : "все кейсы разыграны";
-  $("#board").innerHTML = CATS.map((c) => `<div class="cat">${c.name}</div>` + c.cases.map((n) => {
-    if (!S.played[n]) return `<button class="cell" data-case="${n}" aria-label="${c.name}, ${PRICE}">${PRICE}</button>`;
-    const a = S.awards[n] || {}, who = [0, 1, 2].filter((p) => a[p]).map((p) => `${esc(S.names[p])} +${a[p]}`);
-    return `<button class="cell done" data-case="${n}" title="Открыть снова"><b>Кейс ${n}</b>${who.join("<br>") || "без очков"}</button>`;
-  }).join("")).join("");
-  $("#players").innerHTML = S.names.map((nm, p) => `<div class="pl${S.turn === p ? " turn" : ""}">
-    ${S.turn === p ? '<span class="turn-tag">Выбирает</span>' : `<button class="btn giveturn" data-turn="${p}">Передать ход</button>`}
-    <span class="name" contenteditable="plaintext-only" spellcheck="false" data-name="${p}" aria-label="Имя игрока">${esc(nm)}</span>
-    <span class="score">${total(p)}</span><span class="seat">сидит ${SEATS[p]}</span></div>`).join("");
-  save();
+/* ---------- data ---------- */
+let db = null, dbState = "loading", games = {}, results = {}, current = null;
+let view = "home", S = ls.get("mi-session"), pickId = null, names = ["", "", ""];
+let draft = null, draftId = null, dirty = false, adminTab = "games", busy = "";
+
+const hot = window.claude?.hot;
+if (hot?.data?.S) { S = hot.data.S; view = hot.data.view || view; }
+hot?.snapshot?.(() => ({ S, view }));
+const saveS = () => ls.set("mi-session", S);
+
+const periodKey = (p) => { const m = /(\d)\s*кв\S*\s*(\d{4})/i.exec(p || ""); return m ? +m[2] * 10 + +m[1] : 0; };
+const gameList = () => Object.entries(games).sort((a, b) => periodKey(b[1].period) - periodKey(a[1].period) || (b[1].updated || 0) - (a[1].updated || 0));
+const caseCount = (g) => (g.cats || []).reduce((s, c) => s + (c.cases || []).length, 0);
+
+function connect() {
+  if (!window.claude?.use) { dbState = "off"; render(); return; }
+  claude.use("db").then((d) => {
+    if (!d) { dbState = "off"; render(); return; }
+    db = d;
+    const fail = () => { dbState = "off"; render(); };
+    const live = () => { dbState = "on"; if (!(view === "admin" && dirty)) render(); };
+    d.collection("games").onSnapshot((s) => { games = Object.fromEntries(s.docs.map((x) => [x.id, x.data()])); live(); }, fail);
+    d.collection("results").onSnapshot((s) => { results = Object.fromEntries(s.docs.map((x) => [x.id, x.data()])); live(); }, fail);
+    d.collection("settings").onSnapshot((s) => { current = s.docs.find((x) => x.id === "app")?.data()?.current || null; live(); }, fail);
+  });
 }
 
+/* media: base64 chunks under media/<id>/c/<nnn> */
+const mediaCache = {};
+function getMedia(id) {
+  return (mediaCache[id] ||= (async () => {
+    const m = (await db.doc("media/" + id).get()).data();
+    if (!m) throw new Error("нет файла");
+    const parts = (await db.collection(`media/${id}/c`).get()).docs.sort((a, b) => (a.id < b.id ? -1 : 1)).map((d) => d.data().d);
+    const bin = atob(parts.join(""));
+    const u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    return URL.createObjectURL(new Blob([u8], { type: m.type }));
+  })());
+}
+async function uploadMedia(file, onStep) {
+  if (file.size > MAX_FILE) throw new Error("Файл больше 8 МБ. Сожмите его и загрузите снова.");
+  const b64 = await new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(r.result.split(",")[1]); r.onerror = no; r.readAsDataURL(file); });
+  const id = uid(), n = Math.ceil(b64.length / CHUNK);
+  for (let i = 0; i < n; i++) {
+    onStep(i + 1, n);
+    await db.doc(`media/${id}/c/${String(i).padStart(3, "0")}`).set({ d: b64.slice(i * CHUNK, (i + 1) * CHUNK) });
+  }
+  await db.doc("media/" + id).set({ type: file.type || "application/octet-stream", name: file.name, n, size: file.size });
+  return id;
+}
+function hydrateMedia(root) {
+  root.querySelectorAll("[data-media]").forEach((el) => {
+    if (!db) return;
+    getMedia(el.dataset.media).then((u) => (el.src = u)).catch(() => el.replaceWith(Object.assign(document.createElement("span"), { className: "note err", textContent: "Файл не найден. Загрузите его заново в конструкторе." })));
+  });
+}
+
+/* ---------- rendering ---------- */
+const logo = (cls = "logo") => `<div class="${cls}" aria-hidden="true">${[..."СВОЯИГРА"].map((c) => `<span>${c}</span>`).join("")}</div>`;
+const backBar = (title, extra = "") => `<header class="top"><button class="btn" data-go="home">← Меню</button><h2>${title}</h2><div class="tools">${extra}</div></header>`;
+const dbNote = () => dbState === "off" ? `<p class="note err">Нет доступа к общей базе игры: войдите в claude.ai, чтобы выбирать игры, вести рейтинг и пользоваться конструктором.</p>` : dbState === "loading" ? `<p class="note">Загружаю игры и рейтинг…</p>` : "";
+
+function render() {
+  const app = $("#app");
+  app.innerHTML = { home: vHome, setup: vSetup, board: vBoard, rating: vRating, admin: isAdmin() ? vAdmin : vLogin }[view]();
+  $("#known").innerHTML = [...new Set(Object.values(results).flatMap((r) => r.players.map((p) => norm(p.name))))].sort().map((n) => `<option value="${esc(n)}">`).join("");
+  hydrateMedia(app);
+  saveS();
+}
+
+function vHome() {
+  const cur = games[current];
+  const inGame = S && !S.over;
+  return `<section class="home">
+    <div class="hero">${logo()}<h1>Миссия выполнима</h1>
+      <p>Своя игра для отдела контроля: кейсы по алгоритмам Zero No Show.${cur ? ` Текущая игра — ${esc(cur.period)}.` : ""}</p>${dbNote()}</div>
+    <nav class="menu">
+      ${inGame ? `<button class="mi go" data-go="board"><span class="ic">▶</span><b>Продолжить игру</b><small>${esc(S.period)} · ${S.names.map(esc).join(", ")}</small></button>` : ""}
+      <button class="mi${inGame ? "" : " go"}" data-go="setup"><span class="ic">+</span><b>Новая игра</b><small>Выбрать игру и вписать игроков</small></button>
+      <button class="mi" data-go="rating"><span class="ic">★</span><b>Рейтинг</b><small>Очки игроков по кварталам</small></button>
+      <button class="mi" data-go="admin"><span class="ic">⚙</span><b>Администратор</b><small>Конструктор игрового поля и результаты</small></button>
+    </nav></section>`;
+}
+
+function vSetup() {
+  const list = gameList();
+  if (!pickId || !games[pickId]) pickId = games[current] ? current : list[0]?.[0] || null;
+  return `${backBar("Новая игра")}${dbNote()}
+    <section class="step"><h3>1. Игра</h3>
+      ${list.length ? `<div class="picks">${list.map(([id, g]) => `<button class="pick" data-pick="${id}" aria-pressed="${id === pickId}">
+        ${id === current ? '<span class="tag">Текущая</span>' : ""}<b>${esc(g.period || "Без периода")}</b>
+        <small>${(g.cats || []).length} категории · ${caseCount(g)} кейсов</small></button>`).join("")}</div>`
+        : dbState === "on" ? `<p class="note">Игр пока нет. Создайте игру в кабинете администратора.</p>` : ""}
+    </section>
+    <section class="step"><h3>2. Игроки</h3>
+      <div class="names">${SEATS.map((s, i) => `<label class="fld"><span>Сидит ${s}${i === 1 ? " · начинает игру" : ""}</span>
+        <input class="inp" id="pn${i}" list="known" data-pn="${i}" value="${esc(names[i])}" placeholder="Фамилия Имя" autocomplete="off"></label>`).join("")}</div>
+      <p class="sub">Пишите имя так же, как в рейтинге, — подсказки появятся при вводе.</p>
+    </section>
+    <div class="actions"><button class="btn primary" id="startBtn"${pickId ? "" : " disabled"}>Начать игру</button><span class="sub" id="setupMsg"></span></div>`;
+}
+
+const total = (p) => Object.values(S.awards).reduce((s, a) => s + (a[p] || 0), 0);
+const allKeys = () => S.game.cats.flatMap((c, ci) => c.cases.map((_, k) => `${ci}-${k}`));
+
+function vBoard() {
+  if (!S) { view = "home"; return vHome(); }
+  const keys = allKeys(), left = keys.filter((k) => !S.played[k]).length;
+  const n = Math.max(1, ...S.game.cats.map((c) => c.cases.length));
+  return `<header>${logo()}<div><h1>Миссия выполнима</h1><div class="sub">${esc(S.period)} · ${left ? `осталось кейсов: ${left} из ${keys.length}` : "все кейсы разыграны"}</div></div>
+    <div class="tools"><button class="btn" id="rulesBtn">Правила</button><button class="btn" id="endBtn">Завершить игру</button><button class="btn" data-go="home">Меню</button></div></header>
+    <main class="board" style="--n:${n}" aria-label="Игровое поле">${S.game.cats.map((c, ci) => `<div class="cat">${esc(c.name)}</div>` + c.cases.map((cs, k) => {
+      const key = `${ci}-${k}`;
+      if (!S.played[key]) return `<button class="cell" data-case="${key}" aria-label="${esc(c.name)}, ${cs.price}">${cs.price}</button>`;
+      const a = S.awards[key] || {}, who = [0, 1, 2].filter((p) => a[p]).map((p) => `${esc(S.names[p])} +${a[p]}`);
+      return `<button class="cell done" data-case="${key}" title="Открыть снова"><b>${esc(c.name)} · ${cs.price}</b>${who.join("<br>") || "без очков"}</button>`;
+    }).join("") + `<div aria-hidden="true" style="grid-column:span ${n - c.cases.length}"></div>`.repeat(n > c.cases.length ? 1 : 0)).join("")}</main>
+    <section class="players" aria-label="Игроки">${S.names.map((nm, p) => `<div class="pl${S.turn === p ? " turn" : ""}">
+      ${S.turn === p ? '<span class="turn-tag">Выбирает</span>' : `<button class="btn giveturn" data-turn="${p}">Передать ход</button>`}
+      <span class="name">${esc(nm)}</span><span class="score">${total(p)}</span><span class="seat">сидит ${SEATS[p]}</span></div>`).join("")}</section>`;
+}
+
+function ratingData() {
+  const per = {}, periods = new Set();
+  for (const r of Object.values(results)) {
+    periods.add(r.period);
+    for (const p of r.players || []) {
+      const k = norm(p.name).toLowerCase();
+      const row = (per[k] ||= { name: norm(p.name), by: {}, total: 0 });
+      row.by[r.period] = (row.by[r.period] || 0) + p.score;
+      row.total += p.score;
+    }
+  }
+  return { periods: [...periods].sort((a, b) => periodKey(a) - periodKey(b)), rows: Object.values(per).sort((a, b) => b.total - a.total) };
+}
+function vRating() {
+  const { periods, rows } = ratingData();
+  return `${backBar("Рейтинг")}${dbNote()}
+    ${rows.length ? `<div class="tbl-wrap"><table class="rt"><thead><tr><th>#</th><th>Игрок</th>${periods.map((p) => `<th>${esc(p)}</th>`).join("")}<th>Всего</th></tr></thead>
+    <tbody>${rows.map((r, i) => `<tr class="${i < 3 ? "top3" : ""}"><td>${i + 1}</td><td>${esc(r.name)}</td>${periods.map((p) => `<td>${r.by[p] ?? "—"}</td>`).join("")}<td class="tot">${r.total}</td></tr>`).join("")}</tbody></table></div>`
+      : dbState === "on" ? `<p class="note">Рейтинг пуст. Очки появятся здесь после первой завершённой игры.</p>` : ""}
+    <p class="sub">Очки каждой завершённой игры попадают в рейтинг автоматически. Ошибочный результат администратор может удалить во вкладке «Результаты».</p>`;
+}
+
+function vLogin() {
+  return `${backBar("Вход администратора")}
+    <form class="login" id="loginForm"><label class="fld"><span>Логин</span><input class="inp" id="lg" autocomplete="username"></label>
+      <label class="fld"><span>Пароль</span><input class="inp" id="pw" type="password" autocomplete="current-password"></label>
+      <div class="actions"><button class="btn primary" type="submit">Войти</button><span class="sub" id="loginMsg" role="alert"></span></div></form>`;
+}
+
+const blankCase = () => ({ kind: "text", price: 300, text: "", task: "Опиши порядок дальнейших действий.", qs: [], media: null, mediaName: "", bag: false });
+function vAdmin() {
+  const tabs = `<button class="btn${adminTab === "games" ? " primary" : ""}" data-tab="games">Игры</button><button class="btn${adminTab === "results" ? " primary" : ""}" data-tab="results">Результаты</button><button class="btn" id="logoutBtn">Выйти</button>`;
+  if (adminTab === "results") {
+    const list = Object.entries(results).sort((a, b) => (b[1].date || "").localeCompare(a[1].date || ""));
+    return `${backBar("Администратор", tabs)}${dbNote()}<section class="step"><h3>Сыгранные игры</h3>
+      ${list.length ? list.map(([id, r]) => `<div class="res"><span class="when">${esc(r.period)}<br>${r.date ? new Date(r.date).toLocaleDateString("ru-RU") : "перенесено из таблицы"}</span>
+        <span class="who">${(r.players || []).map((p) => `${esc(p.name)} — <b>${p.score}</b>`).join(" · ")}</span>
+        <button class="btn danger" data-delres="${id}">Удалить</button></div>`).join("") : '<p class="note">Результатов пока нет.</p>'}</section>`;
+  }
+  const list = gameList();
+  if (!draft) { const first = games[current] ? current : list[0]?.[0]; if (first) { draftId = first; draft = clone(games[first]); } }
+  return `${backBar("Администратор", tabs)}${dbNote()}
+    <div class="adm"><aside class="glist"><h3 class="sub" style="margin:0">Игры</h3>
+      ${list.map(([id, g]) => `<button class="pick" data-edit="${id}" aria-pressed="${id === draftId}">${id === current ? '<span class="tag">Текущая</span>' : ""}<b>${esc(g.period || "Без периода")}</b><small>${caseCount(g)} кейсов</small></button>`).join("")}
+      <button class="btn" id="newGame">+ Новая игра</button>${draft && draftId && games[draftId] ? '<button class="btn" id="copyGame">Копировать выбранную</button>' : ""}</aside>
+    ${draft ? editor() : '<p class="note">Создайте первую игру кнопкой «Новая игра».</p>'}</div>`;
+}
+function editor() {
+  const d = draft;
+  return `<section class="ed">
+    <div class="actions"><label class="fld" style="flex:1"><span>Период игры</span><input class="inp" id="period" data-path="period" value="${esc(d.period)}" placeholder="3 квартал 2026"></label>
+      ${draftId === current ? '<span class="tag">Текущая игра</span>' : `<button class="btn" id="makeCurrent"${games[draftId] ? "" : " disabled"}>Сделать текущей</button>`}</div>
+    ${d.cats.map((c, ci) => `<div class="ed-cat"><div class="row"><label class="fld"><span>Категория ${ci + 1}</span><input class="inp" id="c${ci}" data-path="cats.${ci}.name" value="${esc(c.name)}"></label>
+      <button class="btn danger" data-delcat="${ci}">Удалить категорию</button></div>
+      ${c.cases.map((cs, k) => { const p = `cats.${ci}.cases.${k}`; return `<div class="ed-case"><h4>Кейс ${k + 1}</h4>
+        <label class="fld"><span>Формат</span><select class="inp" id="${p}.kind" data-path="${p}.kind" data-rerender>${Object.entries(KINDS).map(([v, l]) => `<option value="${v}"${cs.kind === v ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+        <label class="fld"><span>Стоимость</span><input class="inp" type="number" min="0" step="50" id="${p}.price" data-path="${p}.price" data-num value="${cs.price}" style="width:100px"></label>
+        <label class="chk"><input type="checkbox" id="${p}.bag" data-path="${p}.bag" data-bool${cs.bag ? " checked" : ""}> Кот в мешке</label>
+        <button class="btn danger del" data-delcase="${ci}-${k}">Удалить кейс</button>
+        ${cs.kind !== "text" ? `<div class="wide media-box">${cs.media ? (cs.kind === "call" ? `<audio controls data-media="${cs.media}"></audio>` : `<img alt="Картинка кейса" data-media="${cs.media}">`) + `<span class="sub">${esc(cs.mediaName)}</span>` : `<span class="sub">${cs.kind === "call" ? "Загрузите запись звонка (mp3, m4a, wav)" : "Загрузите картинку"} — до 8 МБ</span>`}
+          <label class="btn">${cs.media ? "Заменить" : "Загрузить"}<input type="file" hidden data-upload="${p}" accept="${cs.kind === "call" ? "audio/*" : "image/*"}"></label></div>` : ""}
+        <label class="fld wide"><span>${cs.kind === "call" ? "Пояснение к звонку (необязательно)" : "Ситуация"}</span><textarea class="inp" id="${p}.text" data-path="${p}.text">${esc(cs.text)}</textarea></label>
+        <label class="fld wide"><span>Задание</span><input class="inp" id="${p}.task" data-path="${p}.task" value="${esc(cs.task)}"></label>
+        <label class="fld wide"><span>Вопросы-подсказки — по одному в строке</span><textarea class="inp" id="${p}.qs" data-path="${p}.qs" data-lines>${esc((cs.qs || []).join("\n"))}</textarea></label>
+      </div>`; }).join("")}
+      <div><button class="btn" data-addcase="${ci}">+ Кейс</button></div></div>`).join("")}
+    <div><button class="btn" id="addCat">+ Категория</button></div>
+    <div class="savebar"><span class="st${dirty ? " dirty" : ""}">${busy || (dirty ? "Есть несохранённые изменения" : games[draftId] ? "Все изменения сохранены" : "Новая игра ещё не сохранена")}</span>
+      ${games[draftId] ? '<button class="btn danger" id="delGame">Удалить игру</button>' : ""}<button class="btn primary" id="saveGame">Сохранить игру</button></div>
+  </section>`;
+}
+function setPath(path, v) {
+  const keys = path.split("."), last = keys.pop();
+  keys.reduce((o, k) => o[k], draft)[last] = v;
+}
+function markDirty() { dirty = true; const st = document.querySelector(".savebar .st"); if (st) { st.textContent = "Есть несохранённые изменения"; st.classList.add("dirty"); } }
+
 /* ---------- timer ---------- */
-let left = TIME, tick = null, audio;
+let TIME = MODES.answer, left = TIME, tick = null, audio;
 function beep(f, d) {
   try {
     audio ||= new AudioContext();
@@ -280,10 +502,12 @@ function setMode(m) {
 
 /* ---------- case screen ---------- */
 let open = null;
-function openCase(n, skipBag) {
-  open = n;
+const caseAt = (key) => { const [ci, k] = key.split("-").map(Number); return [S.game.cats[ci], S.game.cats[ci].cases[k]]; };
+function openCase(key, skipBag) {
+  open = key;
+  const [cat, c] = caseAt(key);
   $("#caseScreen").hidden = false;
-  if (n === BAG && !skipBag && !S.played[n]) {
+  if (c.bag && !skipBag && !S.played[key]) {
     $("#caseIn").innerHTML = `<div class="splash"><div class="big">Кот в мешке!</div>
       <p>${esc(S.names[S.turn])} передаёт этот кейс любому из соперников. Кейс решает тот, кому его отдали.</p>
       <button class="btn primary" id="bagGo">Показать кейс</button></div>`;
@@ -291,25 +515,32 @@ function openCase(n, skipBag) {
     $("#bagGo").focus();
     return;
   }
-  const c = CASES[n], C = 2 * Math.PI * 52;
+  const C = 2 * Math.PI * 52;
+  const paras = (c.text || "").split(/\n+/).filter((t) => t.trim());
   $("#caseIn").innerHTML = `
-    <div class="case-head"><span class="chip">${catOf(n)}</span><span class="chip price">${PRICE}</span><span class="chip">Кейс ${n}${n === BAG ? " · кот в мешке" : ""}</span>
+    <div class="case-head"><span class="chip">${esc(cat.name)}</span><span class="chip price">${c.price}</span>
+      ${c.kind === "call" ? '<span class="chip callchip">Кейс — звонок</span>' : ""}${c.bag ? '<span class="chip">Кот в мешке</span>' : ""}
       <button class="btn" data-close>К полю</button></div>
     <div class="case-body">
-      <div class="case-text">${c.text.map((t) => `<p>${esc(t)}</p>`).join("")}<p class="task">${esc(c.task)}</p>
-        ${c.qs.length ? `<ul class="qs">${c.qs.map((q) => `<li>${esc(q)}</li>`).join("")}</ul>` : ""}</div>
+      <div class="case-text">
+        ${c.kind === "call" ? `<div class="call"><b>Кейс — звонок</b>${c.media ? `<audio controls data-media="${c.media}"></audio>` : '<span class="note err">Запись не загружена.</span>'}</div>` : ""}
+        ${c.kind === "image" && c.media ? `<img class="case-img" alt="Иллюстрация к кейсу" data-media="${c.media}">` : ""}
+        ${paras.map((t) => `<p>${esc(t)}</p>`).join("")}${c.task ? `<p class="task">${esc(c.task)}</p>` : ""}
+        ${c.qs?.length ? `<ul class="qs">${c.qs.map((q) => `<li>${esc(q)}</li>`).join("")}</ul>` : ""}</div>
       <aside class="timer"><div class="ring" id="ring"><svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="52"/><circle class="bar" cx="60" cy="60" r="52" stroke-dasharray="${C}"/></svg><span class="t"></span></div>
         <div class="modes"><button class="opt" data-mode="answer"><b>3:00</b>Ответ</button><button class="opt" data-mode="extra"><b>1:00</b>Добивка</button></div>
         <div class="row"><button class="btn primary" id="tGo"></button><button class="btn" id="tReset">Сброс</button></div><small>пробел — старт/пауза</small></aside>
     </div>
     <div class="score-panel"><h3>Очки — отмечает эксперт</h3><div class="awards" id="awards"></div>
       <div class="finish"><span class="hint">После завершения ход перейдёт к игроку по часовой стрелке.</span><button class="btn primary" id="done">Завершить кейс</button></div></div>`;
+  hydrateMedia($("#caseIn"));
   setMode("answer"); drawAwards();
 }
 function drawAwards() {
-  const a = S.awards[open] || {};
+  const a = S.awards[open] || {}, price = caseAt(open)[1].price;
+  const opts = [[price, "Полный ответ"], [Math.round(price / 2), "Половина"], [50, "Дополнение"], [0, "Неверно"]];
   $("#awards").innerHTML = S.names.map((nm, p) => `<div class="aw"><div class="who"><span>${esc(nm)}${S.turn === p ? " · выбирал" : ""}</span><span class="got">${a[p] != null ? "+" + a[p] : "—"}</span></div>
-    <div class="opts">${OPTS.map(([v, l]) => `<button class="opt" data-p="${p}" data-v="${v}" aria-pressed="${a[p] === v}"><b>${v ? "+" + v : "0"}</b>${l}</button>`).join("")}</div></div>`).join("");
+    <div class="opts">${opts.map(([v, l]) => `<button class="opt" data-p="${p}" data-v="${v}" aria-pressed="${a[p] === v}"><b>${v ? "+" + v : "0"}</b>${l}</button>`).join("")}</div></div>`).join("");
 }
 function closeScreens() {
   clearInterval(tick); tick = null; open = null;
@@ -321,46 +552,126 @@ function finishCase() {
   S.played[open] = true;
   if (first) S.turn = (S.turn + 1) % 3;
   closeScreens();
-  if (Object.keys(S.played).length === 9 && first) showFinal();
+  if (first && allKeys().every((k) => S.played[k])) endGame();
 }
-function showFinal() {
+async function endGame() {
+  S.over = true; saveS();
   const order = [0, 1, 2].sort((a, b) => total(b) - total(a));
   $("#caseScreen").hidden = false;
-  $("#caseIn").innerHTML = `<div class="final"><span class="chip">Игра окончена</span><div class="big">${esc(S.names[order[0]])}</div>
+  $("#caseIn").innerHTML = `<div class="final"><span class="chip">Игра окончена · ${esc(S.period)}</span><div class="big">${esc(S.names[order[0]])}</div>
     <div class="podium">${order.map((p, i) => `<div><span>${i + 1}. ${esc(S.names[p])}</span><b>${total(p)}</b></div>`).join("")}</div>
-    <button class="btn" data-close>К полю</button></div>`;
+    <p class="sub" id="savedMsg">Сохраняю результат в рейтинг…</p>
+    <div class="actions"><button class="btn" data-close>К полю</button><button class="btn primary" data-go="rating">Открыть рейтинг</button></div></div>`;
   [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, .18), i * 170));
+  const msg = (t) => { const el = $("#savedMsg"); if (el) el.textContent = t; };
+  if (S.saved) return msg("Результат уже в рейтинге.");
+  if (!db) return msg("Нет доступа к общей базе — результат не попал в рейтинг.");
+  try {
+    await db.doc("results/" + S.id).set({ gameId: S.gameId, period: S.period, date: new Date().toISOString(), players: S.names.map((name, p) => ({ name, score: total(p) })) });
+    S.saved = true; saveS(); msg("Результат сохранён в рейтинг.");
+  } catch { msg("Не удалось сохранить результат. Проверьте доступ к странице и завершите игру ещё раз."); S.over = false; saveS(); }
 }
 
 function ask(text, yes) {
   $("#confirmText").textContent = text; $("#confirm").hidden = false; $("#confirmYes").focus();
   $("#confirmYes").onclick = () => { $("#confirm").hidden = true; yes(); };
 }
+function go(v) { clearInterval(tick); tick = null; open = null; document.querySelectorAll(".screen").forEach((s) => (s.hidden = true)); view = v; render(); window.scrollTo(0, 0); }
+
+async function saveGame() {
+  if (!db) return;
+  if (!norm(draft.period)) { busy = "Укажите период игры, например «3 квартал 2026»."; render(); return; }
+  busy = "Сохраняю…"; render();
+  draftId ||= uid();
+  try {
+    await db.doc("games/" + draftId).set({ ...draft, period: norm(draft.period), updated: Date.now() });
+    if (!current) await db.doc("settings/app").set({ current: draftId });
+    dirty = false; busy = "";
+  } catch { busy = "Не удалось сохранить. Проверьте доступ к странице и попробуйте ещё раз."; }
+  render();
+}
+function leaveDraft(then) { if (dirty) ask("Есть несохранённые изменения. Выйти без сохранения?", () => { dirty = false; then(); }); else then(); }
 
 document.addEventListener("click", (e) => {
   const t = e.target.closest("button"); if (!t) return;
-  if (t.dataset.case) openCase(+t.dataset.case);
-  else if (t.dataset.turn) { S.turn = +t.dataset.turn; render(); }
-  else if (t.dataset.close != null) closeScreens();
-  else if (t.dataset.p) {
-    const a = (S.awards[open] ||= {}), p = +t.dataset.p, v = +t.dataset.v;
+  const d = t.dataset;
+  if (d.go) { if (view === "admin") leaveDraft(() => go(d.go)); else go(d.go); }
+  else if (d.case) openCase(d.case);
+  else if (d.turn) { S.turn = +d.turn; render(); }
+  else if (d.close != null) closeScreens();
+  else if (d.p) {
+    const a = (S.awards[open] ||= {}), p = +d.p, v = +d.v;
     if (a[p] === v) delete a[p]; else a[p] = v;
-    save(); drawAwards();
+    saveS(); drawAwards();
   }
-  else if (t.id === "bagGo") openCase(BAG, true);
-  else if (t.id === "tGo") toggleTimer();
-  else if (t.id === "tReset") resetTimer();
-  else if (t.dataset.mode) setMode(t.dataset.mode);
-  else if (t.id === "done") finishCase();
-  else if (t.id === "rulesBtn") $("#rulesScreen").hidden = false;
-  else if (t.id === "newBtn") ask("Начать новую игру? Очки и сыгранные кейсы обнулятся, имена игроков останутся.", () => { S = { ...fresh(), names: S.names }; render(); });
-  else if (t.id === "confirmNo") $("#confirm").hidden = true;
+  else if (d.mode) setMode(d.mode);
+  else if (d.pick) { pickId = d.pick; render(); }
+  else if (d.tab) leaveDraft(() => { adminTab = d.tab; render(); });
+  else if (d.edit) leaveDraft(() => { draftId = d.edit; draft = clone(games[d.edit]); busy = ""; render(); });
+  else if (d.delcat) ask(`Удалить категорию «${draft.cats[d.delcat].name}» со всеми кейсами?`, () => { draft.cats.splice(+d.delcat, 1); dirty = true; render(); });
+  else if (d.delcase) { const [ci, k] = d.delcase.split("-").map(Number); ask(`Удалить кейс ${k + 1} из категории «${draft.cats[ci].name}»?`, () => { draft.cats[ci].cases.splice(k, 1); dirty = true; render(); }); }
+  else if (d.addcase) { draft.cats[+d.addcase].cases.push(blankCase()); dirty = true; render(); }
+  else if (d.delres) ask("Удалить этот результат из рейтинга?", () => db.doc("results/" + d.delres).delete());
+  else switch (t.id) {
+    case "bagGo": openCase(open, true); break;
+    case "tGo": toggleTimer(); break;
+    case "tReset": resetTimer(); break;
+    case "done": finishCase(); break;
+    case "rulesBtn": $("#rulesScreen").hidden = false; break;
+    case "endBtn": ask("Завершить игру сейчас? Неразыгранные кейсы пропадут, очки уйдут в рейтинг.", endGame); break;
+    case "confirmNo": $("#confirm").hidden = true; break;
+    case "startBtn": {
+      const ns = names.map(norm);
+      if (ns.some((n) => !n)) { $("#setupMsg").textContent = "Впишите имена всех трёх игроков."; return; }
+      const g = games[pickId];
+      if (!caseCount(g)) { $("#setupMsg").textContent = "В этой игре нет кейсов. Добавьте их в конструкторе."; return; }
+      const start = () => { S = { id: uid(), gameId: pickId, period: g.period, game: clone(g), names: ns, turn: 1, awards: {}, played: {} }; go("board"); };
+      S && !S.over ? ask("Текущая игра не завершена и её очки не попадут в рейтинг. Начать новую?", start) : start();
+      break;
+    }
+    case "logoutBtn": leaveDraft(() => { setAdmin(false); draft = null; draftId = null; go("home"); }); break;
+    case "newGame": leaveDraft(() => { draftId = null; dirty = true; busy = ""; draft = { period: "", cats: ["Согласования", "Задержки", "Форс-мажоры"].map((name) => ({ name, cases: [blankCase(), blankCase(), blankCase()] })) }; render(); $("#period").focus(); }); break;
+    case "copyGame": leaveDraft(() => { draft = clone(games[draftId]); draft.period = ""; draftId = null; dirty = true; busy = ""; render(); $("#period").focus(); }); break;
+    case "addCat": draft.cats.push({ name: "Новая категория", cases: [blankCase()] }); dirty = true; render(); break;
+    case "saveGame": saveGame(); break;
+    case "makeCurrent": db.doc("settings/app").set({ current: draftId }); break;
+    case "delGame": ask(`Удалить игру «${draft.period}»? Результаты в рейтинге останутся.`, async () => {
+      await db.doc("games/" + draftId).delete();
+      if (current === draftId) await db.doc("settings/app").delete();
+      draft = null; draftId = null; dirty = false; render();
+    }); break;
+  }
 });
-document.addEventListener("input", (e) => { const p = e.target.dataset.name; if (p != null) { S.names[p] = e.target.textContent.trim() || `Игрок ${+p + 1}`; save(); } });
+document.addEventListener("input", (e) => {
+  const el = e.target, d = el.dataset;
+  if (d.pn) names[+d.pn] = el.value;
+  else if (d.path && draft) {
+    setPath(d.path, d.bool != null ? el.checked : d.num != null ? +el.value || 0 : d.lines != null ? el.value.split("\n").map((s) => s.trim()).filter(Boolean) : el.value);
+    if (d.rerender != null) { dirty = true; render(); } else markDirty();
+  }
+});
+document.addEventListener("change", async (e) => {
+  const el = e.target, path = el.dataset.upload;
+  if (!path || !el.files[0]) return;
+  try {
+    const id = await uploadMedia(el.files[0], (i, n) => { busy = `Загружаю файл: ${i} из ${n}…`; const st = $(".savebar .st"); if (st) st.textContent = busy; });
+    setPath(path + ".media", id); setPath(path + ".mediaName", el.files[0].name);
+    dirty = true; busy = "Файл загружен. Сохраните игру.";
+  } catch (err) { busy = err.message || "Не удалось загрузить файл."; }
+  render();
+});
+document.addEventListener("submit", (e) => {
+  if (e.target.id !== "loginForm") return;
+  e.preventDefault();
+  if ($("#lg").value.trim() === ADMIN.login && $("#pw").value === ADMIN.pass) { setAdmin(true); render(); }
+  else $("#loginMsg").textContent = "Неверный логин или пароль.";
+});
 document.addEventListener("keydown", (e) => {
-  if (e.target.isContentEditable) { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } return; }
-  if (e.key === "Escape") { if (!$("#confirm").hidden) $("#confirm").hidden = true; else closeScreens(); }
-  if (e.key === " " && $("#ring") && !$("#caseScreen").hidden) { e.preventDefault(); toggleTimer(); }
+  if (e.key === "Escape") { if (!$("#confirm").hidden) $("#confirm").hidden = true; else if (document.querySelector(".screen:not([hidden])")) closeScreens(); }
+  if (e.key === " " && $("#ring") && !$("#caseScreen").hidden && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { e.preventDefault(); toggleTimer(); }
 });
+window.addEventListener("beforeunload", (e) => { if (dirty) e.preventDefault(); });
+
 render();
+connect();
 </script>
