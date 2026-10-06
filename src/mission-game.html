@@ -33,7 +33,7 @@
 html,body{height:100%}
 [hidden]{display:none!important}
 body{background:var(--bg) radial-gradient(120% 80% at 70% 0%,#0F4A22 0%,var(--bg) 60%) fixed;color:var(--ink);font:16px/1.5 var(--f-body);font-variant-numeric:lining-nums;padding-inline:16px;box-sizing:border-box}
-input,select,textarea{font-variant-numeric:lining-nums}
+body,input,select,textarea,button{font-feature-settings:"lnum"} /* Fedra defaults to old-style digits; `font:` shorthand would reset font-variant */
 *{box-sizing:border-box}
 button{font:inherit;color:inherit;cursor:pointer}
 button:focus-visible,[contenteditable]:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
@@ -55,6 +55,7 @@ h1{font:clamp(26px,4vw,40px)/1.05 var(--f-display);margin:0;letter-spacing:.01em
 .board{display:grid;grid-template-columns:minmax(150px,1.3fr) repeat(var(--n,3),1fr);gap:10px}
 .cat{display:flex;align-items:center;padding:0 16px;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;font:clamp(15px,1.8vw,20px)/1.2 var(--f-display);text-transform:uppercase;letter-spacing:.04em;min-height:96px}
 .cell{position:relative;border:0;border-radius:6px;min-height:96px;background:linear-gradient(180deg,#D8DBDD 0 50%,var(--tile) 50% 100%);color:var(--tile-ink);font:clamp(28px,4vw,46px)/1 var(--f-display);transition:transform .15s,box-shadow .15s}
+.cell .no{position:absolute;top:8px;left:10px;font:12px/1 var(--f-display);letter-spacing:.06em;text-transform:uppercase;background:var(--tile-ink);color:var(--tile);padding:4px 7px;border-radius:4px}
 .cell:hover{transform:translateY(-2px);box-shadow:0 0 0 3px var(--gold),0 10px 30px #0008}
 .cell.done{background:var(--tile-done);color:var(--muted);font-size:14px;font-family:var(--f-body);box-shadow:none;transform:none;border:1px dashed var(--line)}
 .cell.done b{display:block;font:20px/1.2 var(--f-display);color:var(--ink);margin-bottom:2px}
@@ -401,9 +402,9 @@ function vBoard() {
     <div class="tools"><button class="btn" id="muteBtn" aria-pressed="${!muted}">${muted ? "Звук выкл." : "Звук вкл."}</button><button class="btn" id="rulesBtn">Правила</button><button class="btn" id="endBtn">Завершить игру</button><button class="btn" data-go="home">Меню</button>${brand()}</div></header>
     <main class="board" style="--n:${n}" aria-label="Игровое поле">${S.game.cats.map((c, ci) => `<div class="cat">${esc(c.name)}</div>` + c.cases.map((cs, k) => {
       const key = `${ci}-${k}`;
-      if (!S.played[key]) return `<button class="cell" data-case="${key}" aria-label="${esc(c.name)}, ${cs.price}">${cs.price}</button>`;
+      if (!S.played[key]) return `<button class="cell" data-case="${key}" aria-label="${esc(c.name)}, кейс ${k + 1}, ${cs.price}"><span class="no">Кейс ${k + 1}</span>${cs.price}</button>`;
       const a = S.awards[key] || {}, who = [0, 1, 2].filter((p) => a[p]).map((p) => `${esc(S.names[p])} ${sign(a[p])}`);
-      return `<button class="cell done" data-case="${key}" title="Открыть снова"><b>${esc(c.name)} · ${cs.price}</b>${who.join("<br>") || "без очков"}</button>`;
+      return `<button class="cell done" data-case="${key}" title="Открыть снова"><b>Кейс ${k + 1} · ${cs.price}</b>${who.join("<br>") || "без очков"}</button>`;
     }).join("") + `<div aria-hidden="true" style="grid-column:span ${n - c.cases.length}"></div>`.repeat(n > c.cases.length ? 1 : 0)).join("")}</main>
     <section class="players" aria-label="Игроки">${S.names.map((nm, p) => `<div class="pl${S.turn === p ? " turn" : ""}">
       ${S.turn === p ? '<span class="turn-tag">Выбирает</span>' : `<button class="btn giveturn" data-turn="${p}">Передать ход</button>`}
@@ -510,8 +511,8 @@ function setPath(path, v) {
 function markDirty() { dirty = true; const st = document.querySelector(".savebar .st"); if (st) { st.textContent = "Есть несохранённые изменения"; st.classList.add("dirty"); } }
 
 /* ---------- timer ---------- */
-let TIME = MODES.answer, left = TIME, tick = null, audio;
-/* show music: files in sounds/, published next to the page */
+let TIME = MODES.answer, left = TIME, tick = null;
+/* show music: only the cat-in-bag sting for now; files in sounds/, published next to the page */
 const sounds = {};
 let muted = !!ls.get("mi-muted");
 function stopSounds() { Object.values(sounds).forEach((a) => a.pause()); }
@@ -520,15 +521,6 @@ function play(name) {
   if (muted) return;
   const a = (sounds[name] ||= new Audio(`sounds/${name}.mp3`));
   a.currentTime = 0; a.play().catch(() => {});
-}
-const THINK = 32; // think.mp3 length: starts so it ends with the timer
-function beep(f, d) {
-  try {
-    audio ||= new AudioContext();
-    const o = audio.createOscillator(), g = audio.createGain();
-    o.frequency.value = f; o.type = "square"; g.gain.value = .08;
-    o.connect(g).connect(audio.destination); o.start(); o.stop(audio.currentTime + d);
-  } catch {}
 }
 function drawTimer() {
   const r = $("#ring"); if (!r) return;
@@ -540,19 +532,15 @@ function drawTimer() {
   $("#tGo").disabled = !left;
 }
 function toggleTimer() {
-  if (tick) { clearInterval(tick); tick = null; sounds.think?.pause(); }
-  else if (left) {
-    if (left <= THINK && sounds.think?.currentTime && !muted) sounds.think.play().catch(() => {}); // resume after pause
-    tick = setInterval(() => {
-      left--;
-      if (left === THINK) play("think");
-      if (!left) { clearInterval(tick); tick = null; beep(220, .9); }
-      drawTimer();
-    }, 1000);
-  }
+  if (tick) { clearInterval(tick); tick = null; }
+  else if (left) tick = setInterval(() => {
+    left--;
+    if (!left) { clearInterval(tick); tick = null; }
+    drawTimer();
+  }, 1000);
   drawTimer();
 }
-function resetTimer() { clearInterval(tick); tick = null; left = TIME; if (sounds.think) { sounds.think.pause(); sounds.think.currentTime = 0; } drawTimer(); }
+function resetTimer() { clearInterval(tick); tick = null; left = TIME; drawTimer(); }
 function setMode(m) {
   TIME = MODES[m];
   document.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.mode === m));
@@ -577,7 +565,7 @@ function openCase(key, skipBag) {
   const C = 2 * Math.PI * 52;
   const paras = (c.text || "").split(/\n+/).filter((t) => t.trim());
   $("#caseIn").innerHTML = `
-    <div class="case-head"><span class="chip">${esc(cat.name)}</span><span class="chip price">${c.price}</span>
+    <div class="case-head"><span class="chip">${esc(cat.name)}</span><span class="chip">Кейс ${+key.split("-")[1] + 1}</span><span class="chip price">${c.price}</span>
       ${c.kind === "call" ? '<span class="chip callchip">Кейс — звонок</span>' : ""}${c.bag ? '<span class="chip">Кот в мешке</span>' : ""}
       <button class="btn" data-close>К полю</button></div>
     <div class="case-body">
@@ -593,7 +581,6 @@ function openCase(key, skipBag) {
     <div class="score-panel"><h3>Очки — отмечает эксперт</h3><div class="awards" id="awards"></div>
       <div class="finish"><span class="hint">После завершения ход перейдёт к игроку по часовой стрелке.</span><button class="btn primary" id="done">Завершить кейс</button></div></div>`;
   hydrateMedia($("#caseIn"));
-  if (!skipBag) play("choice");
   setMode("answer"); drawAwards();
 }
 function drawAwards() {
@@ -623,7 +610,6 @@ async function endGame() {
     <div class="podium">${order.map((p, i) => `<div><span>${i + 1}. ${esc(S.names[p])}</span><b>${total(p)}</b></div>`).join("")}</div>
     <p class="sub" id="savedMsg">Сохраняю результат в рейтинг…</p>
     <div class="actions"><button class="btn" data-close>К полю</button><button class="btn primary" data-go="rating">Открыть рейтинг</button></div></div>`;
-  play("closing");
   const msg = (t) => { const el = $("#savedMsg"); if (el) el.textContent = t; };
   if (S.saved) return msg("Результат уже в рейтинге.");
   if (!db) return msg("Нет доступа к общей базе — результат не попал в рейтинг.");
@@ -747,7 +733,7 @@ document.addEventListener("click", (e) => {
       if (new Set(ns).size < 3) { $("#setupMsg").textContent = "Один игрок выбран дважды."; return; }
       const g = games[pickId];
       if (!caseCount(g)) { $("#setupMsg").textContent = "В этой игре нет кейсов. Добавьте их в конструкторе."; return; }
-      const start = () => { S = { id: uid(), gameId: pickId, period: g.period, game: clone(g), names: ns, turn: 1, awards: {}, played: {} }; go("board"); play("categories"); };
+      const start = () => { S = { id: uid(), gameId: pickId, period: g.period, game: clone(g), names: ns, turn: 1, awards: {}, played: {} }; go("board"); };
       S && !S.over ? ask("Текущая игра не завершена и её очки не попадут в рейтинг. Начать новую?", start) : start();
       break;
     }
