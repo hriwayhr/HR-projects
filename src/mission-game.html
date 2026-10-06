@@ -54,8 +54,8 @@ h1{font:clamp(26px,4vw,40px)/1.05 var(--f-display);margin:0;letter-spacing:.01em
 /* board */
 .board{display:grid;grid-template-columns:minmax(150px,1.3fr) repeat(var(--n,3),1fr);gap:10px}
 .cat{display:flex;align-items:center;padding:0 16px;background:var(--bg-2);border:1px solid var(--line);border-radius:6px;font:clamp(15px,1.8vw,20px)/1.2 var(--f-display);text-transform:uppercase;letter-spacing:.04em;min-height:96px}
-.cell{position:relative;border:0;border-radius:6px;min-height:96px;background:linear-gradient(180deg,#D8DBDD 0 50%,var(--tile) 50% 100%);color:var(--tile-ink);font:clamp(28px,4vw,46px)/1 var(--f-display);transition:transform .15s,box-shadow .15s}
-.cell .no{position:absolute;top:8px;left:10px;font:12px/1 var(--f-display);letter-spacing:.06em;text-transform:uppercase;background:var(--tile-ink);color:var(--tile);padding:4px 7px;border-radius:4px}
+.cell{position:relative;border:0;border-radius:6px;min-height:96px;background:linear-gradient(180deg,#D8DBDD 0 50%,var(--tile) 50% 100%);color:var(--tile-ink);font:clamp(18px,3vw,38px)/1 var(--f-display);transition:transform .15s,box-shadow .15s}
+.cell .no{position:absolute;top:8px;right:10px;font:12px/1 var(--f-display);letter-spacing:.06em;text-transform:uppercase;background:var(--tile-ink);color:var(--tile);padding:4px 7px;border-radius:4px}
 .cell:hover{transform:translateY(-2px);box-shadow:0 0 0 3px var(--gold),0 10px 30px #0008}
 .cell.done{background:var(--tile-done);color:var(--muted);font-size:14px;font-family:var(--f-body);box-shadow:none;transform:none;border:1px dashed var(--line)}
 .cell.done b{display:block;font:20px/1.2 var(--f-display);color:var(--ink);margin-bottom:2px}
@@ -146,7 +146,7 @@ h1{font:clamp(26px,4vw,40px)/1.05 var(--f-display);margin:0;letter-spacing:.01em
 @media (max-width:760px){
   .board{grid-template-columns:repeat(var(--n,3),1fr)}
   .cat{grid-column:1/-1;min-height:0;padding:10px 12px}
-  .cell{min-height:72px}
+  .cell{min-height:80px;padding-top:22px}
   .case-body{grid-template-columns:1fr}
   .timer{flex-direction:row;flex-wrap:wrap;justify-content:center}
   .ring{width:120px}.ring .t{font-size:28px}
@@ -402,7 +402,7 @@ function vBoard() {
     <div class="tools"><button class="btn" id="muteBtn" aria-pressed="${!muted}">${muted ? "Звук выкл." : "Звук вкл."}</button><button class="btn" id="rulesBtn">Правила</button><button class="btn" id="endBtn">Завершить игру</button><button class="btn" data-go="home">Меню</button>${brand()}</div></header>
     <main class="board" style="--n:${n}" aria-label="Игровое поле">${S.game.cats.map((c, ci) => `<div class="cat">${esc(c.name)}</div>` + c.cases.map((cs, k) => {
       const key = `${ci}-${k}`;
-      if (!S.played[key]) return `<button class="cell" data-case="${key}" aria-label="${esc(c.name)}, кейс ${k + 1}, ${cs.price}"><span class="no">Кейс ${k + 1}</span>${cs.price}</button>`;
+      if (!S.played[key]) return `<button class="cell" data-case="${key}" aria-label="${esc(c.name)}, кейс ${k + 1}, ${cs.price}"><span class="no">${cs.price}</span>Кейс ${k + 1}</button>`;
       const a = S.awards[key] || {}, who = [0, 1, 2].filter((p) => a[p]).map((p) => `${esc(S.names[p])} ${sign(a[p])}`);
       return `<button class="cell done" data-case="${key}" title="Открыть снова"><b>Кейс ${k + 1} · ${cs.price}</b>${who.join("<br>") || "без очков"}</button>`;
     }).join("") + `<div aria-hidden="true" style="grid-column:span ${n - c.cases.length}"></div>`.repeat(n > c.cases.length ? 1 : 0)).join("")}</main>
