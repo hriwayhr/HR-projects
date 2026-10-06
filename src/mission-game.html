@@ -398,7 +398,7 @@ function vBoard() {
   const keys = allKeys(), left = keys.filter((k) => !S.played[k]).length;
   const n = Math.max(1, ...S.game.cats.map((c) => c.cases.length));
   return `<header>${logo()}<div><h1>Миссия выполнима</h1><div class="sub">${esc(S.period)} · ${left ? `осталось кейсов: ${left} из ${keys.length}` : "все кейсы разыграны"}</div></div>
-    <div class="tools"><button class="btn" id="rulesBtn">Правила</button><button class="btn" id="endBtn">Завершить игру</button><button class="btn" data-go="home">Меню</button>${brand()}</div></header>
+    <div class="tools"><button class="btn" id="muteBtn" aria-pressed="${!muted}">${muted ? "Звук выкл." : "Звук вкл."}</button><button class="btn" id="rulesBtn">Правила</button><button class="btn" id="endBtn">Завершить игру</button><button class="btn" data-go="home">Меню</button>${brand()}</div></header>
     <main class="board" style="--n:${n}" aria-label="Игровое поле">${S.game.cats.map((c, ci) => `<div class="cat">${esc(c.name)}</div>` + c.cases.map((cs, k) => {
       const key = `${ci}-${k}`;
       if (!S.played[key]) return `<button class="cell" data-case="${key}" aria-label="${esc(c.name)}, ${cs.price}">${cs.price}</button>`;
@@ -511,6 +511,17 @@ function markDirty() { dirty = true; const st = document.querySelector(".savebar
 
 /* ---------- timer ---------- */
 let TIME = MODES.answer, left = TIME, tick = null, audio;
+/* show music: files in sounds/, published next to the page */
+const sounds = {};
+let muted = !!ls.get("mi-muted");
+function stopSounds() { Object.values(sounds).forEach((a) => a.pause()); }
+function play(name) {
+  stopSounds();
+  if (muted) return;
+  const a = (sounds[name] ||= new Audio(`sounds/${name}.mp3`));
+  a.currentTime = 0; a.play().catch(() => {});
+}
+const THINK = 32; // think.mp3 length: starts so it ends with the timer
 function beep(f, d) {
   try {
     audio ||= new AudioContext();
@@ -529,15 +540,19 @@ function drawTimer() {
   $("#tGo").disabled = !left;
 }
 function toggleTimer() {
-  if (tick) { clearInterval(tick); tick = null; }
-  else if (left) tick = setInterval(() => {
-    left--; if (left <= 5 && left) beep(880, .08);
-    if (!left) { clearInterval(tick); tick = null; beep(220, .9); }
-    drawTimer();
-  }, 1000);
+  if (tick) { clearInterval(tick); tick = null; sounds.think?.pause(); }
+  else if (left) {
+    if (left <= THINK && sounds.think?.currentTime && !muted) sounds.think.play().catch(() => {}); // resume after pause
+    tick = setInterval(() => {
+      left--;
+      if (left === THINK) play("think");
+      if (!left) { clearInterval(tick); tick = null; beep(220, .9); }
+      drawTimer();
+    }, 1000);
+  }
   drawTimer();
 }
-function resetTimer() { clearInterval(tick); tick = null; left = TIME; drawTimer(); }
+function resetTimer() { clearInterval(tick); tick = null; left = TIME; if (sounds.think) { sounds.think.pause(); sounds.think.currentTime = 0; } drawTimer(); }
 function setMode(m) {
   TIME = MODES[m];
   document.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.mode === m));
@@ -555,7 +570,7 @@ function openCase(key, skipBag) {
     $("#caseIn").innerHTML = `<div class="splash"><div class="big">Кот в мешке!</div>
       <p>${esc(S.names[S.turn])} передаёт этот кейс любому из соперников. Кейс решает тот, кому его отдали.</p>
       <button class="btn primary" id="bagGo">Показать кейс</button></div>`;
-    beep(660, .15); setTimeout(() => beep(990, .2), 160);
+    play("cat");
     $("#bagGo").focus();
     return;
   }
@@ -578,6 +593,7 @@ function openCase(key, skipBag) {
     <div class="score-panel"><h3>Очки — отмечает эксперт</h3><div class="awards" id="awards"></div>
       <div class="finish"><span class="hint">После завершения ход перейдёт к игроку по часовой стрелке.</span><button class="btn primary" id="done">Завершить кейс</button></div></div>`;
   hydrateMedia($("#caseIn"));
+  if (!skipBag) play("choice");
   setMode("answer"); drawAwards();
 }
 function drawAwards() {
@@ -588,7 +604,7 @@ function drawAwards() {
     <label class="own">Своё значение<input class="inp${a[p] != null && !opts.some(([v]) => v === a[p]) ? " on" : ""}" type="number" step="10" inputmode="numeric" id="own${p}" data-own="${p}" placeholder="например, 100" value="${a[p] != null && !opts.some(([v]) => v === a[p]) ? a[p] : ""}"></label></div>`).join("");
 }
 function closeScreens() {
-  clearInterval(tick); tick = null; open = null;
+  clearInterval(tick); tick = null; open = null; stopSounds();
   document.querySelectorAll(".screen").forEach((s) => (s.hidden = true));
   render();
 }
@@ -607,7 +623,7 @@ async function endGame() {
     <div class="podium">${order.map((p, i) => `<div><span>${i + 1}. ${esc(S.names[p])}</span><b>${total(p)}</b></div>`).join("")}</div>
     <p class="sub" id="savedMsg">Сохраняю результат в рейтинг…</p>
     <div class="actions"><button class="btn" data-close>К полю</button><button class="btn primary" data-go="rating">Открыть рейтинг</button></div></div>`;
-  [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => beep(f, .18), i * 170));
+  play("closing");
   const msg = (t) => { const el = $("#savedMsg"); if (el) el.textContent = t; };
   if (S.saved) return msg("Результат уже в рейтинге.");
   if (!db) return msg("Нет доступа к общей базе — результат не попал в рейтинг.");
@@ -621,7 +637,7 @@ function ask(text, yes) {
   $("#confirmText").textContent = text; $("#confirm").hidden = false; $("#confirmYes").focus();
   $("#confirmYes").onclick = () => { $("#confirm").hidden = true; yes(); };
 }
-function go(v) { clearInterval(tick); tick = null; open = null; document.querySelectorAll(".screen").forEach((s) => (s.hidden = true)); view = v; render(); window.scrollTo(0, 0); }
+function go(v) { clearInterval(tick); tick = null; open = null; stopSounds(); document.querySelectorAll(".screen").forEach((s) => (s.hidden = true)); view = v; render(); window.scrollTo(0, 0); }
 
 /* rating → PNG */
 async function ratingPng() {
@@ -723,6 +739,7 @@ document.addEventListener("click", (e) => {
     case "rulesBtn": $("#rulesScreen").hidden = false; break;
     case "endBtn": ask("Завершить игру сейчас? Неразыгранные кейсы пропадут, очки уйдут в рейтинг.", endGame); break;
     case "confirmNo": $("#confirm").hidden = true; break;
+    case "muteBtn": muted = !muted; ls.set("mi-muted", muted || null); if (muted) stopSounds(); render(); break;
     case "publishBtn": publishRating(); break;
     case "startBtn": {
       const ns = names.map(norm);
@@ -730,7 +747,7 @@ document.addEventListener("click", (e) => {
       if (new Set(ns).size < 3) { $("#setupMsg").textContent = "Один игрок выбран дважды."; return; }
       const g = games[pickId];
       if (!caseCount(g)) { $("#setupMsg").textContent = "В этой игре нет кейсов. Добавьте их в конструкторе."; return; }
-      const start = () => { S = { id: uid(), gameId: pickId, period: g.period, game: clone(g), names: ns, turn: 1, awards: {}, played: {} }; go("board"); };
+      const start = () => { S = { id: uid(), gameId: pickId, period: g.period, game: clone(g), names: ns, turn: 1, awards: {}, played: {} }; go("board"); play("categories"); };
       S && !S.over ? ask("Текущая игра не завершена и её очки не попадут в рейтинг. Начать новую?", start) : start();
       break;
     }
