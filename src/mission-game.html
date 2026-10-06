@@ -488,7 +488,7 @@ function vAdmin() {
   if (adminTab === "results") {
     const list = Object.entries(results).sort((a, b) => (b[1].date || "").localeCompare(a[1].date || ""));
     return `${backBar("Администратор", tabs)}${dbNote()}<section class="step"><h3>Сыгранные игры</h3>
-      ${list.length ? list.map(([id, r]) => `<div class="res"><span class="when">${esc(r.period)}<br>${r.date ? new Date(r.date).toLocaleDateString("ru-RU") : "перенесено из таблицы"}</span>
+      ${list.length ? list.map(([id, r]) => `<div class="res"><span class="when">${esc(r.period)}<br>${r.date ? new Date(r.date).toLocaleDateString("ru-RU") : "перенесено из таблицы"}${r.duration != null ? `<br>длилась ${hms(r.duration)}` : ""}</span>
         <span class="who">${(r.players || []).map((p) => `${esc(p.name)} — <b>${p.score}</b>`).join(" · ")}</span>
         <button class="btn danger" data-delres="${id}">Удалить</button></div>`).join("") : '<p class="note">Результатов пока нет.</p>'}</section>`;
   }
@@ -624,10 +624,11 @@ function finishCase() {
 /* whole-game clock: wall time since start, frozen at the end */
 const GAME_LIMIT = 90 * 60;
 const hms = (t) => `${Math.floor(t / 3600)}:${String(Math.floor(t / 60) % 60).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+const gameSeconds = () => Math.max(0, Math.floor(((S.endedAt || Date.now()) - (S.startedAt || Date.now())) / 1000));
 function drawClock() {
   const el = $("#gameClock"); if (!el || !S) return;
   S.startedAt ||= Date.now(); // sessions started before the clock existed
-  const t = Math.max(0, Math.floor(((S.endedAt || Date.now()) - S.startedAt) / 1000));
+  const t = gameSeconds();
   el.textContent = hms(t);
   el.classList.toggle("over", t >= GAME_LIMIT);
 }
@@ -641,13 +642,14 @@ async function endGame() {
   $("#caseScreen").hidden = false;
   $("#caseIn").innerHTML = `<div class="final"><span class="chip">Игра окончена · ${esc(S.period)}</span>${head}
     <div class="podium">${order.map((p) => `<div class="${rankOf(total(p), scores) === 1 ? "win" : ""}"><span>${rankOf(total(p), scores)}. ${esc(S.names[p])}</span><b>${total(p)}</b></div>`).join("")}</div>
+    <p class="sub">Игра длилась ${hms(gameSeconds())}</p>
     <p class="sub" id="savedMsg">Сохраняю результат в рейтинг…</p>
     <div class="actions"><button class="btn" data-close>К полю</button><button class="btn primary" data-go="rating">Открыть рейтинг</button></div></div>`;
   const msg = (t) => { const el = $("#savedMsg"); if (el) el.textContent = t; };
   if (S.saved) return msg("Результат уже в рейтинге.");
   if (!db) return msg("Нет доступа к общей базе — результат не попал в рейтинг.");
   try {
-    await db.doc("results/" + S.id).set({ gameId: S.gameId, period: S.period, date: new Date().toISOString(), players: S.names.map((name, p) => ({ name, score: total(p) })) });
+    await db.doc("results/" + S.id).set({ gameId: S.gameId, period: S.period, date: new Date().toISOString(), duration: gameSeconds(), players: S.names.map((name, p) => ({ name, score: total(p) })) });
     S.saved = true; saveS(); msg("Результат сохранён в рейтинг.");
   } catch { msg("Не удалось сохранить результат. Проверьте доступ к странице и завершите игру ещё раз."); S.over = false; saveS(); }
 }
