@@ -194,6 +194,7 @@ h1{font:clamp(26px,4vw,40px)/1.05 var(--f-display);margin:0;letter-spacing:.01em
 .pick b{font:20px/1.2 var(--f-display)}
 .pick small{color:var(--muted)}
 .pick[aria-pressed="true"]{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
+.tag.done{background:var(--muted)}
 .tag{align-self:flex-start;background:var(--gold);color:var(--tile-ink);font:700 11px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;border-radius:4px}
 .names{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .fld{display:flex;flex-direction:column;gap:6px;min-width:0}
@@ -322,6 +323,7 @@ const periodKey = (p) => { const m = /(\d)\s*кв\S*\s*(\d{4})/i.exec(p || ""); 
 const gameList = () => Object.entries(games).sort((a, b) => periodKey(b[1].period) - periodKey(a[1].period) || (b[1].updated || 0) - (a[1].updated || 0));
 const roster = (archived) => Object.entries(players).filter(([, p]) => !!p.archived === archived).sort((a, b) => a[1].name.localeCompare(b[1].name, "ru"));
 const archivedNames = () => new Set(roster(true).map(([, p]) => norm(p.name).toLowerCase()));
+const ongoingPeriods = () => new Set(Object.values(games).filter((g) => !g.finished).map((g) => g.period));
 const caseCount = (g) => (g.cats || []).reduce((s, c) => s + (c.cases || []).length, 0);
 
 function connect() {
@@ -400,14 +402,14 @@ function vHome() {
 }
 
 function vSetup() {
-  const list = gameList();
-  if (!pickId || !games[pickId]) pickId = games[current] ? current : list[0]?.[0] || null;
+  const list = gameList().filter(([, g]) => !g.finished);
+  if (!pickId || !list.some(([id]) => id === pickId)) pickId = list.some(([id]) => id === current) ? current : list[0]?.[0] || null;
   return `${backBar("Новая игра")}${dbNote()}
     <section class="step"><h3>1. Игра</h3>
       ${list.length ? `<div class="picks">${list.map(([id, g]) => `<button class="pick" data-pick="${id}" aria-pressed="${id === pickId}">
         ${id === current ? '<span class="tag">Текущая</span>' : ""}<b>${esc(g.period || "Без периода")}</b>
         <small>${(g.cats || []).length} категории · ${caseCount(g)} кейсов</small></button>`).join("")}</div>`
-        : dbState === "on" ? `<p class="note">Игр пока нет. Создайте игру в кабинете администратора.</p>` : ""}
+        : dbState === "on" ? `<p class="note">Нет идущих игр. Создайте игру или возобновите завершённую в кабинете администратора.</p>` : ""}
     </section>
     <section class="step"><h3>2. Игроки</h3>
       ${roster(false).length ? `<div class="names">${[0, 1, 2].map((i) => `<label class="fld"><span>Игрок ${i + 1}</span>
@@ -466,7 +468,7 @@ function ratingView() {
 function vRating() {
   const { allPeriods, periods, rows, gone } = ratingView();
   return `${backBar("Рейтинг", rows.length ? '<button class="btn primary" id="publishBtn">Опубликовать результат</button>' : "")}${dbNote()}
-    ${allPeriods.length ? `<div class="actions" role="group" aria-label="Фильтр по играм">${["all", ...allPeriods].map((p) => `<button class="opt" data-rf="${esc(p)}" aria-pressed="${rateFilter === p}">${p === "all" ? "Все игры" : esc(p)}</button>`).join("")}</div>` : ""}
+    ${allPeriods.length ? `<div class="actions" role="group" aria-label="Фильтр по играм">${["all", ...allPeriods].map((p) => `<button class="opt" data-rf="${esc(p)}" aria-pressed="${rateFilter === p}">${p === "all" ? "Все игры" : esc(p) + (ongoingPeriods().has(p) ? " · идёт" : "")}</button>`).join("")}</div>` : ""}
     <p class="sub" id="publishMsg" role="status"></p>
     ${rows.length ? `<div class="tbl-wrap"><table class="rt"><thead><tr><th>#</th><th>Игрок</th>${periods.map((p) => `<th>${esc(p)}</th>`).join("")}<th>${periods.length ? "Всего" : "Очки"}</th></tr></thead>
     <tbody>${rows.map((r) => { const n = rankOf(r.total, rows.map((x) => x.total)); return `<tr class="${n <= 3 ? "top3" : ""}"><td>${n}</td><td>${esc(r.name)}${gone.has(r.name.toLowerCase()) ? ' <span class="sub">· выбыл</span>' : ""}</td>${periods.map((p) => `<td>${r.by[p] ?? "—"}</td>`).join("")}<td class="tot">${r.total}</td></tr>`; }).join("")}</tbody></table></div>`
@@ -507,7 +509,7 @@ function vAdmin() {
   if (!draft) { const first = games[current] ? current : list[0]?.[0]; if (first) { draftId = first; draft = clone(games[first]); } }
   return `${backBar("Администратор", tabs)}${dbNote()}
     <div class="adm"><aside class="glist"><h3 class="sub" style="margin:0">Игры</h3>
-      ${list.map(([id, g]) => `<button class="pick" data-edit="${id}" aria-pressed="${id === draftId}">${id === current ? '<span class="tag">Текущая</span>' : ""}<b>${esc(g.period || "Без периода")}</b><small>${caseCount(g)} кейсов</small></button>`).join("")}
+      ${list.map(([id, g]) => `<button class="pick" data-edit="${id}" aria-pressed="${id === draftId}">${id === current ? '<span class="tag">Текущая</span>' : ""}<b>${esc(g.period || "Без периода")}</b><small>${caseCount(g)} кейсов · ${g.finished ? "завершена" : "идёт"}</small></button>`).join("")}
       <button class="btn" id="newGame">+ Новая игра</button>${draft && draftId && games[draftId] ? '<button class="btn" id="copyGame">Копировать выбранную</button>' : ""}</aside>
     ${draft ? editor() : '<p class="note">Создайте первую игру кнопкой «Новая игра».</p>'}</div>`;
 }
@@ -515,7 +517,9 @@ function editor() {
   const d = draft;
   return `<section class="ed">
     <div class="actions"><label class="fld" style="flex:1"><span>Период игры</span><input class="inp" id="period" data-path="period" value="${esc(d.period)}" placeholder="3 квартал 2026"></label>
-      ${draftId === current ? '<span class="tag">Текущая игра</span>' : `<button class="btn" id="makeCurrent"${games[draftId] ? "" : " disabled"}>Сделать текущей</button>`}</div>
+      ${draftId === current ? '<span class="tag">Текущая игра</span>' : `<button class="btn" id="makeCurrent"${games[draftId] ? "" : " disabled"}>Сделать текущей</button>`}
+      ${d.finished ? `<span class="tag done">Завершена${d.finishedAt ? " " + new Date(d.finishedAt).toLocaleDateString("ru-RU") : ""}</span><button class="btn" id="finishGame">Возобновить</button>`
+        : `<button class="btn" id="finishGame"${games[draftId] ? "" : " disabled"}>Завершить игру</button>`}</div>
     ${d.cats.map((c, ci) => `<div class="ed-cat"><div class="row"><label class="fld"><span>Категория ${ci + 1}</span><input class="inp" id="c${ci}" data-path="cats.${ci}.name" value="${esc(c.name)}"></label>
       <button class="btn danger" data-delcat="${ci}">Удалить категорию</button></div>
       ${c.cases.map((cs, k) => { const p = `cats.${ci}.cases.${k}`; return `<div class="ed-case"><div class="ed-head"><h4>Кейс ${k + 1}</h4><button class="btn danger" data-delcase="${ci}-${k}">Удалить кейс</button></div>
@@ -816,6 +820,13 @@ document.addEventListener("click", (e) => {
     case "copyGame": leaveDraft(() => { draft = clone(games[draftId]); draft.period = ""; draftId = null; dirty = true; busy = ""; render(); $("#period").focus(); }); break;
     case "addCat": draft.cats.push({ name: "Новая категория", cases: [blankCase()] }); dirty = true; render(); break;
     case "saveGame": saveGame(); break;
+    case "finishGame": {
+      const fin = !draft.finished;
+      ask(fin ? `Завершить игру «${draft.period}»? Это значит, что все игроки её сыграли: новую партию по ней начать будет нельзя. Результаты останутся в рейтинге.`
+              : `Возобновить игру «${draft.period}»? Её снова можно будет выбрать для новой партии.`,
+        () => { draft.finished = fin; draft.finishedAt = fin ? Date.now() : null; saveGame(); });
+      break;
+    }
     case "makeCurrent": db.doc("settings/app").set({ current: draftId }); break;
     case "delGame": ask(`Удалить игру «${draft.period}»? Результаты в рейтинге останутся.`, async () => {
       await db.doc("games/" + draftId).delete();
