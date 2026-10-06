@@ -29,6 +29,8 @@
 :root.light body{background:var(--bg)}
 :root.light .btn.primary:hover{color:var(--tile-ink)}
 .brand{height:30px;width:auto;flex:none}
+.clock{font:22px/1 var(--f-display);font-variant-numeric:lining-nums tabular-nums;padding:8px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg-2)}
+.clock.over{color:var(--bad);border-color:var(--bad)}
 .sep{width:1px;align-self:stretch;min-height:32px;background:var(--line);flex:none}
 .hero .brand{height:44px;align-self:flex-start}
 html,body{height:100%}
@@ -367,6 +369,7 @@ function render() {
   document.documentElement.classList.toggle("light", view === "admin");
   app.innerHTML = { home: vHome, setup: vSetup, board: vBoard, rating: vRating, admin: isAdmin() ? vAdmin : vLogin }[view]();
   hydrateMedia(app);
+  drawClock();
   saveS();
 }
 
@@ -412,7 +415,7 @@ function vBoard() {
   const keys = allKeys(), left = keys.filter((k) => !S.played[k]).length;
   const n = Math.max(1, ...S.game.cats.map((c) => c.cases.length));
   return `<header>${brand()}<span class="sep" aria-hidden="true"></span>${logo()}<div><h1>Миссия выполнима</h1><div class="sub">${esc(S.period)} · ${left ? `осталось кейсов: ${left} из ${keys.length}` : "все кейсы разыграны"}</div></div>
-    <div class="tools"><button class="btn" id="muteBtn" aria-pressed="${!muted}">${muted ? "Звук выкл." : "Звук вкл."}</button><button class="btn" id="rulesBtn">Правила</button><button class="btn" id="endBtn">Завершить игру</button><button class="btn" data-go="home">Меню</button></div></header>
+    <div class="tools"><button class="btn" id="muteBtn" aria-pressed="${!muted}">${muted ? "Звук выкл." : "Звук вкл."}</button><button class="btn" id="rulesBtn">Правила</button><button class="btn" id="endBtn">Завершить игру</button><button class="btn" data-go="home">Меню</button><span class="clock" id="gameClock" title="Время игры (лимит 1,5 часа)"></span></div></header>
     <main class="board" style="--n:${n}" aria-label="Игровое поле">${S.game.cats.map((c, ci) => `<div class="cat">${esc(c.name)}</div>` + c.cases.map((cs, k) => {
       const key = `${ci}-${k}`;
       if (!S.played[key]) return `<button class="cell" data-case="${key}" aria-label="${esc(c.name)}, кейс ${k + 1}, ${cs.price}"><span class="no">${cs.price}</span>Кейс ${k + 1}</button>`;
@@ -614,8 +617,19 @@ function finishCase() {
   closeScreens();
   if (first && allKeys().every((k) => S.played[k])) endGame();
 }
+/* whole-game clock: wall time since start, frozen at the end */
+const GAME_LIMIT = 90 * 60;
+const hms = (t) => `${Math.floor(t / 3600)}:${String(Math.floor(t / 60) % 60).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
+function drawClock() {
+  const el = $("#gameClock"); if (!el || !S) return;
+  S.startedAt ||= Date.now(); // sessions started before the clock existed
+  const t = Math.max(0, Math.floor(((S.endedAt || Date.now()) - S.startedAt) / 1000));
+  el.textContent = hms(t);
+  el.classList.toggle("over", t >= GAME_LIMIT);
+}
+setInterval(drawClock, 1000);
 async function endGame() {
-  S.over = true; saveS();
+  S.over = true; S.endedAt ||= Date.now(); saveS();
   const order = [0, 1, 2].sort((a, b) => total(b) - total(a));
   $("#caseScreen").hidden = false;
   $("#caseIn").innerHTML = `<div class="final"><span class="chip">Игра окончена · ${esc(S.period)}</span><div class="big">${esc(S.names[order[0]])}</div>
@@ -745,7 +759,7 @@ document.addEventListener("click", (e) => {
       if (new Set(ns).size < 3) { $("#setupMsg").textContent = "Один игрок выбран дважды."; return; }
       const g = games[pickId];
       if (!caseCount(g)) { $("#setupMsg").textContent = "В этой игре нет кейсов. Добавьте их в конструкторе."; return; }
-      const start = () => { S = { id: uid(), gameId: pickId, period: g.period, game: shuffled(g), names: ns, turn: 1, awards: {}, played: {} }; go("board"); };
+      const start = () => { S = { id: uid(), gameId: pickId, period: g.period, game: shuffled(g), names: ns, turn: 1, awards: {}, played: {}, startedAt: Date.now() }; go("board"); };
       S && !S.over ? ask("Текущая игра не завершена и её очки не попадут в рейтинг. Начать новую?", start) : start();
       break;
     }
