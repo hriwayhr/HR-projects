@@ -613,10 +613,12 @@ async function ratingPng() {
   const { periods, rows, gone, label } = ratingView();
   try { await Promise.all(['24px "Russo One"', '18px "Golos Text"', '600 18px "Golos Text"'].map((f) => document.fonts.load(f))); } catch {}
   const D = '"Russo One", "Arial Black", sans-serif', B = '"Golos Text", system-ui, sans-serif';
-  const PAD = 56, NUM = 64, NAME = 380, COL = 180, RH = 50, TOP = 180;
-  const W = PAD * 2 + NUM + NAME + COL * (periods.length + 1), H = TOP + RH * (rows.length + 1) + 90;
-  const cv = Object.assign(document.createElement("canvas"), { width: W * 2, height: H * 2 }), c = cv.getContext("2d");
-  c.scale(2, 2);
+  const PAD = 56, NUM = 64, COL = 180, RH = 50, TOP = 180, TITLE = "Миссия выполнима · Рейтинг";
+  const cv = document.createElement("canvas"), c = cv.getContext("2d");
+  c.font = `40px ${D}`;
+  const W = Math.max(PAD * 2 + NUM + 380 + COL * (periods.length + 1), PAD * 2 + 140 + Math.ceil(c.measureText(TITLE).width));
+  const NAME = W - PAD * 2 - NUM - COL * (periods.length + 1), H = TOP + RH * (rows.length + 1) + PAD;
+  cv.width = W * 2; cv.height = H * 2; c.scale(2, 2);
   const g = c.createRadialGradient(W * .7, 0, 50, W * .7, 0, W);
   g.addColorStop(0, "#0F4A22"); g.addColorStop(1, "#06210F");
   c.fillStyle = g; c.fillRect(0, 0, W, H);
@@ -625,7 +627,7 @@ async function ratingPng() {
     c.fillStyle = i ? "#C9CCCF" : "#FFE019"; c.fillRect(x, y, 27, 27);
     c.fillStyle = "#0E1410"; c.font = `16px ${D}`; c.textAlign = "center"; c.fillText(ch, x + 13.5, y + 20);
   });
-  c.textAlign = "left"; c.fillStyle = "#ECF5EE"; c.font = `40px ${D}`; c.fillText("Миссия выполнима · Рейтинг", PAD + 140, 78);
+  c.textAlign = "left"; c.fillStyle = "#ECF5EE"; c.font = `40px ${D}`; c.fillText(TITLE, PAD + 140, 78);
   c.fillStyle = "#FFE019"; c.font = `600 20px ${B}`; c.fillText(label, PAD + 140, 112);
   c.fillStyle = "#9DB8A4"; c.font = `16px ${B}`; c.fillText(`Zero No Show · отдел контроля · ${new Date().toLocaleDateString("ru-RU")}`, PAD + 140, 140);
   const xs = [PAD, PAD + NUM, ...periods.map((_, i) => PAD + NUM + NAME + COL * (i + 1)), PAD + NUM + NAME + COL * (periods.length + 1)];
