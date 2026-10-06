@@ -276,6 +276,15 @@ const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 const norm = (n) => String(n).trim().replace(/\s+/g, " ");
 const clone = (o) => JSON.parse(JSON.stringify(o));
+/* copy of a game with cases shuffled inside each category (Fisher–Yates) */
+const shuffled = (g) => {
+  const c = clone(g);
+  for (const cat of c.cats) for (let i = cat.cases.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [cat.cases[i], cat.cases[j]] = [cat.cases[j], cat.cases[i]];
+  }
+  return c;
+};
 const ls = {
   get: (k) => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
   set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch {} },
@@ -736,7 +745,7 @@ document.addEventListener("click", (e) => {
       if (new Set(ns).size < 3) { $("#setupMsg").textContent = "Один игрок выбран дважды."; return; }
       const g = games[pickId];
       if (!caseCount(g)) { $("#setupMsg").textContent = "В этой игре нет кейсов. Добавьте их в конструкторе."; return; }
-      const start = () => { S = { id: uid(), gameId: pickId, period: g.period, game: clone(g), names: ns, turn: 1, awards: {}, played: {} }; go("board"); };
+      const start = () => { S = { id: uid(), gameId: pickId, period: g.period, game: shuffled(g), names: ns, turn: 1, awards: {}, played: {} }; go("board"); };
       S && !S.over ? ask("Текущая игра не завершена и её очки не попадут в рейтинг. Начать новую?", start) : start();
       break;
     }
