@@ -144,7 +144,7 @@ h1{font:clamp(26px,4vw,40px)/1.05 var(--f-display);margin:0;letter-spacing:.01em
 
 .confirm{position:fixed;inset:0;background:#000a;z-index:20;display:grid;place-items:center;padding:16px}
 .confirm>div{background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:22px;max-width:380px;display:grid;gap:16px}
-.confirm .row{display:flex;gap:8px;justify-content:flex-end}
+.confirm .row{display:grid;grid-template-columns:repeat(2,minmax(0,120px));gap:10px;justify-content:center}
 
 @media (max-width:760px){
   .board{grid-template-columns:repeat(var(--n,3),1fr)}
@@ -264,7 +264,7 @@ table.rt{border-collapse:collapse;width:100%;font-variant-numeric:lining-nums ta
   <p>Ситуация дана аудиозаписью. Ведущий включает её, игрок решает кейс как обычно.</p>
   <p class="sub">Сыгранный кейс можно открыть снова и поправить очки. Пробел — старт/пауза таймера, Esc — закрыть.</p>
 </div></div>
-<div class="confirm" id="confirm" hidden><div><span id="confirmText"></span><div class="row"><button class="btn" id="confirmNo">Отмена</button><button class="btn primary" id="confirmYes">Да</button></div></div></div>
+<div class="confirm" id="confirm" hidden><div><span id="confirmText"></span><div class="row"><button class="btn primary" id="confirmYes">Да</button><button class="btn" id="confirmNo">Отмена</button></div></div></div>
 
 <script>
 const MODES = { answer: 180, extra: 60 };
