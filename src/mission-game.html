@@ -36,7 +36,7 @@
 html,body{height:100%}
 [hidden]{display:none!important}
 body{background:var(--bg) radial-gradient(120% 80% at 70% 0%,#0F4A22 0%,var(--bg) 60%) fixed;color:var(--ink);font:16px/1.5 var(--f-body);font-variant-numeric:lining-nums;padding-inline:16px;box-sizing:border-box}
-body,input,select,textarea,button{font-feature-settings:"lnum"} /* Fedra defaults to old-style digits; `font:` shorthand would reset font-variant */
+*,*::before,*::after{font-feature-settings:"lnum"!important} /* Fedra defaults to old-style digits; every `font:` shorthand resets feature settings, so force it everywhere */
 *{box-sizing:border-box}
 button{font:inherit;color:inherit;cursor:pointer}
 button:focus-visible,[contenteditable]:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
@@ -195,7 +195,7 @@ h1{font:clamp(26px,4vw,40px)/1.05 var(--f-display);margin:0;letter-spacing:.01em
 .pick small{color:var(--muted)}
 .pick[aria-pressed="true"]{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset}
 .tag.done{background:var(--muted)}
-.tag{align-self:flex-start;background:var(--gold);color:var(--tile-ink);font:700 11px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;border-radius:4px}
+.tag{align-self:flex-start;background:var(--gold);color:var(--tile-ink);font:600 11px/1 var(--f-body);letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;border-radius:4px}
 .names{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .fld{display:flex;flex-direction:column;gap:6px;min-width:0}
 .fld>span{font-size:13px;color:var(--muted)}
@@ -329,6 +329,8 @@ const gameList = () => Object.entries(games).sort((a, b) => periodKey(b[1].perio
 const roster = (archived) => Object.entries(players).filter(([, p]) => !!p.archived === archived).sort((a, b) => a[1].name.localeCompare(b[1].name, "ru"));
 const archivedNames = () => new Set(roster(true).map(([, p]) => norm(p.name).toLowerCase()));
 const ongoingPeriods = () => new Set(Object.values(games).filter((g) => !g.finished).map((g) => g.period));
+const ddmm = (t) => new Date(t).toLocaleDateString("ru-RU");
+const gameStatus = (g) => g.finished ? `завершена${g.finishedAt ? " " + ddmm(g.finishedAt) : ""}` : g.startedAt ? `идёт с ${ddmm(g.startedAt)}` : "ещё не начата";
 const caseCount = (g) => (g.cats || []).reduce((s, c) => s + (c.cases || []).length, 0);
 
 function connect() {
@@ -413,7 +415,7 @@ function vSetup() {
     <section class="step"><h3>1. Игра</h3>
       ${list.length ? `<div class="picks">${list.map(([id, g]) => `<button class="pick" data-pick="${id}" aria-pressed="${id === pickId}">
         ${id === current ? '<span class="tag">Текущая</span>' : ""}<b>${esc(g.period || "Без периода")}</b>
-        <small>${(g.cats || []).length} категории · ${caseCount(g)} кейсов</small></button>`).join("")}</div>`
+        <small>${(g.cats || []).length} категории · ${caseCount(g)} кейсов<br>${gameStatus(g)}</small></button>`).join("")}</div>`
         : dbState === "on" ? `<p class="note">Нет идущих игр. Создайте игру или возобновите завершённую в кабинете администратора.</p>` : ""}
     </section>
     <section class="step"><h3>2. Игроки</h3>
@@ -511,10 +513,11 @@ function vAdmin() {
         <button class="btn danger" data-delres="${id}">Удалить</button></div>`).join("") : '<p class="note">Результатов пока нет.</p>'}</section>`;
   }
   const list = gameList();
+  if (draft && draftId && games[draftId] && !dirty) draft = clone(games[draftId]); // pick up changes saved elsewhere (e.g. first play)
   if (!draft) { const first = games[current] ? current : list[0]?.[0]; if (first) { draftId = first; draft = clone(games[first]); } }
   return `${backBar("Администратор", tabs)}${dbNote()}
     <div class="adm"><aside class="glist"><h3 class="sub" style="margin:0">Игры</h3>
-      ${list.map(([id, g]) => `<button class="pick" data-edit="${id}" aria-pressed="${id === draftId}">${id === current ? '<span class="tag">Текущая</span>' : ""}<b>${esc(g.period || "Без периода")}</b><small>${caseCount(g)} кейсов · ${g.finished ? "завершена" : "идёт"}</small></button>`).join("")}
+      ${list.map(([id, g]) => `<button class="pick" data-edit="${id}" aria-pressed="${id === draftId}">${id === current ? '<span class="tag">Текущая</span>' : ""}<b>${esc(g.period || "Без периода")}</b><small>${caseCount(g)} кейсов · ${gameStatus(g)}</small></button>`).join("")}
       <button class="btn" id="newGame">+ Новая игра</button>${draft && draftId && games[draftId] ? '<button class="btn" id="copyGame">Копировать выбранную</button>' : ""}</aside>
     ${draft ? editor() : '<p class="note">Создайте первую игру кнопкой «Новая игра».</p>'}</div>`;
 }
@@ -523,6 +526,7 @@ function editor() {
   return `<section class="ed">
     <div class="ed-top"><label class="fld"><span>Период игры</span><input class="inp" id="period" data-path="period" value="${esc(d.period)}" placeholder="3 квартал 2026"></label>
       ${draftId === current ? '<span class="tag">Текущая игра</span>' : `<button class="btn" id="makeCurrent"${games[draftId] ? "" : " disabled"}>Сделать текущей</button>`}
+      ${d.startedAt ? `<span class="tag done">Начата ${ddmm(d.startedAt)}</span>` : '<span class="tag done">Ещё не начата</span>'}
       ${d.finished ? `<span class="tag done">Завершена${d.finishedAt ? " " + new Date(d.finishedAt).toLocaleDateString("ru-RU") : ""}</span><button class="btn" id="finishGame">Возобновить</button>`
         : `<button class="btn" id="finishGame"${games[draftId] ? "" : " disabled"}>Завершить игру</button>`}</div>
     ${d.cats.map((c, ci) => `<div class="ed-cat"><div class="row"><label class="fld"><span>Категория ${ci + 1}</span><input class="inp" id="c${ci}" data-path="cats.${ci}.name" value="${esc(c.name)}"></label>
@@ -770,7 +774,8 @@ async function saveGame() {
   busy = "Сохраняю…"; render();
   draftId ||= uid();
   try {
-    await db.doc("games/" + draftId).set({ ...draft, period: norm(draft.period), updated: Date.now() });
+    const stored = games[draftId] || {};
+    await db.doc("games/" + draftId).set({ ...draft, startedAt: stored.startedAt ?? draft.startedAt ?? null, period: norm(draft.period), updated: Date.now() });
     if (!current) await db.doc("settings/app").set({ current: draftId });
     dirty = false; busy = "";
   } catch { busy = "Не удалось сохранить. Проверьте доступ к странице и попробуйте ещё раз."; }
@@ -816,20 +821,22 @@ document.addEventListener("click", (e) => {
       if (new Set(ns).size < 3) { $("#setupMsg").textContent = "Один игрок выбран дважды."; return; }
       const g = games[pickId];
       if (!caseCount(g)) { $("#setupMsg").textContent = "В этой игре нет кейсов. Добавьте их в конструкторе."; return; }
-      const start = () => { S = { id: uid(), gameId: pickId, period: g.period, game: shuffled(g), names: ns, turn: Math.floor(Math.random() * 3), awards: {}, played: {}, startedAt: Date.now() }; go("board"); };
+      const start = () => { S = { id: uid(), gameId: pickId, period: g.period, game: shuffled(g), names: ns, turn: Math.floor(Math.random() * 3), awards: {}, played: {}, startedAt: Date.now() };
+        if (db && !g.startedAt) db.doc("games/" + pickId).set({ ...g, startedAt: S.startedAt }).catch(() => {}); // first time this game is played
+        go("board"); };
       S && !S.over ? ask("Текущая игра не завершена и её очки не попадут в рейтинг. Начать новую?", start) : start();
       break;
     }
     case "logoutBtn": leaveDraft(() => { setAdmin(false); draft = null; draftId = null; go("home"); }); break;
     case "newGame": leaveDraft(() => { draftId = null; dirty = true; busy = ""; draft = { period: "", cats: ["Согласования", "Задержки", "Форс-мажоры"].map((name) => ({ name, cases: [blankCase(), blankCase(), blankCase()] })) }; render(); $("#period").focus(); }); break;
-    case "copyGame": leaveDraft(() => { draft = clone(games[draftId]); draft.period = ""; draftId = null; dirty = true; busy = ""; render(); $("#period").focus(); }); break;
+    case "copyGame": leaveDraft(() => { draft = clone(games[draftId]); draft.period = ""; delete draft.startedAt; delete draft.finished; delete draft.finishedAt; draftId = null; dirty = true; busy = ""; render(); $("#period").focus(); }); break;
     case "addCat": draft.cats.push({ name: "Новая категория", cases: [blankCase()] }); dirty = true; render(); break;
     case "saveGame": saveGame(); break;
     case "finishGame": {
       const fin = !draft.finished;
       ask(fin ? `Завершить игру «${draft.period}»? Это значит, что все игроки её сыграли: новую партию по ней начать будет нельзя. Результаты останутся в рейтинге.`
               : `Возобновить игру «${draft.period}»? Её снова можно будет выбрать для новой партии.`,
-        () => { draft.finished = fin; draft.finishedAt = fin ? Date.now() : null; saveGame(); });
+        () => { draft.finished = fin; draft.finishedAt = fin ? Date.now() : null; dirty = true; saveGame(); });
       break;
     }
     case "makeCurrent": db.doc("settings/app").set({ current: draftId }); break;
