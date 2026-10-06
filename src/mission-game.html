@@ -208,10 +208,14 @@ table.rt{border-collapse:collapse;width:100%;font-variant-numeric:lining-nums ta
 .ed-cat{border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;background:var(--shade)}
 .ed-cat>.row{display:flex;gap:10px;align-items:end}
 .ed-cat>.row .fld{flex:1}
-.ed-case{background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:14px;display:grid;grid-template-columns:repeat(4,auto) 1fr;gap:12px;align-items:end}
-.ed-case .wide{grid-column:1/-1}
-.ed-case .del{justify-self:end}
-.ed-case h4{margin:0;font:16px/1 var(--f-display);align-self:center}
+.ed-case{background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.ed-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.ed-head h4{margin:0;font:17px/1 var(--f-display)}
+.ed-meta{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end}
+.ed-meta .fmt{flex:1 1 220px}
+.ed-meta .fld:not(.fmt){flex:0 0 120px}
+.ed-meta .chk{min-height:42px}
+.ed-meta .inp{height:42px}
 .chk{display:flex;gap:8px;align-items:center;font-size:14px}
 .media-box{display:flex;gap:12px;align-items:center;flex-wrap:wrap;border:1px dashed var(--line);border-radius:6px;padding:10px}
 .media-box img{max-height:120px;border-radius:4px}
@@ -232,7 +236,6 @@ table.rt{border-collapse:collapse;width:100%;font-variant-numeric:lining-nums ta
 @media (max-width:760px){
   .home,.adm{grid-template-columns:1fr;gap:24px}
   .names{grid-template-columns:1fr}
-  .ed-case{grid-template-columns:1fr 1fr}
 }
 </style>
 
@@ -488,11 +491,10 @@ function editor() {
       ${draftId === current ? '<span class="tag">Текущая игра</span>' : `<button class="btn" id="makeCurrent"${games[draftId] ? "" : " disabled"}>Сделать текущей</button>`}</div>
     ${d.cats.map((c, ci) => `<div class="ed-cat"><div class="row"><label class="fld"><span>Категория ${ci + 1}</span><input class="inp" id="c${ci}" data-path="cats.${ci}.name" value="${esc(c.name)}"></label>
       <button class="btn danger" data-delcat="${ci}">Удалить категорию</button></div>
-      ${c.cases.map((cs, k) => { const p = `cats.${ci}.cases.${k}`; return `<div class="ed-case"><h4>Кейс ${k + 1}</h4>
-        <label class="fld"><span>Формат</span><select class="inp" id="${p}.kind" data-path="${p}.kind" data-rerender>${Object.entries(KINDS).map(([v, l]) => `<option value="${v}"${cs.kind === v ? " selected" : ""}>${l}</option>`).join("")}</select></label>
-        <label class="fld"><span>Стоимость</span><input class="inp" type="number" min="0" step="50" id="${p}.price" data-path="${p}.price" data-num value="${cs.price}" style="width:100px"></label>
-        <label class="chk"><input type="checkbox" id="${p}.bag" data-path="${p}.bag" data-bool${cs.bag ? " checked" : ""}> Кот в мешке</label>
-        <button class="btn danger del" data-delcase="${ci}-${k}">Удалить кейс</button>
+      ${c.cases.map((cs, k) => { const p = `cats.${ci}.cases.${k}`; return `<div class="ed-case"><div class="ed-head"><h4>Кейс ${k + 1}</h4><button class="btn danger" data-delcase="${ci}-${k}">Удалить кейс</button></div>
+        <div class="ed-meta"><label class="fld fmt"><span>Формат</span><select class="inp" id="${p}.kind" data-path="${p}.kind" data-rerender>${Object.entries(KINDS).map(([v, l]) => `<option value="${v}"${cs.kind === v ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+        <label class="fld"><span>Стоимость</span><input class="inp" type="number" min="0" step="50" id="${p}.price" data-path="${p}.price" data-num value="${cs.price}"></label>
+        <label class="chk"><input type="checkbox" id="${p}.bag" data-path="${p}.bag" data-bool${cs.bag ? " checked" : ""}> Кот в мешке</label></div>
         ${cs.kind !== "text" ? `<div class="wide media-box">${cs.media ? (cs.kind === "call" ? `<audio controls data-media="${cs.media}"></audio>` : `<img alt="Картинка кейса" data-media="${cs.media}">`) + `<span class="sub">${esc(cs.mediaName)}</span>` : `<span class="sub">${cs.kind === "call" ? "Загрузите запись звонка (mp3, m4a, wav)" : "Загрузите картинку"} — до 8 МБ</span>`}
           <label class="btn">${cs.media ? "Заменить" : "Загрузить"}<input type="file" hidden data-upload="${p}" accept="${cs.kind === "call" ? "audio/*" : "image/*"}"></label></div>` : ""}
         <label class="fld wide"><span>${cs.kind === "call" ? "Пояснение к звонку (необязательно)" : "Ситуация"}</span><textarea class="inp" id="${p}.text" data-path="${p}.text">${esc(cs.text)}</textarea></label>
