@@ -641,7 +641,7 @@ async function endGame() {
     : `<div class="big">Ничья</div><p class="tie">${winners.length === 3 ? `Все игроки набрали по ${scores[0]}` : `${winners.map((p) => esc(S.names[p])).join(" и ")} набрали по ${scores[0]}`}</p>`;
   $("#caseScreen").hidden = false;
   $("#caseIn").innerHTML = `<div class="final"><span class="chip">Игра окончена · ${esc(S.period)}</span>${head}
-    <div class="podium">${order.map((p) => `<div class="${rankOf(total(p), scores) === 1 ? "win" : ""}"><span>${rankOf(total(p), scores)}. ${esc(S.names[p])}</span><b>${total(p)}</b></div>`).join("")}</div>
+    <div class="podium">${order.map((p) => `<div class="${rankOf(total(p), scores) === 1 ? "win" : ""}"><span>${winners.length > 1 ? "" : `${rankOf(total(p), scores)}. `}${esc(S.names[p])}</span><b>${total(p)}</b></div>`).join("")}</div>
     <p class="sub">Игра длилась ${hms(gameSeconds())}</p>
     <p class="sub" id="savedMsg">Сохраняю результат в рейтинг…</p>
     <div class="actions"><button class="btn" data-close>К полю</button><button class="btn primary" data-go="rating">Открыть рейтинг</button></div></div>`;
