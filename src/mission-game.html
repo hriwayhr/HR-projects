@@ -69,8 +69,8 @@ h1{font:clamp(26px,4vw,40px)/1.05 var(--f-display);margin:0;letter-spacing:.01em
 .pl .name:hover{background:#ffffff10}
 .pl .score{font:clamp(30px,4vw,44px)/1.1 var(--f-display);font-variant-numeric:lining-nums tabular-nums}
 .pl .seat{color:var(--muted);font-size:12px}
-.pl .giveturn{position:absolute;right:10px;top:10px;font-size:12px;padding:4px 8px}
-.pl.turn .giveturn{display:none}
+.pl-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.pl .giveturn{flex:none;font-size:12px;padding:4px 8px}
 
 /* overlay screens */
 .screen{position:fixed;inset:0;background:var(--bg);z-index:10;overflow:auto;padding:calc(env(safe-area-inset-top,0px) + 20px) 16px calc(env(safe-area-inset-bottom,0px) + 20px)}
@@ -407,8 +407,8 @@ function vBoard() {
       return `<button class="cell done" data-case="${key}" title="Открыть снова"><b>Кейс ${k + 1} · ${cs.price}</b>${who.join("<br>") || "без очков"}</button>`;
     }).join("") + `<div aria-hidden="true" style="grid-column:span ${n - c.cases.length}"></div>`.repeat(n > c.cases.length ? 1 : 0)).join("")}</main>
     <section class="players" aria-label="Игроки">${S.names.map((nm, p) => `<div class="pl${S.turn === p ? " turn" : ""}">
-      ${S.turn === p ? '<span class="turn-tag">Выбирает</span>' : `<button class="btn giveturn" data-turn="${p}">Передать ход</button>`}
-      <span class="name">${esc(nm)}</span><span class="score">${total(p)}</span><span class="seat">сидит ${SEATS[p]}</span></div>`).join("")}</section>`;
+      ${S.turn === p ? '<span class="turn-tag">Выбирает</span>' : ""}
+      <div class="pl-top"><span class="name">${esc(nm)}</span>${S.turn === p ? "" : `<button class="btn giveturn" data-turn="${p}">Передать ход</button>`}</div><span class="score">${total(p)}</span><span class="seat">сидит ${SEATS[p]}</span></div>`).join("")}</section>`;
 }
 
 function ratingData(only) {
