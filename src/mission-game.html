@@ -71,7 +71,8 @@ h1{font:clamp(26px,4vw,40px)/1.05 var(--f-display);margin:0;letter-spacing:.01em
 .pl .name{font-weight:600;font-size:17px;min-width:0;overflow-wrap:anywhere;border-radius:4px;padding:0 2px;margin-left:-2px}
 .pl .name:hover{background:#ffffff10}
 .pl .score{font:clamp(30px,4vw,44px)/1.1 var(--f-display);font-variant-numeric:lining-nums tabular-nums}
-.pl .seat{color:var(--muted);font-size:12px}
+.starter{color:var(--gold);font-weight:600;margin:auto 0 6px;font-size:17px}
+.starter+.players{margin-top:0}
 .pl-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
 .pl .giveturn{flex:none;font-size:12px;padding:4px 8px}
 
@@ -250,12 +251,12 @@ table.rt{border-collapse:collapse;width:100%;font-variant-numeric:lining-nums ta
   <p>Игра для отработки алгоритма действий отдела контроля по предотвращению неподач в рамках политики Zero No Show. Три игрока, до 1,5 часов. Ведущий следит за ходом игры, эксперт оценивает полноту ответа и присваивает очки. На ответ — 3 минуты, на добивку — 1 минута.</p>
   <h3>Ход игры</h3>
   <ol>
-    <li>Первым начинает игрок, сидящий посередине. Он выбирает категорию и кейс.</li>
+    <li>Кто начинает, решает жребий при старте игры. Этот игрок выбирает категорию и кейс.</li>
     <li>Игрок решает кейс вслух, проговаривая каждый шаг своих действий за отведённое время.</li>
     <li>За правильно решённый кейс игрок получает его полную стоимость.</li>
     <li>Ответ частично верный — половина или полная стоимость, на усмотрение эксперта. Право дополнить ответ переходит другим игрокам.</li>
     <li>Игрок не знает ответа или ответил неверно — вопрос переходит другим игрокам, очки не начисляются. Отвечает тот, кто первым поднял руку: полный верный ответ — полная стоимость, дополнение — 50 очков.</li>
-    <li>После ответа ход переходит следующему игроку по часовой стрелке.</li>
+    <li>После ответа ход переходит следующему игроку.</li>
     <li>Игра заканчивается, когда разыграны все кейсы. Очки попадают в рейтинг.</li>
   </ol>
   <h3>Кот в мешке</h3>
@@ -268,7 +269,6 @@ table.rt{border-collapse:collapse;width:100%;font-variant-numeric:lining-nums ta
 
 <script>
 const MODES = { answer: 180, extra: 60 };
-const SEATS = ["слева", "посередине", "справа"];
 const KINDS = { text: "Текст", call: "Кейс — звонок (аудио)", image: "Текст + картинка" };
 const ADMIN = { login: "admin", pass: "12345" }; // ponytail: client-side gate only — db rules, not this, protect the data
 const CHUNK = 200000, MAX_FILE = 8 * 1024 * 1024; // ponytail: media lives in db chunks (assets has no audio type); replaced files stay as orphans
@@ -398,8 +398,8 @@ function vSetup() {
         : dbState === "on" ? `<p class="note">Игр пока нет. Создайте игру в кабинете администратора.</p>` : ""}
     </section>
     <section class="step"><h3>2. Игроки</h3>
-      ${roster(false).length ? `<div class="names">${SEATS.map((s, i) => `<label class="fld"><span>Сидит ${s}${i === 1 ? " · начинает игру" : ""}</span>
-        <select class="inp" id="pn${i}" data-pn="${i}"><option value="">— выберите игрока —</option>${roster(false).map(([, p]) => `<option${p.name === names[i] ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>`).join("")}</div>
+      ${roster(false).length ? `<div class="names">${[0, 1, 2].map((i) => `<label class="fld"><span>Игрок ${i + 1}</span>
+        <select class="inp" id="pn${i}" data-pn="${i}"><option value="">— выберите игрока —</option>${roster(false).map(([, p]) => `<option${p.name === names[i] ? " selected" : ""}${p.name !== names[i] && names.includes(p.name) ? " disabled" : ""}>${esc(p.name)}</option>`).join("")}</select></label>`).join("")}</div>
       <p class="sub">Нет нужного человека? Администратор добавляет игроков во вкладке «Игроки».</p>`
         : dbState === "on" ? `<p class="note">Список игроков пуст. Добавьте игроков в кабинете администратора.</p>` : ""}
     </section>
@@ -422,9 +422,10 @@ function vBoard() {
       const a = S.awards[key] || {}, who = [0, 1, 2].filter((p) => a[p]).map((p) => `${esc(S.names[p])} ${sign(a[p])}`);
       return `<button class="cell done" data-case="${key}" title="Открыть снова"><b>Кейс ${k + 1} · ${cs.price}</b>${who.join("<br>") || "без очков"}</button>`;
     }).join("") + `<div aria-hidden="true" style="grid-column:span ${n - c.cases.length}"></div>`.repeat(n > c.cases.length ? 1 : 0)).join("")}</main>
+    ${Object.keys(S.played).length ? "" : `<p class="starter">Жребий выбрал, кто начинает: ${esc(S.names[S.turn])}</p>`}
     <section class="players" aria-label="Игроки">${S.names.map((nm, p) => `<div class="pl${S.turn === p ? " turn" : ""}">
-      ${S.turn === p ? '<span class="turn-tag">Выбирает</span>' : ""}
-      <div class="pl-top"><span class="name">${esc(nm)}</span>${S.turn === p ? "" : `<button class="btn giveturn" data-turn="${p}">Передать ход</button>`}</div><span class="score">${total(p)}</span><span class="seat">сидит ${SEATS[p]}</span></div>`).join("")}</section>`;
+      ${S.turn === p ? `<span class="turn-tag">${Object.keys(S.played).length ? "Выбирает" : "Начинает игру"}</span>` : ""}
+      <div class="pl-top"><span class="name">${esc(nm)}</span>${S.turn === p ? "" : `<button class="btn giveturn" data-turn="${p}">Передать ход</button>`}</div><span class="score">${total(p)}</span></div>`).join("")}</section>`;
 }
 
 function ratingData(only) {
@@ -594,7 +595,7 @@ function openCase(key, skipBag) {
         <div class="row"><button class="btn primary" id="tGo"></button><button class="btn" id="tReset">Сброс</button></div><small>пробел — старт/пауза</small></aside>
     </div>
     <div class="score-panel"><h3>Очки — отмечает эксперт</h3><div class="awards" id="awards"></div>
-      <div class="finish"><span class="hint">После завершения ход перейдёт к игроку по часовой стрелке.</span><button class="btn primary" id="done">Завершить кейс</button></div></div>`;
+      <div class="finish"><span class="hint">После завершения ход перейдёт к следующему игроку.</span><button class="btn primary" id="done">Завершить кейс</button></div></div>`;
   hydrateMedia($("#caseIn"));
   setMode("answer"); drawAwards();
 }
@@ -759,7 +760,7 @@ document.addEventListener("click", (e) => {
       if (new Set(ns).size < 3) { $("#setupMsg").textContent = "Один игрок выбран дважды."; return; }
       const g = games[pickId];
       if (!caseCount(g)) { $("#setupMsg").textContent = "В этой игре нет кейсов. Добавьте их в конструкторе."; return; }
-      const start = () => { S = { id: uid(), gameId: pickId, period: g.period, game: shuffled(g), names: ns, turn: 1, awards: {}, played: {}, startedAt: Date.now() }; go("board"); };
+      const start = () => { S = { id: uid(), gameId: pickId, period: g.period, game: shuffled(g), names: ns, turn: Math.floor(Math.random() * 3), awards: {}, played: {}, startedAt: Date.now() }; go("board"); };
       S && !S.over ? ask("Текущая игра не завершена и её очки не попадут в рейтинг. Начать новую?", start) : start();
       break;
     }
@@ -778,7 +779,7 @@ document.addEventListener("click", (e) => {
 });
 document.addEventListener("input", (e) => {
   const el = e.target, d = el.dataset;
-  if (d.pn) names[+d.pn] = el.value;
+  if (d.pn) { names[+d.pn] = el.value; render(); $("#pn" + d.pn).focus(); }
   else if (el.id === "showArch") { showArchived = el.checked; render(); }
   else if (d.path && draft) {
     setPath(d.path, d.bool != null ? el.checked : d.num != null ? +el.value || 0 : d.lines != null ? el.value.split("\n").map((s) => s.trim()).filter(Boolean) : el.value);
