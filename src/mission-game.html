@@ -268,6 +268,7 @@ let adminMem = false;
 const setAdmin = (v) => { adminMem = v; try { v ? sessionStorage.setItem("mi-admin", "1") : sessionStorage.removeItem("mi-admin"); } catch {} };
 
 /* ---------- data ---------- */
+let rateFilter = "all";
 let db = null, dbState = "loading", games = {}, results = {}, players = {}, current = null, showArchived = false;
 let view = "home", S = ls.get("mi-session"), pickId = null, names = ["", "", ""];
 let draft = null, draftId = null, dirty = false, adminTab = "games", busy = "";
@@ -394,9 +395,9 @@ function vBoard() {
       <span class="name">${esc(nm)}</span><span class="score">${total(p)}</span><span class="seat">сидит ${SEATS[p]}</span></div>`).join("")}</section>`;
 }
 
-function ratingData() {
+function ratingData(only) {
   const per = {}, periods = new Set();
-  for (const r of Object.values(results)) {
+  for (const r of Object.values(results).filter((r) => !only || r.period === only)) {
     periods.add(r.period);
     for (const p of r.players || []) {
       const k = norm(p.name).toLowerCase();
@@ -407,11 +408,20 @@ function ratingData() {
   }
   return { periods: [...periods].sort((a, b) => periodKey(a) - periodKey(b)), rows: Object.values(per).sort((a, b) => b.total - a.total) };
 }
-function vRating() {
-  const { periods, rows: all } = ratingData(), gone = archivedNames();
+function ratingView() {
+  const allPeriods = ratingData().periods;
+  if (rateFilter !== "all" && !allPeriods.includes(rateFilter)) rateFilter = "all";
+  const only = rateFilter === "all" ? null : rateFilter;
+  const { rows: all } = ratingData(only), gone = archivedNames();
   const rows = showArchived ? all : all.filter((r) => !gone.has(r.name.toLowerCase()));
-  return `${backBar("Рейтинг")}${dbNote()}
-    ${rows.length ? `<div class="tbl-wrap"><table class="rt"><thead><tr><th>#</th><th>Игрок</th>${periods.map((p) => `<th>${esc(p)}</th>`).join("")}<th>Всего</th></tr></thead>
+  return { allPeriods, periods: only ? [] : allPeriods, rows, gone, label: only || "Все игры" };
+}
+function vRating() {
+  const { allPeriods, periods, rows, gone } = ratingView();
+  return `${backBar("Рейтинг", rows.length ? '<button class="btn primary" id="publishBtn">Опубликовать результат</button>' : "")}${dbNote()}
+    ${allPeriods.length ? `<div class="actions" role="group" aria-label="Фильтр по играм">${["all", ...allPeriods].map((p) => `<button class="opt" data-rf="${esc(p)}" aria-pressed="${rateFilter === p}">${p === "all" ? "Все игры" : esc(p)}</button>`).join("")}</div>` : ""}
+    <p class="sub" id="publishMsg" role="status"></p>
+    ${rows.length ? `<div class="tbl-wrap"><table class="rt"><thead><tr><th>#</th><th>Игрок</th>${periods.map((p) => `<th>${esc(p)}</th>`).join("")}<th>${periods.length ? "Всего" : "Очки"}</th></tr></thead>
     <tbody>${rows.map((r, i) => `<tr class="${i < 3 ? "top3" : ""}"><td>${i + 1}</td><td>${esc(r.name)}${gone.has(r.name.toLowerCase()) ? ' <span class="sub">· выбыл</span>' : ""}</td>${periods.map((p) => `<td>${r.by[p] ?? "—"}</td>`).join("")}<td class="tot">${r.total}</td></tr>`).join("")}</tbody></table></div>`
       : dbState === "on" ? `<p class="note">Рейтинг пуст. Очки появятся здесь после первой завершённой игры.</p>` : ""}
     ${gone.size ? `<label class="chk"><input type="checkbox" id="showArch"${showArchived ? " checked" : ""}> Показать выбывших (${gone.size})</label>` : ""}
@@ -598,6 +608,58 @@ function ask(text, yes) {
 }
 function go(v) { clearInterval(tick); tick = null; open = null; document.querySelectorAll(".screen").forEach((s) => (s.hidden = true)); view = v; render(); window.scrollTo(0, 0); }
 
+/* rating → PNG */
+async function ratingPng() {
+  const { periods, rows, gone, label } = ratingView();
+  try { await Promise.all(['24px "Russo One"', '18px "Golos Text"', '600 18px "Golos Text"'].map((f) => document.fonts.load(f))); } catch {}
+  const D = '"Russo One", "Arial Black", sans-serif', B = '"Golos Text", system-ui, sans-serif';
+  const PAD = 56, NUM = 64, NAME = 380, COL = 180, RH = 50, TOP = 180;
+  const W = PAD * 2 + NUM + NAME + COL * (periods.length + 1), H = TOP + RH * (rows.length + 1) + 90;
+  const cv = Object.assign(document.createElement("canvas"), { width: W * 2, height: H * 2 }), c = cv.getContext("2d");
+  c.scale(2, 2);
+  const g = c.createRadialGradient(W * .7, 0, 50, W * .7, 0, W);
+  g.addColorStop(0, "#0F4A22"); g.addColorStop(1, "#06210F");
+  c.fillStyle = g; c.fillRect(0, 0, W, H);
+  [..."СВОЯИГРА"].forEach((ch, i) => {
+    const x = PAD + (i % 4) * 30, y = 40 + Math.floor(i / 4) * 30;
+    c.fillStyle = i ? "#C9CCCF" : "#FFE019"; c.fillRect(x, y, 27, 27);
+    c.fillStyle = "#0E1410"; c.font = `16px ${D}`; c.textAlign = "center"; c.fillText(ch, x + 13.5, y + 20);
+  });
+  c.textAlign = "left"; c.fillStyle = "#ECF5EE"; c.font = `40px ${D}`; c.fillText("Миссия выполнима · Рейтинг", PAD + 140, 78);
+  c.fillStyle = "#FFE019"; c.font = `600 20px ${B}`; c.fillText(label, PAD + 140, 112);
+  c.fillStyle = "#9DB8A4"; c.font = `16px ${B}`; c.fillText(`Zero No Show · отдел контроля · ${new Date().toLocaleDateString("ru-RU")}`, PAD + 140, 140);
+  const xs = [PAD, PAD + NUM, ...periods.map((_, i) => PAD + NUM + NAME + COL * (i + 1)), PAD + NUM + NAME + COL * (periods.length + 1)];
+  const row = (y, cells, fonts, colors) => cells.forEach((t, i) => {
+    c.font = fonts[i]; c.fillStyle = colors[i]; c.textAlign = i < 2 ? "left" : "right";
+    c.fillText(String(t), i < 2 ? xs[i] + 12 : xs[i] - 12, y + RH / 2 + 7);
+  });
+  c.fillStyle = "#0B3419"; c.fillRect(PAD, TOP, W - PAD * 2, RH);
+  const head = ["#", "ИГРОК", ...periods.map((p) => p.toUpperCase()), periods.length ? "ВСЕГО" : "ОЧКИ"];
+  row(TOP, head, head.map(() => `600 14px ${B}`), head.map(() => "#9DB8A4"));
+  rows.forEach((r, i) => {
+    const y = TOP + RH * (i + 1);
+    c.fillStyle = "#2A5A37"; c.fillRect(PAD, y, W - PAD * 2, 1);
+    const cells = [i + 1, r.name + (gone.has(r.name.toLowerCase()) ? " · выбыл" : ""), ...periods.map((p) => r.by[p] ?? "—"), r.total];
+    row(y, cells, cells.map((_, k) => (k === 0 && i < 3) || k === cells.length - 1 ? `20px ${D}` : `18px ${B}`),
+      cells.map((_, k) => (k === 0 && i < 3) || k === cells.length - 1 ? "#FFE019" : "#ECF5EE"));
+  });
+  c.strokeStyle = "#2A5A37"; c.lineWidth = 1; c.strokeRect(PAD + .5, TOP + .5, W - PAD * 2 - 1, RH * (rows.length + 1) - 1);
+  return { blob: await new Promise((ok) => cv.toBlob(ok, "image/png")), label };
+}
+async function publishRating() {
+  const msg = (t) => { const el = $("#publishMsg"); if (el) el.textContent = t; };
+  msg("Готовлю картинку…");
+  const dl = await window.claude?.use?.("downloads");
+  if (!dl) return msg("Сохранение файлов здесь недоступно. Откройте страницу на claude.ai в браузере на компьютере.");
+  const { blob, label } = await ratingPng();
+  try {
+    await dl.save({ filename: `Рейтинг — ${label} — ${new Date().toLocaleDateString("ru-RU")}.png`, data: blob });
+    msg("Картинка рейтинга сохранена.");
+  } catch (e) {
+    msg(e?.code === "declined" ? "Сохранение отменено." : e?.code === "rate_limited" ? "Окно сохранения уже открыто." : "Не удалось сохранить картинку.");
+  }
+}
+
 async function saveGame() {
   if (!db) return;
   if (!norm(draft.period)) { busy = "Укажите период игры, например «3 квартал 2026»."; render(); return; }
@@ -631,6 +693,7 @@ document.addEventListener("click", (e) => {
   else if (d.delcat) ask(`Удалить категорию «${draft.cats[d.delcat].name}» со всеми кейсами?`, () => { draft.cats.splice(+d.delcat, 1); dirty = true; render(); });
   else if (d.delcase) { const [ci, k] = d.delcase.split("-").map(Number); ask(`Удалить кейс ${k + 1} из категории «${draft.cats[ci].name}»?`, () => { draft.cats[ci].cases.splice(k, 1); dirty = true; render(); }); }
   else if (d.addcase) { draft.cats[+d.addcase].cases.push(blankCase()); dirty = true; render(); }
+  else if (d.rf) { rateFilter = d.rf; render(); }
   else if (d.arch) { const pl = players[d.arch]; db.doc("players/" + d.arch).set({ ...pl, archived: !pl.archived }); }
   else if (d.delres) ask("Удалить этот результат из рейтинга?", () => db.doc("results/" + d.delres).delete());
   else switch (t.id) {
@@ -641,6 +704,7 @@ document.addEventListener("click", (e) => {
     case "rulesBtn": $("#rulesScreen").hidden = false; break;
     case "endBtn": ask("Завершить игру сейчас? Неразыгранные кейсы пропадут, очки уйдут в рейтинг.", endGame); break;
     case "confirmNo": $("#confirm").hidden = true; break;
+    case "publishBtn": publishRating(); break;
     case "startBtn": {
       const ns = names.map(norm);
       if (ns.some((n) => !n)) { $("#setupMsg").textContent = "Выберите всех трёх игроков."; return; }
