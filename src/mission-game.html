@@ -223,7 +223,6 @@ table.rt{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
 </style>
 
 <div class="wrap" id="app"></div>
-<datalist id="known"></datalist>
 
 <div class="screen" id="caseScreen" hidden><div class="screen-in" id="caseIn"></div></div>
 <div class="screen" id="rulesScreen" hidden><div class="screen-in rules">
@@ -269,7 +268,7 @@ let adminMem = false;
 const setAdmin = (v) => { adminMem = v; try { v ? sessionStorage.setItem("mi-admin", "1") : sessionStorage.removeItem("mi-admin"); } catch {} };
 
 /* ---------- data ---------- */
-let db = null, dbState = "loading", games = {}, results = {}, current = null;
+let db = null, dbState = "loading", games = {}, results = {}, players = {}, current = null, showArchived = false;
 let view = "home", S = ls.get("mi-session"), pickId = null, names = ["", "", ""];
 let draft = null, draftId = null, dirty = false, adminTab = "games", busy = "";
 
@@ -280,6 +279,8 @@ const saveS = () => ls.set("mi-session", S);
 
 const periodKey = (p) => { const m = /(\d)\s*кв\S*\s*(\d{4})/i.exec(p || ""); return m ? +m[2] * 10 + +m[1] : 0; };
 const gameList = () => Object.entries(games).sort((a, b) => periodKey(b[1].period) - periodKey(a[1].period) || (b[1].updated || 0) - (a[1].updated || 0));
+const roster = (archived) => Object.entries(players).filter(([, p]) => !!p.archived === archived).sort((a, b) => a[1].name.localeCompare(b[1].name, "ru"));
+const archivedNames = () => new Set(roster(true).map(([, p]) => norm(p.name).toLowerCase()));
 const caseCount = (g) => (g.cats || []).reduce((s, c) => s + (c.cases || []).length, 0);
 
 function connect() {
@@ -291,6 +292,7 @@ function connect() {
     const live = () => { dbState = "on"; if (!(view === "admin" && dirty)) render(); };
     d.collection("games").onSnapshot((s) => { games = Object.fromEntries(s.docs.map((x) => [x.id, x.data()])); live(); }, fail);
     d.collection("results").onSnapshot((s) => { results = Object.fromEntries(s.docs.map((x) => [x.id, x.data()])); live(); }, fail);
+    d.collection("players").onSnapshot((s) => { players = Object.fromEntries(s.docs.map((x) => [x.id, x.data()])); live(); }, fail);
     d.collection("settings").onSnapshot((s) => { current = s.docs.find((x) => x.id === "app")?.data()?.current || null; live(); }, fail);
   });
 }
@@ -334,7 +336,6 @@ const dbNote = () => dbState === "off" ? `<p class="note err">Нет досту�
 function render() {
   const app = $("#app");
   app.innerHTML = { home: vHome, setup: vSetup, board: vBoard, rating: vRating, admin: isAdmin() ? vAdmin : vLogin }[view]();
-  $("#known").innerHTML = [...new Set(Object.values(results).flatMap((r) => r.players.map((p) => norm(p.name))))].sort().map((n) => `<option value="${esc(n)}">`).join("");
   hydrateMedia(app);
   saveS();
 }
@@ -364,9 +365,10 @@ function vSetup() {
         : dbState === "on" ? `<p class="note">Игр пока нет. Создайте игру в кабинете администратора.</p>` : ""}
     </section>
     <section class="step"><h3>2. Игроки</h3>
-      <div class="names">${SEATS.map((s, i) => `<label class="fld"><span>Сидит ${s}${i === 1 ? " · начинает игру" : ""}</span>
-        <input class="inp" id="pn${i}" list="known" data-pn="${i}" value="${esc(names[i])}" placeholder="Фамилия Имя" autocomplete="off"></label>`).join("")}</div>
-      <p class="sub">Пишите имя так же, как в рейтинге, — подсказки появятся при вводе.</p>
+      ${roster(false).length ? `<div class="names">${SEATS.map((s, i) => `<label class="fld"><span>Сидит ${s}${i === 1 ? " · начинает игру" : ""}</span>
+        <select class="inp" id="pn${i}" data-pn="${i}"><option value="">— выберите игрока —</option>${roster(false).map(([, p]) => `<option${p.name === names[i] ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>`).join("")}</div>
+      <p class="sub">Нет нужного человека? Администратор добавляет игроков во вкладке «Игроки».</p>`
+        : dbState === "on" ? `<p class="note">Список игроков пуст. Добавьте игроков в кабинете администратора.</p>` : ""}
     </section>
     <div class="actions"><button class="btn primary" id="startBtn"${pickId ? "" : " disabled"}>Начать игру</button><span class="sub" id="setupMsg"></span></div>`;
 }
@@ -406,11 +408,13 @@ function ratingData() {
   return { periods: [...periods].sort((a, b) => periodKey(a) - periodKey(b)), rows: Object.values(per).sort((a, b) => b.total - a.total) };
 }
 function vRating() {
-  const { periods, rows } = ratingData();
+  const { periods, rows: all } = ratingData(), gone = archivedNames();
+  const rows = showArchived ? all : all.filter((r) => !gone.has(r.name.toLowerCase()));
   return `${backBar("Рейтинг")}${dbNote()}
     ${rows.length ? `<div class="tbl-wrap"><table class="rt"><thead><tr><th>#</th><th>Игрок</th>${periods.map((p) => `<th>${esc(p)}</th>`).join("")}<th>Всего</th></tr></thead>
-    <tbody>${rows.map((r, i) => `<tr class="${i < 3 ? "top3" : ""}"><td>${i + 1}</td><td>${esc(r.name)}</td>${periods.map((p) => `<td>${r.by[p] ?? "—"}</td>`).join("")}<td class="tot">${r.total}</td></tr>`).join("")}</tbody></table></div>`
+    <tbody>${rows.map((r, i) => `<tr class="${i < 3 ? "top3" : ""}"><td>${i + 1}</td><td>${esc(r.name)}${gone.has(r.name.toLowerCase()) ? ' <span class="sub">· выбыл</span>' : ""}</td>${periods.map((p) => `<td>${r.by[p] ?? "—"}</td>`).join("")}<td class="tot">${r.total}</td></tr>`).join("")}</tbody></table></div>`
       : dbState === "on" ? `<p class="note">Рейтинг пуст. Очки появятся здесь после первой завершённой игры.</p>` : ""}
+    ${gone.size ? `<label class="chk"><input type="checkbox" id="showArch"${showArchived ? " checked" : ""}> Показать выбывших (${gone.size})</label>` : ""}
     <p class="sub">Очки каждой завершённой игры попадают в рейтинг автоматически. Ошибочный результат администратор может удалить во вкладке «Результаты».</p>`;
 }
 
@@ -423,7 +427,18 @@ function vLogin() {
 
 const blankCase = () => ({ kind: "text", price: 300, text: "", task: "Опиши порядок дальнейших действий.", qs: [], media: null, mediaName: "", bag: false });
 function vAdmin() {
-  const tabs = `<button class="btn${adminTab === "games" ? " primary" : ""}" data-tab="games">Игры</button><button class="btn${adminTab === "results" ? " primary" : ""}" data-tab="results">Результаты</button><button class="btn" id="logoutBtn">Выйти</button>`;
+  const tabs = `<button class="btn${adminTab === "games" ? " primary" : ""}" data-tab="games">Игры</button><button class="btn${adminTab === "results" ? " primary" : ""}" data-tab="results">Результаты</button><button class="btn${adminTab === "players" ? " primary" : ""}" data-tab="players">Игроки</button><button class="btn" id="logoutBtn">Выйти</button>`;
+  if (adminTab === "players") {
+    const totals = Object.fromEntries(ratingData().rows.map((r) => [r.name.toLowerCase(), r.total]));
+    const row = ([id, p]) => `<div class="res"><span class="who"><b>${esc(p.name)}</b></span><span class="when">${totals[norm(p.name).toLowerCase()] ?? 0} очков в рейтинге</span>
+      <button class="btn${p.archived ? "" : " danger"}" data-arch="${id}">${p.archived ? "Вернуть" : "В архив"}</button></div>`;
+    const act = roster(false), arch = roster(true);
+    return `${backBar("Администратор", tabs)}${dbNote()}
+      <form class="actions" id="addPlayer"><label class="fld" style="flex:1;max-width:420px"><span>Новый игрок</span><input class="inp" id="newPlayer" placeholder="Фамилия Имя" autocomplete="off"></label>
+        <button class="btn primary" type="submit" style="align-self:end">Добавить</button><span class="sub" id="playerMsg" role="alert" style="align-self:end"></span></form>
+      <section class="step"><h3>Играют · ${act.length}</h3>${act.map(row).join("") || '<p class="note">Активных игроков нет.</p>'}</section>
+      <section class="step"><h3>Архив · ${arch.length}</h3>${arch.map(row).join("") || '<p class="note">Выбывших нет. Игрок в архиве не выбирается в новой игре и скрыт из рейтинга, его очки сохраняются.</p>'}</section>`;
+  }
   if (adminTab === "results") {
     const list = Object.entries(results).sort((a, b) => (b[1].date || "").localeCompare(a[1].date || ""));
     return `${backBar("Администратор", tabs)}${dbNote()}<section class="step"><h3>Сыгранные игры</h3>
@@ -616,6 +631,7 @@ document.addEventListener("click", (e) => {
   else if (d.delcat) ask(`Удалить категорию «${draft.cats[d.delcat].name}» со всеми кейсами?`, () => { draft.cats.splice(+d.delcat, 1); dirty = true; render(); });
   else if (d.delcase) { const [ci, k] = d.delcase.split("-").map(Number); ask(`Удалить кейс ${k + 1} из категории «${draft.cats[ci].name}»?`, () => { draft.cats[ci].cases.splice(k, 1); dirty = true; render(); }); }
   else if (d.addcase) { draft.cats[+d.addcase].cases.push(blankCase()); dirty = true; render(); }
+  else if (d.arch) { const pl = players[d.arch]; db.doc("players/" + d.arch).set({ ...pl, archived: !pl.archived }); }
   else if (d.delres) ask("Удалить этот результат из рейтинга?", () => db.doc("results/" + d.delres).delete());
   else switch (t.id) {
     case "bagGo": openCase(open, true); break;
@@ -627,7 +643,8 @@ document.addEventListener("click", (e) => {
     case "confirmNo": $("#confirm").hidden = true; break;
     case "startBtn": {
       const ns = names.map(norm);
-      if (ns.some((n) => !n)) { $("#setupMsg").textContent = "Впишите имена всех трёх игроков."; return; }
+      if (ns.some((n) => !n)) { $("#setupMsg").textContent = "Выберите всех трёх игроков."; return; }
+      if (new Set(ns).size < 3) { $("#setupMsg").textContent = "Один игрок выбран дважды."; return; }
       const g = games[pickId];
       if (!caseCount(g)) { $("#setupMsg").textContent = "В этой игре нет кейсов. Добавьте их в конструкторе."; return; }
       const start = () => { S = { id: uid(), gameId: pickId, period: g.period, game: clone(g), names: ns, turn: 1, awards: {}, played: {} }; go("board"); };
@@ -650,6 +667,7 @@ document.addEventListener("click", (e) => {
 document.addEventListener("input", (e) => {
   const el = e.target, d = el.dataset;
   if (d.pn) names[+d.pn] = el.value;
+  else if (el.id === "showArch") { showArchived = el.checked; render(); }
   else if (d.path && draft) {
     setPath(d.path, d.bool != null ? el.checked : d.num != null ? +el.value || 0 : d.lines != null ? el.value.split("\n").map((s) => s.trim()).filter(Boolean) : el.value);
     if (d.rerender != null) { dirty = true; render(); } else markDirty();
@@ -671,6 +689,15 @@ document.addEventListener("change", async (e) => {
   render();
 });
 document.addEventListener("submit", (e) => {
+  if (e.target.id === "addPlayer") {
+    e.preventDefault();
+    const name = norm($("#newPlayer").value), msg = (t) => ($("#playerMsg").textContent = t);
+    if (!name) return msg("Впишите фамилию и имя.");
+    const same = Object.values(players).find((p) => norm(p.name).toLowerCase() === name.toLowerCase());
+    if (same) return msg(same.archived ? "Этот игрок в архиве — верните его кнопкой «Вернуть»." : "Такой игрок уже есть в списке.");
+    db.doc("players/" + uid()).set({ name, archived: false, added: Date.now() }).catch(() => msg("Не удалось добавить. Проверьте доступ к странице."));
+    return;
+  }
   if (e.target.id !== "loginForm") return;
   e.preventDefault();
   if ($("#lg").value.trim() === ADMIN.login && $("#pw").value === ADMIN.pass) { setAdmin(true); render(); }
