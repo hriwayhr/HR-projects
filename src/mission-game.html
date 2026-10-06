@@ -137,7 +137,14 @@ h1{font:clamp(26px,4vw,40px)/1.05 var(--f-display);margin:0;letter-spacing:.01em
 .rules td{padding:4px 12px 4px 0;border-bottom:1px solid var(--line)}
 
 .final{text-align:center;display:flex;flex-direction:column;align-items:center;gap:18px;flex:1;justify-content:center}
-.final .big{font:clamp(36px,7vw,80px)/1 var(--f-display);color:var(--gold)}
+.final .big{font:clamp(36px,7vw,80px)/1 var(--f-display);color:var(--gold);animation:pop .7s cubic-bezier(.2,1.6,.4,1) .15s both;text-shadow:0 0 40px #FFE01955}
+.final .crown{font:600 18px/1 var(--f-body);letter-spacing:.3em;text-transform:uppercase;color:var(--ink);animation:rise .5s ease-out both;margin-bottom:-6px}
+.final .crown::before,.final .crown::after{content:"★";color:var(--gold);margin:0 .6em;letter-spacing:0}
+.podium div{animation:rise .5s ease-out both;animation-delay:calc(.6s + var(--i,0) * .15s)}
+.podium div.win{animation-name:rise,glow;animation-duration:.5s,2s;animation-delay:calc(.6s + var(--i,0) * .15s),1.2s;animation-iteration-count:1,infinite;animation-direction:normal,alternate}
+@keyframes rise{from{transform:translateY(18px);opacity:0}to{transform:none;opacity:1}}
+@keyframes glow{from{box-shadow:0 0 0 0 #FFE01900}to{box-shadow:0 0 24px 2px #FFE01966}}
+.confetti{position:fixed;inset:0;pointer-events:none;z-index:11}
 .podium{display:grid;gap:10px;width:min(520px,100%)}
 .podium div{display:flex;justify-content:space-between;gap:10px;background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:12px 16px;font-size:18px}
 .podium div.win{border-color:var(--gold)}
@@ -610,6 +617,7 @@ function drawAwards() {
     <label class="own">Своё значение<input class="inp${a[p] != null && !opts.some(([v]) => v === a[p]) ? " on" : ""}" type="number" step="10" inputmode="numeric" id="own${p}" data-own="${p}" placeholder="например, 100" value="${a[p] != null && !opts.some(([v]) => v === a[p]) ? a[p] : ""}"></label></div>`).join("");
 }
 function closeScreens() {
+  document.querySelectorAll(".confetti").forEach((x) => x.remove());
   clearInterval(tick); tick = null; open = null; stopSounds();
   document.querySelectorAll(".screen").forEach((s) => (s.hidden = true));
   render();
@@ -633,18 +641,43 @@ function drawClock() {
   el.classList.toggle("over", t >= GAME_LIMIT);
 }
 setInterval(drawClock, 1000);
+/* celebration: confetti burst over the final screen */
+function confetti() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const cv = Object.assign(document.createElement("canvas"), { className: "confetti" });
+  $("#caseScreen").append(cv);
+  const c = cv.getContext("2d"), W = (cv.width = innerWidth), H = (cv.height = innerHeight);
+  const colors = ["#FFE019", "#C9CCCF", "#3FD06B", "#FFFFFF", "#009634"];
+  const bits = Array.from({ length: 180 }, () => ({
+    x: W / 2 + (Math.random() - .5) * W * .3, y: H * .35,
+    vx: (Math.random() - .5) * 16, vy: -Math.random() * 16 - 6,
+    r: Math.random() * Math.PI, vr: (Math.random() - .5) * .3,
+    w: 6 + Math.random() * 8, h: 4 + Math.random() * 6, col: colors[Math.floor(Math.random() * colors.length)],
+  }));
+  const t0 = performance.now();
+  (function frame(t) {
+    if (!cv.isConnected) return;
+    c.clearRect(0, 0, W, H);
+    for (const b of bits) {
+      b.vy += .35; b.vx *= .99; b.x += b.vx; b.y += b.vy; b.r += b.vr;
+      c.save(); c.translate(b.x, b.y); c.rotate(b.r); c.fillStyle = b.col; c.fillRect(-b.w / 2, -b.h / 2, b.w, b.h); c.restore();
+    }
+    if (t - t0 < 4500) requestAnimationFrame(frame); else cv.remove();
+  })(t0);
+}
 async function endGame() {
   S.over = true; S.endedAt ||= Date.now(); saveS();
   const order = [0, 1, 2].sort((a, b) => total(b) - total(a)), scores = order.map(total);
   const winners = order.filter((p) => total(p) === scores[0]);
-  const head = winners.length === 1 ? `<div class="big">${esc(S.names[winners[0]])}</div>`
+  const head = winners.length === 1 ? `<div class="crown">Победитель</div><div class="big">${esc(S.names[winners[0]])}</div>`
     : `<div class="big">Ничья</div><p class="tie">${winners.length === 3 ? `Все игроки набрали по ${scores[0]}` : `${winners.map((p) => esc(S.names[p])).join(" и ")} набрали по ${scores[0]}`}</p>`;
   $("#caseScreen").hidden = false;
   $("#caseIn").innerHTML = `<div class="final"><span class="chip">Игра окончена · ${esc(S.period)}</span>${head}
-    <div class="podium">${order.map((p) => `<div class="${rankOf(total(p), scores) === 1 ? "win" : ""}"><span>${winners.length > 1 ? "" : `${rankOf(total(p), scores)}. `}${esc(S.names[p])}</span><b>${total(p)}</b></div>`).join("")}</div>
+    <div class="podium">${order.map((p, i) => `<div class="${rankOf(total(p), scores) === 1 ? "win" : ""}" style="--i:${i}"><span>${winners.length > 1 ? "" : `${rankOf(total(p), scores)}. `}${esc(S.names[p])}</span><b>${total(p)}</b></div>`).join("")}</div>
     <p class="sub">Игра длилась ${hms(gameSeconds())}</p>
     <p class="sub" id="savedMsg">Сохраняю результат в рейтинг…</p>
     <div class="actions"><button class="btn" data-close>К полю</button><button class="btn primary" data-go="rating">Открыть рейтинг</button></div></div>`;
+  confetti();
   const msg = (t) => { const el = $("#savedMsg"); if (el) el.textContent = t; };
   if (S.saved) return msg("Результат уже в рейтинге.");
   if (!db) return msg("Нет доступа к общей базе — результат не попал в рейтинг.");
