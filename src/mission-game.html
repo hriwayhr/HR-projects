@@ -238,6 +238,10 @@ table.rt{border-collapse:collapse;width:100%;font-variant-numeric:lining-nums ta
 .res .who{flex:1;min-width:0}
 .btn.danger:hover{border-color:var(--bad);color:var(--bad)}
 
+.audio-stub{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;border:2px dashed var(--gold);border-radius:14px;padding:40px 20px;margin-bottom:.9em}
+.audio-stub .ic{font-size:44px;line-height:1;color:var(--gold)}
+.audio-stub b{font:clamp(30px,5vw,56px)/1 var(--f-display);color:var(--gold)}
+.audio-stub span:last-child{color:var(--muted);font-size:17px}
 .call{display:flex;flex-direction:column;gap:10px;background:var(--bg-2);border:1px solid var(--gold);border-radius:10px;padding:14px 16px;margin-bottom:.9em}
 .call b{font:18px/1 var(--f-display);color:var(--gold)}
 .call audio{width:100%}
@@ -277,7 +281,7 @@ table.rt{border-collapse:collapse;width:100%;font-variant-numeric:lining-nums ta
 
 <script>
 const MODES = { answer: 180, extra: 60 };
-const KINDS = { text: "Текст", call: "Кейс — звонок (аудио)", image: "Текст + картинка" };
+const KINDS = { text: "Текст", call: "Кейс — звонок (аудио)", image: "Текст + картинка", audio: "Аудио кейс (проводит ведущий)" };
 const ADMIN = { login: "admin", pass: "12345" }; // ponytail: client-side gate only — db rules, not this, protect the data
 const CHUNK = 200000, MAX_FILE = 8 * 1024 * 1024; // ponytail: media lives in db chunks (assets has no audio type); replaced files stay as orphans
 
@@ -518,9 +522,9 @@ function editor() {
         <div class="ed-meta"><label class="fld fmt"><span>Формат</span><select class="inp" id="${p}.kind" data-path="${p}.kind" data-rerender>${Object.entries(KINDS).map(([v, l]) => `<option value="${v}"${cs.kind === v ? " selected" : ""}>${l}</option>`).join("")}</select></label>
         <label class="fld"><span>Стоимость</span><input class="inp" type="number" min="0" step="50" id="${p}.price" data-path="${p}.price" data-num value="${cs.price}"></label>
         <label class="chk"><input type="checkbox" id="${p}.bag" data-path="${p}.bag" data-bool${cs.bag ? " checked" : ""}> Кот в мешке</label></div>
-        ${cs.kind !== "text" ? `<div class="wide media-box">${cs.media ? (cs.kind === "call" ? `<audio controls data-media="${cs.media}"></audio>` : `<img alt="Картинка кейса" data-media="${cs.media}">`) + `<span class="sub">${esc(cs.mediaName)}</span>` : `<span class="sub">${cs.kind === "call" ? "Загрузите запись звонка (mp3, m4a, wav)" : "Загрузите картинку"} — до 8 МБ</span>`}
+        ${cs.kind === "call" || cs.kind === "image" ? `<div class="wide media-box">${cs.media ? (cs.kind === "call" ? `<audio controls data-media="${cs.media}"></audio>` : `<img alt="Картинка кейса" data-media="${cs.media}">`) + `<span class="sub">${esc(cs.mediaName)}</span>` : `<span class="sub">${cs.kind === "call" ? "Загрузите запись звонка (mp3, m4a, wav)" : "Загрузите картинку"} — до 8 МБ</span>`}
           <label class="btn">${cs.media ? "Заменить" : "Загрузить"}<input type="file" hidden data-upload="${p}" accept="${cs.kind === "call" ? "audio/*" : "image/*"}"></label></div>` : ""}
-        <label class="fld wide"><span>${cs.kind === "call" ? "Пояснение к звонку (необязательно)" : "Ситуация"}</span><textarea class="inp" id="${p}.text" data-path="${p}.text">${esc(cs.text)}</textarea></label>
+        <label class="fld wide"><span>${cs.kind === "call" ? "Пояснение к звонку (необязательно)" : cs.kind === "audio" ? "Заметка для ведущего (необязательно, игрокам видна)" : "Ситуация"}</span><textarea class="inp" id="${p}.text" data-path="${p}.text">${esc(cs.text)}</textarea></label>
         <label class="fld wide"><span>Задание</span><input class="inp" id="${p}.task" data-path="${p}.task" value="${esc(cs.task)}"></label>
         <label class="fld wide"><span>Вопросы-подсказки — по одному в строке</span><textarea class="inp" id="${p}.qs" data-path="${p}.qs" data-lines>${esc((cs.qs || []).join("\n"))}</textarea></label>
       </div>`; }).join("")}
@@ -592,10 +596,11 @@ function openCase(key, skipBag) {
   const paras = (c.text || "").split(/\n+/).filter((t) => t.trim());
   $("#caseIn").innerHTML = `
     <div class="case-head"><span class="chip">${esc(cat.name)}</span><span class="chip">Кейс ${+key.split("-")[1] + 1}</span><span class="chip price">${c.price}</span>
-      ${c.kind === "call" ? '<span class="chip callchip">Кейс — звонок</span>' : ""}${c.bag ? '<span class="chip">Кот в мешке</span>' : ""}
+      ${c.kind === "call" ? '<span class="chip callchip">Кейс — звонок</span>' : c.kind === "audio" ? '<span class="chip callchip">Аудио кейс</span>' : ""}${c.bag ? '<span class="chip">Кот в мешке</span>' : ""}
       <button class="btn" data-close>К полю</button></div>
     <div class="case-body">
       <div class="case-text">
+        ${c.kind === "audio" ? `<div class="audio-stub"><span class="ic" aria-hidden="true">☎</span><b>Аудио кейс</b><span>Ведущий проводит звонок голосом. Таймер и очки — как обычно.</span></div>` : ""}
         ${c.kind === "call" ? `<div class="call"><b>Кейс — звонок</b>${c.media ? `<audio controls data-media="${c.media}"></audio>` : '<span class="note err">Запись не загружена.</span>'}</div>` : ""}
         ${c.kind === "image" && c.media ? `<img class="case-img" alt="Иллюстрация к кейсу" data-media="${c.media}">` : ""}
         ${paras.map((t) => `<p>${esc(t)}</p>`).join("")}${c.task ? `<p class="task">${esc(c.task)}</p>` : ""}
