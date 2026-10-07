@@ -222,6 +222,14 @@ table.rt{border-collapse:collapse;width:100%;font-variant-numeric:lining-nums ta
 .ed-top .inp{height:42px}
 .ed-top .btn,.ed-top .tag{height:42px;display:inline-flex;align-items:center;align-self:auto}
 .ed-top .tag{padding:0 12px;border-radius:8px}
+.lib-row{background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:flex;gap:16px;align-items:center}
+.lib-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.lib-main p{margin:0}
+.lib-tags{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.lib-tags .tag{align-self:auto}
+.lib-side{display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none;text-align:right;max-width:200px}
+.picker>div{max-width:760px;width:100%;max-height:85vh;overflow:auto;background:var(--bg)}
+.pick-list{display:grid;gap:10px}
 .ed-cat{border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:12px;background:var(--shade)}
 .ed-cat>.row{display:flex;gap:10px;align-items:end}
 .ed-cat>.row .fld{flex:1}
@@ -261,6 +269,7 @@ table.rt{border-collapse:collapse;width:100%;font-variant-numeric:lining-nums ta
 </style>
 
 <div class="wrap" id="app"></div>
+<datalist id="topics"></datalist>
 
 <div class="screen" id="caseScreen" hidden><div class="screen-in" id="caseIn"></div></div>
 <div class="screen" id="rulesScreen" hidden><div class="screen-in rules">
@@ -315,6 +324,7 @@ const setAdmin = (v) => { adminMem = v; try { v ? sessionStorage.setItem("mi-adm
 
 /* ---------- data ---------- */
 let rateFilter = "all";
+let library = {}, libEdit = null, libFilter = "all", pickFor = null, pickTopic = "all";
 let db = null, dbState = "loading", games = {}, results = {}, players = {}, current = null, showArchived = false;
 let view = "home", S = ls.get("mi-session"), pickId = null, names = ["", "", ""];
 let draft = null, draftId = null, dirty = false, adminTab = "games", busy = "";
@@ -342,6 +352,7 @@ function connect() {
     const live = () => { dbState = "on"; if (!(view === "admin" && dirty)) render(); };
     d.collection("games").onSnapshot((s) => { games = Object.fromEntries(s.docs.map((x) => [x.id, x.data()])); live(); }, fail);
     d.collection("results").onSnapshot((s) => { results = Object.fromEntries(s.docs.map((x) => [x.id, x.data()])); live(); }, fail);
+    d.collection("cases").onSnapshot((s) => { library = Object.fromEntries(s.docs.map((x) => [x.id, x.data()])); live(); }, fail);
     d.collection("players").onSnapshot((s) => { players = Object.fromEntries(s.docs.map((x) => [x.id, x.data()])); live(); }, fail);
     d.collection("settings").onSnapshot((s) => { current = s.docs.find((x) => x.id === "app")?.data()?.current || null; live(); }, fail);
   });
@@ -390,6 +401,7 @@ function render() {
   document.documentElement.classList.toggle("light", view === "admin");
   app.innerHTML = { home: vHome, setup: vSetup, board: vBoard, rating: vRating, admin: isAdmin() ? vAdmin : vLogin }[view]();
   hydrateMedia(app);
+  $("#topics").innerHTML = libTopics().map((t) => `<option value="${esc(t)}">`).join("");
   drawClock();
   saveS();
 }
@@ -505,7 +517,8 @@ function vLogin() {
 
 const blankCase = () => ({ kind: "text", price: 300, text: "", task: "Опиши порядок дальнейших действий.", qs: [], media: null, mediaName: "", bag: false });
 function vAdmin() {
-  const tabs = `<button class="btn${adminTab === "games" ? " primary" : ""}" data-tab="games">Игры</button><button class="btn${adminTab === "results" ? " primary" : ""}" data-tab="results">Результаты</button><button class="btn${adminTab === "players" ? " primary" : ""}" data-tab="players">Игроки</button><button class="btn" id="logoutBtn">Выйти</button>`;
+  const tabs = `<button class="btn${adminTab === "games" ? " primary" : ""}" data-tab="games">Игры</button><button class="btn${adminTab === "results" ? " primary" : ""}" data-tab="results">Результаты</button><button class="btn${adminTab === "library" ? " primary" : ""}" data-tab="library">База кейсов</button><button class="btn${adminTab === "players" ? " primary" : ""}" data-tab="players">Игроки</button><button class="btn" id="logoutBtn">Выйти</button>`;
+  if (adminTab === "library") return `${backBar("Администратор", tabs)}${dbNote()}${vLibrary()}`;
   if (adminTab === "players") {
     const totals = Object.fromEntries(ratingData().rows.map((r) => [r.name.toLowerCase(), r.total]));
     const row = ([id, p]) => `<div class="res"><span class="who"><b>${esc(p.name)}</b></span><span class="when">${totals[norm(p.name).toLowerCase()] ?? 0} очков в рейтинге</span>
@@ -531,7 +544,7 @@ function vAdmin() {
     <div class="adm"><aside class="glist"><h3 class="sub" style="margin:0">Игры</h3>
       ${list.map(([id, g]) => `<button class="pick" data-edit="${id}" aria-pressed="${id === draftId}">${id === current ? '<span class="tag">Текущая</span>' : ""}<b>${esc(g.period || "Без периода")}</b><small>${caseCount(g)} кейсов · ${gameStatus(g)}</small></button>`).join("")}
       <button class="btn" id="newGame">+ Новая игра</button>${draft && draftId && games[draftId] ? '<button class="btn" id="copyGame">Копировать выбранную</button>' : ""}</aside>
-    ${draft ? editor() : '<p class="note">Создайте первую игру кнопкой «Новая игра».</p>'}</div>`;
+    ${draft ? editor() : '<p class="note">Создайте первую игру кнопкой «Новая игра».</p>'}</div>${pickFor !== null && draft ? picker() : ""}`;
 }
 function editor() {
   const d = draft;
@@ -543,25 +556,63 @@ function editor() {
         : `<button class="btn" id="finishGame"${games[draftId] ? "" : " disabled"}>Завершить игру</button>`}</div>
     ${d.cats.map((c, ci) => `<div class="ed-cat"><div class="row"><label class="fld"><span>Категория ${ci + 1}</span><input class="inp" id="c${ci}" data-path="cats.${ci}.name" value="${esc(c.name)}"></label>
       <button class="btn danger" data-delcat="${ci}">Удалить категорию</button></div>
-      ${c.cases.map((cs, k) => { const p = `cats.${ci}.cases.${k}`; return `<div class="ed-case"><div class="ed-head"><h4>Кейс ${k + 1}</h4><button class="btn danger" data-delcase="${ci}-${k}">Удалить кейс</button></div>
-        <div class="ed-meta"><label class="fld fmt"><span>Формат</span><select class="inp" id="${p}.kind" data-path="${p}.kind" data-rerender>${Object.entries(KINDS).map(([v, l]) => `<option value="${v}"${cs.kind === v ? " selected" : ""}>${l}</option>`).join("")}</select></label>
-        <label class="fld"><span>Стоимость</span><input class="inp" type="number" min="0" step="50" id="${p}.price" data-path="${p}.price" data-num value="${cs.price}"></label>
-        <label class="chk"><input type="checkbox" id="${p}.bag" data-path="${p}.bag" data-bool${cs.bag ? " checked" : ""}> Кот в мешке</label></div>
-        ${cs.kind === "call" || cs.kind === "image" ? `<div class="wide media-box">${cs.media ? (cs.kind === "call" ? `<audio controls data-media="${cs.media}"></audio>` : `<img alt="Картинка кейса" data-media="${cs.media}">`) + `<span class="sub">${esc(cs.mediaName)}</span>` : `<span class="sub">${cs.kind === "call" ? "Загрузите запись звонка (mp3, m4a, wav)" : "Загрузите картинку"} — до 8 МБ</span>`}
-          <label class="btn">${cs.media ? "Заменить" : "Загрузить"}<input type="file" hidden data-upload="${p}" accept="${cs.kind === "call" ? "audio/*" : "image/*"}"></label></div>` : ""}
-        <label class="fld wide"><span>${cs.kind === "call" ? "Пояснение к звонку (необязательно)" : cs.kind === "audio" ? "Заметка для ведущего (необязательно, игрокам видна)" : "Ситуация"}</span><textarea class="inp" id="${p}.text" data-path="${p}.text">${esc(cs.text)}</textarea></label>
-        <label class="fld wide"><span>Задание</span><input class="inp" id="${p}.task" data-path="${p}.task" value="${esc(cs.task)}"></label>
-        <label class="fld wide"><span>Вопросы-подсказки — по одному в строке</span><textarea class="inp" id="${p}.qs" data-path="${p}.qs" data-lines>${esc((cs.qs || []).join("\n"))}</textarea></label>
+      ${c.cases.map((cs, k) => { const p = `cats.${ci}.cases.${k}`; return `<div class="ed-case"><div class="ed-head"><h4>Кейс ${k + 1}${cs.fromLib ? ' <span class="tag done">из базы</span>' : ""}</h4><button class="btn danger" data-delcase="${ci}-${k}">Удалить кейс</button></div>
+        ${caseFields(cs, p)}
       </div>`; }).join("")}
-      <div><button class="btn" data-addcase="${ci}">+ Кейс</button></div></div>`).join("")}
+      <div class="actions"><button class="btn" data-pickcat="${ci}">+ Из базы кейсов</button><button class="btn" data-addcase="${ci}">+ Новый кейс</button></div></div>`).join("")}
     <div><button class="btn" id="addCat">+ Категория</button></div>
     <div class="savebar"><span class="st${dirty ? " dirty" : ""}">${busy || (dirty ? "Есть несохранённые изменения" : games[draftId] ? "Все изменения сохранены" : "Новая игра ещё не сохранена")}</span>
       ${games[draftId] ? '<button class="btn danger" id="delGame">Удалить игру</button>' : ""}<button class="btn primary" id="saveGame">Сохранить игру</button></div>
   </section>`;
 }
+/* ---------- case base: cases/<id> = { topic, kind, price, text, task, qs, media, mediaName } ---------- */
+const libTopics = () => [...new Set(Object.values(library).map((c) => c.topic).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ru"));
+const libSnippet = (c) => c.kind === "audio" ? "Аудио кейс" : (c.text || "").slice(0, 160) + ((c.text || "").length > 160 ? "…" : "") || "Без текста";
+const libUsage = (id) => Object.values(games).filter((g) => (g.cats || []).some((c) => c.cases.some((x) => x.fromLib === id))).map((g) => g.period);
+const libSorted = (topic) => Object.entries(library).filter(([, c]) => topic === "all" || (c.topic || "Без темы") === topic)
+  .sort((a, b) => (a[1].topic || "").localeCompare(b[1].topic || "", "ru") || (a[1].added || 0) - (b[1].added || 0));
+const topicChips = (cur, attr) => `<div class="actions" role="group" aria-label="Темы">${["all", ...libTopics()].map((t) =>
+  `<button class="opt" ${attr}="${esc(t)}" aria-pressed="${cur === t}">${t === "all" ? `Все · ${Object.keys(library).length}` : `${esc(t)} · ${Object.values(library).filter((c) => c.topic === t).length}`}</button>`).join("")}</div>`;
+const libRow = ([id, c], action) => `<div class="lib-row"><div class="lib-main"><div class="lib-tags">${c.topic ? `<span class="tag done">${esc(c.topic)}</span>` : ""}<span class="tag done">${esc(KINDS[c.kind] || c.kind)}</span><span class="sub">${c.price || 300} очков</span></div>
+  <p>${esc(libSnippet(c))}</p>${c.task ? `<small class="sub">${esc(c.task)}</small>` : ""}</div>${action}</div>`;
+function vLibrary() {
+  if (libEdit) {
+    const exists = !!library[libEdit.id];
+    return `<section class="ed"><div class="ed-case"><div class="ed-head"><h4>${exists ? "Кейс из базы" : "Новый кейс"}</h4></div>${caseFields(libEdit.obj, "lib", true)}</div>
+      <div class="savebar"><span class="st${dirty ? " dirty" : ""}">${busy || (dirty ? "Есть несохранённые изменения" : exists ? "Все изменения сохранены" : "Кейс ещё не сохранён")}</span>
+        ${exists ? '<button class="btn danger" id="libDel">Удалить из базы</button>' : ""}<button class="btn" id="libClose">К списку</button><button class="btn primary" id="libSave">Сохранить кейс</button></div></section>`;
+  }
+  if (libFilter !== "all" && !libTopics().includes(libFilter)) libFilter = "all";
+  const list = libSorted(libFilter);
+  return `<div class="ed-top"><p class="sub" style="flex:1;margin:0">Из этих кейсов собираются игры: в конструкторе игры у каждой категории есть кнопка «+ Из базы кейсов». В игру попадает копия — правки в игре базу не меняют.</p>
+      <button class="btn primary" id="libNew">+ Новый кейс</button></div>
+    ${topicChips(libFilter, "data-libtopic")}
+    ${list.length ? list.map(([id, c]) => { const used = libUsage(id); return libRow([id, c], `<div class="lib-side">${used.length ? `<small class="sub">В играх: ${used.map(esc).join(", ")}</small>` : '<small class="sub">Пока не в играх</small>'}<button class="btn" data-libedit="${id}">Изменить</button></div>`); }).join("")
+      : dbState === "on" ? '<p class="note">В базе пока нет кейсов. Добавьте первый кнопкой «Новый кейс».</p>' : ""}`;
+}
+function picker() {
+  const cat = draft.cats[pickFor], inGame = new Set(draft.cats.flatMap((c) => c.cases.map((x) => x.fromLib).filter(Boolean)));
+  const list = libSorted(pickTopic);
+  return `<div class="confirm picker" role="dialog" aria-label="Кейсы из базы"><div>
+    <div class="ed-head"><h4>Добавить в «${esc(cat.name)}»</h4><button class="btn" id="pickClose">Закрыть</button></div>
+    ${topicChips(pickTopic, "data-picktopic")}
+    <div class="pick-list">${list.length ? list.map(([id, c]) => libRow([id, c], inGame.has(id) ? '<span class="sub">Уже в игре</span>' : `<button class="btn primary" data-pickadd="${id}">Добавить</button>`)).join("")
+      : '<p class="note">В базе нет кейсов по этой теме.</p>'}</div></div></div>`;
+}
+const caseFields = (cs, p, lib = false) => `
+        <div class="ed-meta"><label class="fld fmt"><span>Формат</span><select class="inp" id="${p}.kind" data-path="${p}.kind" data-rerender>${Object.entries(KINDS).map(([v, l]) => `<option value="${v}"${cs.kind === v ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+        <label class="fld"><span>Стоимость</span><input class="inp" type="number" min="0" step="50" id="${p}.price" data-path="${p}.price" data-num value="${cs.price}"></label>
+        ${lib ? `<label class="fld fmt"><span>Тема</span><input class="inp" list="topics" id="${p}.topic" data-path="${p}.topic" value="${esc(cs.topic || "")}" placeholder="Например, Задержки"></label>`
+          : `<label class="chk"><input type="checkbox" id="${p}.bag" data-path="${p}.bag" data-bool${cs.bag ? " checked" : ""}> Кот в мешке</label>`}</div>
+        ${cs.kind === "call" || cs.kind === "image" ? `<div class="wide media-box">${cs.media ? (cs.kind === "call" ? `<audio controls data-media="${cs.media}"></audio>` : `<img alt="Картинка кейса" data-media="${cs.media}">`) + `<span class="sub">${esc(cs.mediaName)}</span>` : `<span class="sub">${cs.kind === "call" ? "Загрузите запись звонка (mp3, m4a, wav)" : "Загрузите картинку"} — до 8 МБ</span>`}
+          <label class="btn">${cs.media ? "Заменить" : "Загрузить"}<input type="file" hidden data-upload="${p}" accept="${cs.kind === "call" ? "audio/*" : "image/*"}"></label></div>` : ""}
+        <label class="fld wide"><span>${cs.kind === "call" ? "Пояснение к звонку (необязательно)" : cs.kind === "audio" ? "Заметка для ведущего (необязательно, игрокам видна)" : "Ситуация"}</span><textarea class="inp" id="${p}.text" data-path="${p}.text">${esc(cs.text)}</textarea></label>
+        <label class="fld wide"><span>Задание</span><input class="inp" id="${p}.task" data-path="${p}.task" value="${esc(cs.task)}"></label>
+        <label class="fld wide"><span>Вопросы-подсказки — по одному в строке</span><textarea class="inp" id="${p}.qs" data-path="${p}.qs" data-lines>${esc((cs.qs || []).join("\n"))}</textarea></label>
+`;
 function setPath(path, v) {
-  const keys = path.split("."), last = keys.pop();
-  keys.reduce((o, k) => o[k], draft)[last] = v;
+  const lib = path.startsWith("lib"), keys = path.split(".").slice(lib ? 1 : 0), last = keys.pop();
+  keys.reduce((o, k) => o[k], lib ? libEdit.obj : draft)[last] = v;
 }
 function markDirty() { dirty = true; const st = document.querySelector(".savebar .st"); if (st) { st.textContent = "Есть несохранённые изменения"; st.classList.add("dirty"); } }
 
@@ -810,12 +861,21 @@ document.addEventListener("click", (e) => {
   }
   else if (d.mode) setMode(d.mode);
   else if (d.pick) { pickId = d.pick; render(); }
-  else if (d.tab) leaveDraft(() => { adminTab = d.tab; render(); });
+  else if (d.tab) leaveDraft(() => { adminTab = d.tab; libEdit = null; pickFor = null; busy = ""; render(); });
   else if (d.edit) leaveDraft(() => { draftId = d.edit; draft = clone(games[d.edit]); busy = ""; render(); });
   else if (d.delcat) ask(`Удалить категорию «${draft.cats[d.delcat].name}» со всеми кейсами?`, () => { draft.cats.splice(+d.delcat, 1); dirty = true; render(); });
   else if (d.delcase) { const [ci, k] = d.delcase.split("-").map(Number); ask(`Удалить кейс ${k + 1} из категории «${draft.cats[ci].name}»?`, () => { draft.cats[ci].cases.splice(k, 1); dirty = true; render(); }); }
   else if (d.addcase) { draft.cats[+d.addcase].cases.push(blankCase()); dirty = true; render(); }
   else if (d.rf) { rateFilter = d.rf; render(); }
+  else if (d.libtopic) { libFilter = d.libtopic; render(); }
+  else if (d.libedit) { libEdit = { id: d.libedit, obj: clone(library[d.libedit]) }; dirty = false; busy = ""; render(); window.scrollTo(0, 0); }
+  else if (d.pickcat) { pickFor = +d.pickcat; const name = draft.cats[pickFor].name; pickTopic = libTopics().includes(name) ? name : "all"; render(); }
+  else if (d.picktopic) { pickTopic = d.picktopic; render(); }
+  else if (d.pickadd) {
+    const { topic, updated, added, ...c } = clone(library[d.pickadd]);
+    draft.cats[pickFor].cases.push({ ...c, price: c.price || 300, bag: false, fromLib: d.pickadd });
+    pickFor = null; dirty = true; render();
+  }
   else if (d.arch) { const pl = players[d.arch]; db.doc("players/" + d.arch).set({ ...pl, archived: !pl.archived }); }
   else if (d.delres) ask("Удалить этот результат из рейтинга?", () => db.doc("results/" + d.delres).delete());
   else switch (t.id) {
@@ -827,6 +887,18 @@ document.addEventListener("click", (e) => {
     case "endBtn": ask("Завершить игру сейчас? Неразыгранные кейсы пропадут, очки уйдут в рейтинг.", endGame); break;
     case "confirmNo": $("#confirm").hidden = true; break;
     case "muteBtn": muted = !muted; ls.set("mi-muted", muted || null); if (muted) stopSounds(); render(); break;
+    case "libNew": leaveDraft(() => { libEdit = { id: uid(), obj: { ...blankCase(), topic: libFilter === "all" ? "" : libFilter } }; delete libEdit.obj.bag; dirty = true; busy = ""; render(); }); break;
+    case "libClose": leaveDraft(() => { libEdit = null; busy = ""; render(); }); break;
+    case "libSave": {
+      const o = libEdit.obj;
+      if (o.kind !== "audio" && !(o.text || "").trim()) { busy = "Заполните «Ситуацию» — без неё кейс не сыграть."; render(); break; }
+      const prev = library[libEdit.id];
+      db.doc("cases/" + libEdit.id).set({ ...o, topic: norm(o.topic || ""), added: prev?.added || Date.now(), updated: Date.now() })
+        .then(() => { dirty = false; busy = ""; libEdit = null; render(); }, () => { busy = "Не удалось сохранить. Проверьте доступ к странице."; render(); });
+      break;
+    }
+    case "libDel": ask("Удалить кейс из базы? В уже собранных играх его копии останутся.", () => db.doc("cases/" + libEdit.id).delete().then(() => { dirty = false; libEdit = null; render(); })); break;
+    case "pickClose": pickFor = null; render(); break;
     case "saveFileBtn": window.__offline.save().catch(() => {}).then(render); break;
     case "publishBtn": publishRating(); break;
     case "startBtn": {
@@ -901,6 +973,7 @@ document.addEventListener("submit", (e) => {
   else $("#loginMsg").textContent = "Неверный логин или пароль.";
 });
 document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && pickFor !== null) { pickFor = null; render(); return; }
   if (e.key === "Escape") { if (!$("#confirm").hidden) $("#confirm").hidden = true; else if (document.querySelector(".screen:not([hidden])")) closeScreens(); }
   if (e.key === " " && $("#ring") && !$("#caseScreen").hidden && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { e.preventDefault(); toggleTimer(); }
 });
