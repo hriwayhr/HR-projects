@@ -227,6 +227,13 @@ table.rt{border-collapse:collapse;width:100%;font-variant-numeric:lining-nums ta
 .lv-yellow.tag,.opt.lv-yellow[aria-pressed="true"]{background:#B07A00;border-color:#B07A00}
 .lv-red.tag,.opt.lv-red[aria-pressed="true"]{background:#C62828;border-color:#C62828}
 .tag.review{background:transparent;color:var(--muted);border:1px dashed var(--line-strong, var(--muted))}
+.rt.st td,.rt.st th{white-space:normal;vertical-align:middle}
+.rt.st td.case{min-width:280px;max-width:520px}
+.rt.st td:not(.case){white-space:nowrap}
+.rt.st tr.bad td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
+.bar{display:inline-block;width:80px;height:8px;border-radius:4px;background:var(--line);vertical-align:middle;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--gold)}
+tr.bad .bar i{background:var(--bad)}
 .lib-row{background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:flex;gap:16px;align-items:center}
 .lib-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
 .lib-main p{margin:0}
@@ -523,8 +530,9 @@ function vLogin() {
 
 const blankCase = () => ({ kind: "text", price: 300, text: "", task: "Опиши порядок дальнейших действий.", qs: [], media: null, mediaName: "", bag: false });
 function vAdmin() {
-  const tabs = `<button class="btn${adminTab === "games" ? " primary" : ""}" data-tab="games">Игры</button><button class="btn${adminTab === "results" ? " primary" : ""}" data-tab="results">Результаты</button><button class="btn${adminTab === "library" ? " primary" : ""}" data-tab="library">База кейсов</button><button class="btn${adminTab === "players" ? " primary" : ""}" data-tab="players">Игроки</button><button class="btn" id="logoutBtn">Выйти</button>`;
+  const tabs = `<button class="btn${adminTab === "games" ? " primary" : ""}" data-tab="games">Игры</button><button class="btn${adminTab === "results" ? " primary" : ""}" data-tab="results">Результаты</button><button class="btn${adminTab === "library" ? " primary" : ""}" data-tab="library">База кейсов</button><button class="btn${adminTab === "players" ? " primary" : ""}" data-tab="players">Игроки</button><button class="btn${adminTab === "stats" ? " primary" : ""}" data-tab="stats">Аналитика</button><button class="btn" id="logoutBtn">Выйти</button>`;
   if (adminTab === "library") return `${backBar("Администратор", tabs)}${dbNote()}${vLibrary()}`;
+  if (adminTab === "stats") return `${backBar("Администратор", tabs)}${dbNote()}${vStats()}`;
   if (adminTab === "players") {
     const totals = Object.fromEntries(ratingData().rows.map((r) => [r.name.toLowerCase(), r.total]));
     const row = ([id, p]) => `<div class="res"><span class="who"><b>${esc(p.name)}</b></span><span class="when">${totals[norm(p.name).toLowerCase()] ?? 0} очков в рейтинге</span>
@@ -588,6 +596,33 @@ const topicChips = (cur, attr) => `<div class="actions" role="group" aria-label=
   `<button class="opt" ${attr}="${esc(t)}" aria-pressed="${cur === t}">${t === "all" ? `Все · ${Object.keys(library).length}` : `${esc(t)} · ${Object.values(library).filter((c) => c.topic === t).length}`}</button>`).join("")}</div>`;
 const libRow = ([id, c], action) => `<div class="lib-row"><div class="lib-main"><div class="lib-tags">${c.topic ? `<span class="tag done">${esc(c.topic)}</span>` : ""}${c.level ? `<span class="tag lv lv-${c.level}">${LEVELS[c.level]}</span>` : ""}<span class="tag done">${esc(KINDS[c.kind] || c.kind)}</span>${c.actual ? '<span class="tag lv lv-green">Актуальный</span>' : '<span class="tag review">На проверке</span>'}<span class="sub">${c.price || 300} очков${c.source ? " · " + esc(c.source) : ""}</span></div>
   <p>${esc(libSnippet(c))}</p>${c.task ? `<small class="sub">${esc(c.task)}</small>` : ""}</div>${action}</div>`;
+/* ---------- case analytics: built from results[].cases (saved since this feature) ---------- */
+const PROBLEM = 0.5; // ponytail: fixed threshold — average below half the case price marks it as problematic
+let statsMode = "problem";
+function statsData() {
+  const per = {};
+  for (const r of Object.values(results)) for (const c of r.cases || []) {
+    const id = c.fromLib || "t:" + norm(c.text).slice(0, 80).toLowerCase();
+    const got = c.scores.filter((x) => x != null), best = got.length ? Math.max(...got) : 0;
+    const pct = c.price ? Math.max(0, Math.min(1, best / c.price)) : 0;
+    const row = (per[id] ||= { id, fromLib: c.fromLib, text: c.text, kind: c.kind, topic: c.topic, plays: 0, sum: 0, zero: 0, full: 0, periods: new Set() });
+    row.plays++; row.sum += pct; row.zero += best <= 0 ? 1 : 0; row.full += pct >= 1 ? 1 : 0; row.periods.add(r.period);
+  }
+  return Object.values(per).map((r) => ({ ...r, avg: r.sum / r.plays, text: library[r.fromLib]?.text || r.text, topic: library[r.fromLib]?.topic || r.topic }))
+    .sort((a, b) => a.avg - b.avg || b.plays - a.plays);
+}
+function vStats() {
+  const all = statsData(), problem = all.filter((r) => r.avg < PROBLEM), list = statsMode === "problem" ? problem : all;
+  const intro = `<p class="sub" style="margin:0">Результат розыгрыша — лучший балл за кейс среди игроков, в процентах от стоимости кейса. Проблемные — в среднем меньше ${PROBLEM * 100}%. Статистика собирается с игр, завершённых после 07.10.2026.</p>`;
+  if (!all.length) return `${intro}<p class="note">Пока нет данных. Статистика появится после первой завершённой игры.</p>`;
+  return `${intro}
+    <div class="actions" role="group" aria-label="Какие кейсы"><button class="opt" data-statsmode="problem" aria-pressed="${statsMode === "problem"}">Проблемные · ${problem.length}</button><button class="opt" data-statsmode="all" aria-pressed="${statsMode === "all"}">Все разыгранные · ${all.length}</button></div>
+    ${list.length ? `<div class="tbl-wrap"><table class="rt st"><thead><tr><th>Кейс</th><th>Тема</th><th>Розыгрышей</th><th>Средний результат</th><th>Без ответа</th><th>Полный ответ</th><th></th></tr></thead><tbody>
+      ${list.map((r) => `<tr class="${r.avg < PROBLEM ? "bad" : ""}"><td class="case">${esc(libSnippet({ text: r.text, kind: r.kind }))}</td><td>${esc(r.topic || "")}</td><td>${r.plays}</td>
+        <td><span class="bar"><i style="width:${Math.round(r.avg * 100)}%"></i></span> ${Math.round(r.avg * 100)}%</td><td>${r.zero}</td><td>${r.full}</td>
+        <td>${r.fromLib && library[r.fromLib] ? `<button class="btn" data-statsopen="${r.fromLib}">В базе</button>` : ""}</td></tr>`).join("")}</tbody></table></div>`
+      : '<p class="note">Проблемных кейсов нет — все разыгранные кейсы в среднем набирают не меньше половины стоимости.</p>'}`;
+}
 function vLibrary() {
   if (libEdit) {
     const exists = !!library[libEdit.id];
@@ -765,6 +800,13 @@ function confetti() {
     if (t - t0 < 4500) requestAnimationFrame(frame); else cv.remove();
   })(t0);
 }
+/* per-case outcome of this session, for the admin analytics */
+function caseStats() {
+  return allKeys().filter((k) => S.played[k]).map((k) => {
+    const [cat, c] = caseAt(k), a = S.awards[k] || {};
+    return { fromLib: c.fromLib || null, topic: cat.name, kind: c.kind, price: c.price, text: (c.text || "").slice(0, 300), scores: [0, 1, 2].map((p) => a[p] ?? null) };
+  });
+}
 async function endGame() {
   S.over = true; S.endedAt ||= Date.now(); saveS();
   const order = [0, 1, 2].sort((a, b) => total(b) - total(a)), scores = order.map(total);
@@ -782,7 +824,7 @@ async function endGame() {
   if (S.saved) return msg("Результат уже в рейтинге.");
   if (!db) return msg("Нет доступа к общей базе — результат не попал в рейтинг.");
   try {
-    await db.doc("results/" + S.id).set({ gameId: S.gameId, period: S.period, date: new Date().toISOString(), duration: gameSeconds(), players: S.names.map((name, p) => ({ name, score: total(p) })) });
+    await db.doc("results/" + S.id).set({ gameId: S.gameId, period: S.period, date: new Date().toISOString(), duration: gameSeconds(), players: S.names.map((name, p) => ({ name, score: total(p) })), cases: caseStats() });
     S.saved = true; saveS();
     msg(window.__offline && !window.__offline.status().linked ? "Результат сохранён на этом ПК. Чтобы он был и в файле игры, нажмите в меню «Сохранять в файл игры»." : "Результат сохранён в рейтинг.");
   } catch { msg("Не удалось сохранить результат. Проверьте доступ к странице и завершите игру ещё раз."); S.over = false; saveS(); }
@@ -892,6 +934,8 @@ document.addEventListener("click", (e) => {
   else if (d.picktopic) { pickTopic = d.picktopic; render(); }
   else if (d.picklevel) { pickLevel = d.picklevel; render(); }
   else if (d.liblevel) { libLevel = d.liblevel; render(); }
+  else if (d.statsmode) { statsMode = d.statsmode; render(); }
+  else if (d.statsopen) { adminTab = "library"; libEdit = { id: d.statsopen, obj: clone(library[d.statsopen]) }; dirty = false; busy = ""; render(); window.scrollTo(0, 0); }
   else if (d.libactualf) { libActual = d.libactualf; render(); }
   else if (d.pickactual) { pickActual = d.pickactual; render(); }
   else if (d.pickadd) {
