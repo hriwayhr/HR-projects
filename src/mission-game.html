@@ -226,6 +226,7 @@ table.rt{border-collapse:collapse;width:100%;font-variant-numeric:lining-nums ta
 .lv-green.tag,.opt.lv-green[aria-pressed="true"]{background:#2E7D32;border-color:#2E7D32}
 .lv-yellow.tag,.opt.lv-yellow[aria-pressed="true"]{background:#B07A00;border-color:#B07A00}
 .lv-red.tag,.opt.lv-red[aria-pressed="true"]{background:#C62828;border-color:#C62828}
+.tag.review{background:transparent;color:var(--muted);border:1px dashed var(--line-strong, var(--muted))}
 .lib-row{background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:flex;gap:16px;align-items:center}
 .lib-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
 .lib-main p{margin:0}
@@ -328,7 +329,7 @@ const setAdmin = (v) => { adminMem = v; try { v ? sessionStorage.setItem("mi-adm
 
 /* ---------- data ---------- */
 let rateFilter = "all";
-let library = {}, libEdit = null, libFilter = "all", libLevel = "all", pickFor = null, pickTopic = "all", pickLevel = "all";
+let library = {}, libEdit = null, libFilter = "all", libLevel = "all", libActual = "all", pickActual = "all", pickFor = null, pickTopic = "all", pickLevel = "all";
 const LEVELS = { green: "Зелёный", yellow: "Жёлтый", red: "Красный" };
 let db = null, dbState = "loading", games = {}, results = {}, players = {}, current = null, showArchived = false;
 let view = "home", S = ls.get("mi-session"), pickId = null, names = ["", "", ""];
@@ -575,14 +576,17 @@ const libTopics = () => [...new Set(Object.values(library).map((c) => c.topic).f
 const libSnippet = (c) => c.kind === "audio" ? "Аудио кейс" : (c.text || "").slice(0, 160) + ((c.text || "").length > 160 ? "…" : "") || "Без текста";
 const libUsage = (id) => Object.values(games).filter((g) => (g.cats || []).some((c) => c.cases.some((x) => x.fromLib === id))).map((g) => g.period);
 const LV_ORDER = { green: 0, yellow: 1, red: 2 };
-const libSorted = (topic, level = "all") => Object.entries(library)
-  .filter(([, c]) => (topic === "all" || (c.topic || "Без темы") === topic) && (level === "all" || c.level === level))
+const libSorted = (topic, level = "all", actual = "all") => Object.entries(library)
+  .filter(([, c]) => (topic === "all" || (c.topic || "Без темы") === topic) && (level === "all" || c.level === level) && (actual === "all" || !!c.actual === (actual === "yes")))
   .sort((a, b) => (a[1].topic || "").localeCompare(b[1].topic || "", "ru") || (LV_ORDER[a[1].level] ?? 3) - (LV_ORDER[b[1].level] ?? 3) || (a[1].added || 0) - (b[1].added || 0));
+const actualChips = (cur, attr) => { const all = Object.values(library), yes = all.filter((c) => c.actual).length;
+  return `<div class="actions" role="group" aria-label="Статус">${[["all", "Любой статус"], ["yes", `Актуальные · ${yes}`], ["no", `На проверке · ${all.length - yes}`]].map(([v, l]) =>
+  `<button class="opt${v === "yes" ? " lv-green" : ""}" ${attr}="${v}" aria-pressed="${cur === v}">${l}</button>`).join("")}</div>`; };
 const levelChips = (cur, attr) => `<div class="actions" role="group" aria-label="Сложность">${["all", ...Object.keys(LEVELS)].map((l) =>
   `<button class="opt${l === "all" ? "" : " lv-" + l}" ${attr}="${l}" aria-pressed="${cur === l}">${l === "all" ? "Любая сложность" : LEVELS[l]}</button>`).join("")}</div>`;
 const topicChips = (cur, attr) => `<div class="actions" role="group" aria-label="Темы">${["all", ...libTopics()].map((t) =>
   `<button class="opt" ${attr}="${esc(t)}" aria-pressed="${cur === t}">${t === "all" ? `Все · ${Object.keys(library).length}` : `${esc(t)} · ${Object.values(library).filter((c) => c.topic === t).length}`}</button>`).join("")}</div>`;
-const libRow = ([id, c], action) => `<div class="lib-row"><div class="lib-main"><div class="lib-tags">${c.topic ? `<span class="tag done">${esc(c.topic)}</span>` : ""}${c.level ? `<span class="tag lv lv-${c.level}">${LEVELS[c.level]}</span>` : ""}<span class="tag done">${esc(KINDS[c.kind] || c.kind)}</span><span class="sub">${c.price || 300} очков${c.source ? " · " + esc(c.source) : ""}</span></div>
+const libRow = ([id, c], action) => `<div class="lib-row"><div class="lib-main"><div class="lib-tags">${c.topic ? `<span class="tag done">${esc(c.topic)}</span>` : ""}${c.level ? `<span class="tag lv lv-${c.level}">${LEVELS[c.level]}</span>` : ""}<span class="tag done">${esc(KINDS[c.kind] || c.kind)}</span>${c.actual ? '<span class="tag lv lv-green">Актуальный</span>' : '<span class="tag review">На проверке</span>'}<span class="sub">${c.price || 300} очков${c.source ? " · " + esc(c.source) : ""}</span></div>
   <p>${esc(libSnippet(c))}</p>${c.task ? `<small class="sub">${esc(c.task)}</small>` : ""}</div>${action}</div>`;
 function vLibrary() {
   if (libEdit) {
@@ -592,21 +596,23 @@ function vLibrary() {
         ${exists ? '<button class="btn danger" id="libDel">Удалить из базы</button>' : ""}<button class="btn" id="libClose">К списку</button><button class="btn primary" id="libSave">Сохранить кейс</button></div></section>`;
   }
   if (libFilter !== "all" && !libTopics().includes(libFilter)) libFilter = "all";
-  const list = libSorted(libFilter, libLevel);
+  const list = libSorted(libFilter, libLevel, libActual);
   return `<div class="ed-top"><p class="sub" style="flex:1;margin:0">Из этих кейсов собираются игры: в конструкторе игры у каждой категории есть кнопка «+ Из базы кейсов». В игру попадает копия — правки в игре базу не меняют.</p>
       <button class="btn primary" id="libNew">+ Новый кейс</button></div>
     ${topicChips(libFilter, "data-libtopic")}
     ${levelChips(libLevel, "data-liblevel")}
-    ${list.length ? list.map(([id, c]) => { const used = libUsage(id); return libRow([id, c], `<div class="lib-side">${used.length ? `<small class="sub">В играх: ${used.map(esc).join(", ")}</small>` : '<small class="sub">Пока не в играх</small>'}<button class="btn" data-libedit="${id}">Изменить</button></div>`); }).join("")
+    ${actualChips(libActual, "data-libactualf")}
+    ${list.length ? list.map(([id, c]) => { const used = libUsage(id); return libRow([id, c], `<div class="lib-side">${used.length ? `<small class="sub">В играх: ${used.map(esc).join(", ")}</small>` : '<small class="sub">Пока не в играх</small>'}<label class="chk"><input type="checkbox" id="act-${id}" data-libactual="${id}"${c.actual ? " checked" : ""}> Актуальный</label><button class="btn" data-libedit="${id}">Изменить</button></div>`); }).join("")
       : dbState === "on" ? '<p class="note">В базе пока нет кейсов. Добавьте первый кнопкой «Новый кейс».</p>' : ""}`;
 }
 function picker() {
   const cat = draft.cats[pickFor], inGame = new Set(draft.cats.flatMap((c) => c.cases.map((x) => x.fromLib).filter(Boolean)));
-  const list = libSorted(pickTopic, pickLevel);
+  const list = libSorted(pickTopic, pickLevel, pickActual);
   return `<div class="confirm picker" role="dialog" aria-label="Кейсы из базы"><div>
     <div class="ed-head"><h4>Добавить в «${esc(cat.name)}»</h4><button class="btn" id="pickClose">Закрыть</button></div>
     ${topicChips(pickTopic, "data-picktopic")}
     ${levelChips(pickLevel, "data-picklevel")}
+    ${actualChips(pickActual, "data-pickactual")}
     <div class="pick-list">${list.length ? list.map(([id, c]) => libRow([id, c], inGame.has(id) ? '<span class="sub">Уже в игре</span>' : `<button class="btn primary" data-pickadd="${id}">Добавить</button>`)).join("")
       : '<p class="note">В базе нет кейсов по этой теме.</p>'}</div></div></div>`;
 }
@@ -614,7 +620,8 @@ const caseFields = (cs, p, lib = false) => `
         <div class="ed-meta"><label class="fld fmt"><span>Формат</span><select class="inp" id="${p}.kind" data-path="${p}.kind" data-rerender>${Object.entries(KINDS).map(([v, l]) => `<option value="${v}"${cs.kind === v ? " selected" : ""}>${l}</option>`).join("")}</select></label>
         <label class="fld"><span>Стоимость</span><input class="inp" type="number" min="0" step="50" id="${p}.price" data-path="${p}.price" data-num value="${cs.price}"></label>
         ${lib ? `<label class="fld fmt"><span>Тема</span><input class="inp" list="topics" id="${p}.topic" data-path="${p}.topic" value="${esc(cs.topic || "")}" placeholder="Например, Задержки"></label>
-          <label class="fld"><span>Сложность</span><select class="inp" id="${p}.level" data-path="${p}.level"><option value="">—</option>${Object.entries(LEVELS).map(([v, l]) => `<option value="${v}"${cs.level === v ? " selected" : ""}>${l}</option>`).join("")}</select></label>`
+          <label class="fld"><span>Сложность</span><select class="inp" id="${p}.level" data-path="${p}.level"><option value="">—</option>${Object.entries(LEVELS).map(([v, l]) => `<option value="${v}"${cs.level === v ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+          <label class="chk"><input type="checkbox" id="${p}.actual" data-path="${p}.actual" data-bool${cs.actual ? " checked" : ""}> Актуальный</label>`
           : `<label class="chk"><input type="checkbox" id="${p}.bag" data-path="${p}.bag" data-bool${cs.bag ? " checked" : ""}> Кот в мешке</label>`}</div>
         ${cs.kind === "call" || cs.kind === "image" ? `<div class="wide media-box">${cs.media ? (cs.kind === "call" ? `<audio controls data-media="${cs.media}"></audio>` : `<img alt="Картинка кейса" data-media="${cs.media}">`) + `<span class="sub">${esc(cs.mediaName)}</span>` : `<span class="sub">${cs.kind === "call" ? "Загрузите запись звонка (mp3, m4a, wav)" : "Загрузите картинку"} — до 8 МБ</span>`}
           <label class="btn">${cs.media ? "Заменить" : "Загрузить"}<input type="file" hidden data-upload="${p}" accept="${cs.kind === "call" ? "audio/*" : "image/*"}"></label></div>` : ""}
@@ -885,8 +892,10 @@ document.addEventListener("click", (e) => {
   else if (d.picktopic) { pickTopic = d.picktopic; render(); }
   else if (d.picklevel) { pickLevel = d.picklevel; render(); }
   else if (d.liblevel) { libLevel = d.liblevel; render(); }
+  else if (d.libactualf) { libActual = d.libactualf; render(); }
+  else if (d.pickactual) { pickActual = d.pickactual; render(); }
   else if (d.pickadd) {
-    const { topic, updated, added, level, source, ...c } = clone(library[d.pickadd]);
+    const { topic, updated, added, level, source, actual, ...c } = clone(library[d.pickadd]);
     draft.cats[pickFor].cases.push({ ...c, price: c.price || 300, bag: false, fromLib: d.pickadd });
     pickFor = null; dirty = true; render();
   }
@@ -958,6 +967,11 @@ document.addEventListener("input", (e) => {
 });
 document.addEventListener("change", async (e) => {
   const el = e.target, path = el.dataset.upload;
+  if (el.dataset.libactual && db) {
+    const id = el.dataset.libactual;
+    db.doc("cases/" + id).set({ ...library[id], actual: el.checked, updated: Date.now() }).catch(() => { el.checked = !el.checked; });
+    return;
+  }
   if (el.dataset.own != null) {
     const a = (S.awards[open] ||= {}), p = +el.dataset.own, v = parseInt(el.value, 10);
     if (Number.isFinite(v)) a[p] = v; else delete a[p];
