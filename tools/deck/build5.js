@@ -136,31 +136,35 @@ pres.defineSlideMaster({ title: "Финал", background: { color: OL }, objects
     const p = [["P_julia.png", "Юлия Немчинова", "Руководитель отдела HR"], ["P_anna.png", "Анна Шулятицкая", "Ведущий HR-специалист"], ["P_elena.png", "Елена Таратынова", "Офис-менеджер"]];
     const cw = 3.75, gap = (CW - 3 * cw) / 2;
     p.forEach((r, i) => {
-      const x = MX + i * (cw + gap), y = 3.0;
-      card(s, x, y, cw, 3.75, "Карточка " + r[1]);
-      s.addImage({ path: I(r[0]), x: x + 0.2, y: y + 0.2, w: 3.35, h: 2.0, objectName: r[1], altText: r[1] });
-      T(s, r[1], { x: x + 0.3, y: y + 2.5, w: cw - 0.6, h: 0.4, fontSize: 20, bold: true, color: OL });
-      T(s, r[2], { x: x + 0.3, y: y + 2.95, w: cw - 0.6, h: 0.4, fontSize: 15, color: BODY });
+      const x = MX + i * (cw + gap), y = 2.85;
+      card(s, x, y, cw, 3.95, "Карточка " + r[1]);
+      s.addImage({ path: I(r[0]), x: x + 0.2, y: y + 0.2, w: 3.35, h: 2.5, objectName: r[1], altText: r[1] });
+      T(s, r[1], { x: x + 0.3, y: y + 2.95, w: cw - 0.6, h: 0.4, fontSize: 20, bold: true, color: OL });
+      T(s, r[2], { x: x + 0.3, y: y + 3.4, w: cw - 0.6, h: 0.4, fontSize: 15, color: BODY });
     });
     s.addNotes("Представить каждого: роль и зоны ответственности.");
   }
 
-  // 6 ============ EJM
+  // 6 ============ EJM — дорожная карта
   {
     const s = pres.addSlide({ masterName: "Контент" });
     await pill(s, "Employee Journey Map", fa.FaMapMarkerAlt);
     s.addText("Мы рядом на всём твоём пути", { placeholder: "title" });
-    para(s, "Карта пути сотрудника: на каждом этапе у нас есть, чем помочь.");
+    para(s, "Дорожная карта сотрудника: на каждом этапе у нас есть, чем помочь.");
     const st = [[fa.FaHandshake, "Найм", "Знакомимся и зовём в команду"], [fa.FaSeedling, "Адаптация", "Помогаем влиться и освоиться"], [fa.FaHeart, "Вовлечённость", "Чтобы было интересно и тепло"], [fa.FaGraduationCap, "Обучение", "Делимся знаниями и навыками"], [fa.FaChartLine, "Рост и развитие", "Двигаемся вперёд вместе"], [fa.FaBullhorn, "HR-бренд", "Рассказываем, какие мы"]];
-    const cw = 3.75, ch = 1.75, gap = (CW - 3 * cw) / 2;
+    const cw = 3.1, c0 = MX + cw / 2, c1 = W - MX - cw / 2, step = (c1 - c0) / 5, ry = 4.61;
+    s.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: MX, y: ry - 0.11, w: CW, h: 0.22, rectRadius: 0.11, fill: { color: "E3E6DD" }, line: { color: "E3E6DD", width: 0 }, objectName: "Дорога" });
+    s.addShape(pres.shapes.LINE, { x: MX + 0.2, y: ry, w: CW - 0.4, h: 0, line: { color: "9AA392", width: 1.25, dashType: "dash" }, objectName: "Разметка" });
     for (let i = 0; i < 6; i++) {
-      const x = MX + (i % 3) * (cw + gap), y = 3.0 + Math.floor(i / 3) * (ch + 0.25);
-      card(s, x, y, cw, ch, "Этап " + st[i][1]);
-      await badge(s, st[i][0], x + 0.3, y + 0.3, 0.62);
-      T(s, st[i][1], { x: x + 1.15, y: y + 0.3, w: cw - 1.4, h: 0.62, fontSize: 18, bold: true, color: OL, valign: "middle" });
-      T(s, st[i][2], { x: x + 0.3, y: y + 1.1, w: cw - 0.6, h: 0.5, fontSize: 14, color: BODY });
+      const cx = c0 + i * step, up = i % 2 === 0, cy = up ? 2.75 : 5.25, ch = 1.3;
+      card(s, cx - cw / 2, cy, cw, ch, "Этап " + st[i][1]);
+      T(s, "0" + (i + 1), { x: cx - cw / 2 + 0.25, y: cy + 0.2, w: 0.5, h: 0.35, fontSize: 14, bold: true, color: G, valign: "middle" });
+      T(s, st[i][1], { x: cx - cw / 2 + 0.75, y: cy + 0.2, w: cw - 0.95, h: 0.35, fontSize: 17, bold: true, color: OL, valign: "middle" });
+      T(s, st[i][2], { x: cx - cw / 2 + 0.25, y: cy + 0.68, w: cw - 0.5, h: 0.5, fontSize: 14, color: BODY });
+      s.addShape(pres.shapes.LINE, { x: cx, y: up ? cy + ch : ry + 0.36, w: 0, h: up ? ry - 0.36 - (cy + ch) : cy - (ry + 0.36), line: { color: OL, width: 1.25 }, objectName: "Выноска " + (i + 1) });
+      await badge(s, st[i][0], cx - 0.36, ry - 0.36, 0.72, i === 5 ? G : OL, "Веха " + st[i][1]);
     }
-    s.addNotes("Шесть этапов пути сотрудника. Дальше — подробнее про найм, адаптацию и HR-бренд.");
+    s.addNotes("Шесть этапов пути сотрудника — как дорожная карта. Дальше подробнее про найм, адаптацию и HR-бренд.");
   }
 
   // 7 ============ НАЙМ
