@@ -272,19 +272,23 @@ pres.defineSlideMaster({ title: "Финал", background: { color: OL }, objects
     s.addNotes("Скриншот внутреннего дашборда. Перед показом широкой аудитории проверьте конфиденциальность цифр.");
   }
 
-  // 13 ============ ИСТОРИЯ
+  // 13 ============ ИСТОРИЯ — хронология
   {
     const s = pres.addSlide({ masterName: "Контент" });
     await pill(s, "Культура i’way · История", fa.FaCalendarAlt);
     s.addText("Как всё начиналось", { placeholder: "title" });
     s.addImage({ path: I("P_found.png"), x: MX, y: 2.4, w: 3.3, h: 4.2, objectName: "Основатели", altText: "Основатели i’way" });
-    const ev = [["2009", "ООО «Сибирская трансферная компания»"], ["2011", "iWay Express: двуязычный сайт с онлайн-бронированием"], ["2013", "Родился бренд i’way"], ["2023", "Открыли офис в Казахстане"]];
-    for (let i = 0; i < 4; i++) {
-      const x = 4.4 + (i % 2) * 4.15, y = 2.4 + Math.floor(i / 2) * 2.2;
-      card(s, x, y, 4.0, 2.0, "Год " + ev[i][0]);
-      T(s, ev[i][0], { x: x + 0.35, y: y + 0.25, w: 3.3, h: 0.8, fontSize: 40, bold: true, color: G });
-      T(s, ev[i][1], { x: x + 0.35, y: y + 1.1, w: 3.3, h: 0.8, fontSize: 15, color: OL });
-    }
+    const ev = [["2009", "Основание", "ООО «Сибирская трансферная компания»"], ["2011", "Выход в онлайн", "iWay Express: запустили двуязычный сайт с онлайн-бронированием"], ["2013", "Новый бренд", "Родился бренд i’way"], ["2023", "Выход за границу", "Открыли офис в Казахстане"]];
+    const lx = 5.0, y0 = 2.55, stepY = 1.15;
+    s.addShape(pres.shapes.LINE, { x: lx, y: y0 + 0.15, w: 0, h: stepY * 3, line: { color: "8E9684", width: 2.5 }, objectName: "Линия времени" });
+    ev.forEach((r, i) => {
+      const y = y0 + i * stepY, last = i === 3;
+      circ(s, lx - 0.17, y - 0.02 , 0.34, WHITE, "Точка фон");
+      s.addShape(pres.shapes.OVAL, { x: lx - 0.17, y: y - 0.02, w: 0.34, h: 0.34, fill: { color: WHITE }, line: { color: last ? G : OL, width: 3 }, objectName: "Веха " + r[0] });
+      T(s, r[0], { x: lx + 0.5, y: y - 0.1, w: 1.6, h: 0.55, fontSize: 32, bold: true, color: last ? G : OL, valign: "middle" });
+      T(s, r[1], { x: lx + 2.2, y: y - 0.1, w: 5.4, h: 0.3, fontSize: 12, bold: true, color: G, charSpacing: 1.5 });
+      T(s, r[2], { x: lx + 2.2, y: y + 0.2, w: 5.4, h: 0.7, fontSize: 16, color: OL });
+    });
     s.addNotes("Даты 2009–2013 — из внутренней презентации; офис в Казахстане (начало 2023, Алматы) — Forbes.kz, по данным Felo-поиска.");
   }
 

@@ -1,11 +1,11 @@
 """Добавляет плавный переход (fade) и мягкое появление элементов (fade-in, группами) в каждый слайд.
-usage: python3 anim.py in.pptx out.pptx"""
+usage: python3 anim.py in.pptx out.pptx [slides_without_animation e.g. 1,3,10]"""
 import sys, zipfile, re
 from lxml import etree
 NS = {'p': 'http://schemas.openxmlformats.org/presentationml/2006/main', 'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'}
 P = '{%s}' % NS['p']
 EMU = 914400
-FADE_MS, MAX_TOTAL_MS = 700, 3200
+FADE_MS = 900
 
 def info(el):
     nv = el.find('.//p:cNvPr', NS)
@@ -31,7 +31,7 @@ def inside(box, outer):
 
 def build_timing(groups):
     n = len(groups)
-    step = min(350, MAX_TOTAL_MS // max(n, 1))
+    step = 0
     cid = [3]
     def nid():
         cid[0] += 1; return cid[0]
@@ -62,35 +62,43 @@ def build_timing(groups):
            + (f'<p:bldLst>{"".join(bld)}</p:bldLst>' if bld else '') + '</p:timing>')
     return etree.fromstring(xml)
 
-def process(xml_bytes):
+def process(xml_bytes, animate):
+    """Переход fade — на всех слайдах. Анимация (если animate): основной блок слайда появляется ОДНИМ мягким fade-in,
+    шапка (тег, заголовок, вступление) и логотип остаются на месте."""
     root = etree.fromstring(xml_bytes)
     tree = root.find('.//p:cSld/p:spTree', NS)
-    groups, cur = [], None
+    body, boxes = [], []
     for el in tree:
         if el.tag not in (P + 'sp', P + 'pic', P + 'cxnSp', P + 'graphicFrame'): continue
         sid, box, ph, txbox = info(el)
-        if ph is not None and ph.get('type') in ('sldNum', 'ftr', 'dt'): continue
-        item = (sid, el.tag == P + 'sp', txbox)
-        if is_container(el, box, txbox):
-            groups.append([item]); cur = box
-        elif el.tag == P + 'sp' and box is not None and not txbox and el.find('.//a:prstGeom', NS) is not None and el.find('.//a:prstGeom', NS).get('prst') == 'ellipse':
-            groups.append([item]); cur = box   # бейдж: иконка внутри появляется вместе с кругом
-        elif cur is not None and box is not None and inside(box, cur):
-            groups[-1].append(item)
-        else:
-            groups.append([item]); cur = None
+        if ph is not None: continue                      # заголовок и служебные плейсхолдеры
+        if box is None or box[1] + box[3] <= 2.8 * EMU: continue   # шапка и логотип сверху
+        body.append(el); boxes.append(box)
+    gid = None
+    if animate and body:
+        # один объект-группа вместо эффекта на каждый элемент: в панели анимации будет ровно одна строка
+        x0 = min(b[0] for b in boxes); y0 = min(b[1] for b in boxes)
+        x1 = max(b[0] + b[2] for b in boxes); y1 = max(b[1] + b[3] for b in boxes)
+        gid = max(int(e.get('id')) for e in tree.iter(P + 'cNvPr')) + 1
+        grp = etree.fromstring(
+            f'<p:grpSp xmlns:p="{NS["p"]}" xmlns:a="{NS["a"]}"><p:nvGrpSpPr><p:cNvPr id="{gid}" name="Основной блок"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>'
+            f'<p:grpSpPr><a:xfrm><a:off x="{x0}" y="{y0}"/><a:ext cx="{x1-x0}" cy="{y1-y0}"/><a:chOff x="{x0}" y="{y0}"/><a:chExt cx="{x1-x0}" cy="{y1-y0}"/></a:xfrm></p:grpSpPr></p:grpSp>')
+        body[0].addprevious(grp)
+        for el in body: grp.append(el)
     for old in root.findall('p:transition', NS) + root.findall('p:timing', NS): root.remove(old)
     anchor = root.find('p:clrMapOvr', NS)
     trans = etree.fromstring(f'<p:transition xmlns:p="{NS["p"]}" spd="slow"><p:fade/></p:transition>')
     anchor.addnext(trans)
-    if groups: trans.addnext(build_timing(groups))
-    return etree.tostring(root, xml_declaration=True, encoding='UTF-8', standalone=True), len(groups)
+    if gid: trans.addnext(build_timing([[(gid, False, False)]]))
+    return etree.tostring(root, xml_declaration=True, encoding='UTF-8', standalone=True), len(body)
 
 src, dst = sys.argv[1], sys.argv[2]
+skip = {int(x) for x in sys.argv[3].split(',')} if len(sys.argv) > 3 and sys.argv[3] else set()
 zin = zipfile.ZipFile(src); zout = zipfile.ZipFile(dst, 'w', zipfile.ZIP_DEFLATED)
 for it in zin.infolist():
     d = zin.read(it.filename)
-    if re.fullmatch(r'ppt/slides/slide\d+\.xml', it.filename):
-        d, n = process(d); print(it.filename, n, 'groups')
+    m = re.fullmatch(r'ppt/slides/slide(\d+)\.xml', it.filename)
+    if m:
+        d, n = process(d, int(m.group(1)) not in skip); print(it.filename, 'static' if int(m.group(1)) in skip else f'fade body ({n} shapes)')
     zout.writestr(it, d)
 zout.close()
