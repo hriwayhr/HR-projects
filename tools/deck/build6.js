@@ -136,11 +136,11 @@ pres.defineSlideMaster({ title: "Финал", background: { color: OL }, objects
     const p = [["P_julia.png", "Юлия Немчинова", "Руководитель отдела HR"], ["P_anna.png", "Анна Шулятицкая", "Ведущий HR-специалист"], ["P_elena.png", "Елена Таратынова", "Офис-менеджер"]];
     const cw = 3.75, gap = (CW - 3 * cw) / 2;
     p.forEach((r, i) => {
-      const x = MX + i * (cw + gap), y = 2.85;
-      card(s, x, y, cw, 3.95, "Карточка " + r[1]);
-      s.addImage({ path: I(r[0]), x: x + 0.2, y: y + 0.2, w: 3.35, h: 2.5, objectName: r[1], altText: r[1] });
-      T(s, r[1], { x: x + 0.3, y: y + 2.95, w: cw - 0.6, h: 0.4, fontSize: 20, bold: true, color: OL });
-      T(s, r[2], { x: x + 0.3, y: y + 3.4, w: cw - 0.6, h: 0.4, fontSize: 15, color: BODY });
+      const x = MX + i * (cw + gap), y = 2.5;
+      card(s, x, y, cw, 4.3, "Карточка " + r[1]);
+      s.addImage({ path: I(r[0]), x: x + (cw - 3.1) / 2, y: y + 0.2, w: 3.1, h: 3.1, objectName: r[1], altText: r[1] });   // целиком, без обрезки
+      T(s, r[1], { x: x + 0.2, y: y + 3.4, w: cw - 0.4, h: 0.4, fontSize: 20, bold: true, color: OL, align: "center" });
+      T(s, r[2], { x: x + 0.2, y: y + 3.82, w: cw - 0.4, h: 0.35, fontSize: 15, color: BODY, align: "center" });
     });
     s.addNotes("Представить каждого: роль и зоны ответственности.");
   }
