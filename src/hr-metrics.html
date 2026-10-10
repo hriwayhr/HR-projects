@@ -85,6 +85,14 @@
   @media (max-width:900px){ #vTiles{grid-template-columns:repeat(2,minmax(0,1fr));} }
   @media (max-width:720px){ .tiles{grid-template-columns:repeat(2,minmax(0,1fr));} }
   .tile{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:14px 16px; min-width:0;}
+  .tile[data-detail]{cursor:pointer; transition:border-color .15s;}
+  .tile[data-detail]:hover{border-color:var(--accent);}
+  .tile.sel{box-shadow:0 0 0 2px var(--accent);}
+  .detail{margin:-8px 0 22px;}
+  .detail-head{display:flex; flex-wrap:wrap; gap:8px 16px; align-items:baseline; justify-content:space-between; margin-bottom:8px;}
+  .detail-head h3{margin:0;}
+  .detail-sum{display:flex; flex-wrap:wrap; gap:6px 28px; font-size:13px; color:var(--ink-3); margin:4px 0 10px;}
+  .detail-sum b{color:var(--ink); font-size:16px;}
   .tile .k{font-size:13px; color:var(--ink-3);}
   .tile .v{font-size:30px; font-weight:700; line-height:1.1; margin-top:4px;}
   .tile .v small{font-size:15px; color:var(--ink-3); font-weight:600;}
@@ -257,6 +265,7 @@
     <div class="panel todo" id="dTodo"></div>
     <div class="chips" id="dChips"></div>
     <div class="tiles" id="dTiles"></div>
+    <div id="dDetail"></div>
     <div class="grid2">
       <div class="panel">
         <h3 id="dTableTitle">По рекрутерам</h3>
@@ -686,7 +695,8 @@ function tile(k, v, prev, opts){
     var diff = v - prev, good = opts.lowerIsBetter ? diff < 0 : diff > 0;
     d = diff === 0 ? 'как накануне' : '<span class="'+(good ? 'up' : 'down')+'">'+(diff > 0 ? '+' : '−')+Math.abs(diff)+(opts.unit||'')+'</span> ' + (opts.vs || 'к предыдущему дню');
   }
-  return '<div class="tile'+(opts.hero ? ' hero' : '')+'"><div class="k">'+k+'</div><div class="v">'+(opts.text != null ? opts.text : num(v) ? v + (opts.suffix||'') : '—')+'</div><div class="d">'+(opts.note || d || '&nbsp;')+'</div></div>';
+  var dk = DETAIL[k] ? ' data-detail="'+esc(k)+'" role="button" tabindex="0" aria-expanded="'+(state.detail === k)+'" title="Подробнее"' : '';
+  return '<div class="tile'+(opts.hero ? ' hero' : '')+(state.detail === k ? ' sel' : '')+'"'+dk+'><div class="k">'+k+'</div><div class="v">'+(opts.text != null ? opts.text : num(v) ? v + (opts.suffix||'') : '—')+'</div><div class="d">'+(opts.note || d || '&nbsp;')+'</div></div>';
 }
 // ---------- период дашборда: день, неделя, месяц, квартал, год, свой ----------
 var MONTHS_SHORT = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
@@ -771,6 +781,72 @@ function renderDay(){
   var foot = rows.length > 1 ? '<tfoot><tr><td>Команда</td>'+cols.map(function(c){ return cell(rVal(r, ps, c[1])); }).join('')+'</tr></tfoot>' : '';
   $('dTable').innerHTML = '<thead><tr><th>Рекрутер</th>'+cols.map(function(c){ return '<th>'+esc(c[0])+'</th>'; }).join('')+'</tr></thead><tbody>'+body+'</tbody>'+foot;
   renderChart(mode, r, ps);
+  renderDetail(mode, r, prev, ps);
+}
+// ---------- подробности по плитке: график по частям периода и разбивка по людям ----------
+var DETAIL = {
+  'Собеседования прошли': {k:'int_done'}, 'Доходимость': {conv:true, unit:'%'}, 'Открытые вакансии': {k:vacStock, stock:true},
+  'Кандидаты на вакансию': {k:candStock, stock:true}, 'Звонки': {k:'calls'}, 'Чаты': {k:chats}, 'Отказы': {k:'rejections'}, 'Выходы новых сотрудников': {k:'hires'}
+};
+function detailVal(def, r, ps){
+  if(!r) return null;
+  if(def.conv){ var pl = rSum(r, ps, 'int_planned'), dn = rSum(r, ps, 'int_done'); return num(dn) && pl ? Math.round(dn / pl * 100) : null; }
+  return rVal(r, ps, def.k);
+}
+function renderDetail(mode, r, prev, ps){
+  var name = state.detail, def = DETAIL[name];
+  if(!def){ $('dDetail').innerHTML = ''; return; }
+  var bk = chartBuckets(mode, r), shift = prev ? daysBetween(prev.from, r.from) : 0;
+  if(mode === 'day') shift = 7;   // день: неделя дня против прошлой недели
+  var rows = bk.map(function(b){
+    var pb = shift ? {from:addDays(b.from, -shift), to:addDays(b.to, -shift)} : null;
+    return {b:b, v:b.from > today() ? null : detailVal(def, b, ps), pv:detailVal(def, pb, ps)};
+  });
+  var unit = def.unit || '', max = Math.max(4, Math.max.apply(null, rows.map(function(x){ return Math.max(x.v || 0, x.pv || 0); })));
+  max = def.conv ? 100 : Math.ceil(max / 4) * 4;
+  // ширина рисунка — по экрану, чтобы подписи на телефоне не превращались в мелочь
+  var n = rows.length, W = Math.max(320, Math.min(900, (document.querySelector('.wrap') || document.body).clientWidth - 64)), H = 220, L = 34, B = 34, T = 18, step = (W - L) / Math.max(n, 1), bw = Math.min(28, step * 0.32), labels = n <= 14;
+  function y(v){ return T + (H - B - T) * (1 - v / max); }
+  var s = '<svg viewBox="0 0 '+W+' '+H+'" width="100%" role="img" aria-label="'+esc(name)+' по частям периода">';
+  for(var i = 0; i <= 4; i++){ var g = max * i / 4; s += '<line x1="'+L+'" x2="'+W+'" y1="'+y(g)+'" y2="'+y(g)+'" stroke="var(--line)" stroke-width="1"/><text x="'+(L-6)+'" y="'+(y(g)+4)+'" text-anchor="end">'+Math.round(g)+'</text>'; }
+  rows.forEach(function(x, i){
+    var cx = L + i * step + step / 2, x1 = cx - bw - 1, x2 = cx + 1, when = x.b.from === x.b.to ? human(x.b.from) : shortDate(x.b.from) + '–' + shortDate(x.b.to);
+    if(x.pv !== null) s += '<rect x="'+x1+'" y="'+y(x.pv)+'" width="'+bw+'" height="'+Math.max(y(0) - y(x.pv), 0)+'" rx="3" fill="var(--muted-bar)"><title>'+when+', прошлый период: '+x.pv+unit+'</title></rect>';
+    if(x.v !== null){
+      s += '<rect x="'+x2+'" y="'+y(x.v)+'" width="'+bw+'" height="'+Math.max(y(0) - y(x.v), 0)+'" rx="3" fill="var(--accent)"><title>'+when+': '+x.v+unit+'</title></rect>';
+      if(labels) s += '<text x="'+(x2 + bw / 2)+'" y="'+(y(x.v) - 4)+'" text-anchor="middle" style="fill:var(--ink-2)">'+x.v+'</text>';
+    }
+    if(labels || i % Math.ceil(n / 14) === 0) s += '<text x="'+cx+'" y="'+(H - 16)+'" text-anchor="middle">'+x.b.l1+'</text><text x="'+cx+'" y="'+(H - 3)+'" text-anchor="middle">'+x.b.l2+'</text>';
+  });
+  s += '</svg>';
+  var now = detailVal(def, r, ps), before = detailVal(def, prev, ps);
+  var filled = rows.filter(function(x){ return x.v !== null; }), best = filled.reduce(function(m, x){ return !m || x.v > m.v ? x : m; }, null);
+  var days = rDates(r).filter(function(d){ return hasData(d, ps) && !isWeekend(d); }).length;
+  var sum = [['Всего', now === null ? '—' : now + unit], ['Прошлый период', before === null ? '—' : before + unit]];
+  if(!def.conv && !def.stock && days) sum.push(['В среднем за рабочий день', String(Math.round((now || 0) / days * 10) / 10).replace('.', ',')]);
+  if(best && n > 1) sum.push(['Лучший отрезок', best.b.l1 + (best.b.l2 ? ' ' + best.b.l2 : '') + ' — ' + best.v + unit]);
+  // по людям: значение, доля в итоге команды и изменение к прошлому периоду
+  var people = ps.filter(function(p){ return detailVal(def, r, [p]) !== null || detailVal(def, prev, [p]) !== null; });
+  var table = people.length > 1 || !scope() ? '<div class="scroll"><table><thead><tr><th>Рекрутер</th><th>Сейчас</th><th>Прошлый период</th><th>Изменение</th>'+(def.conv ? '' : '<th>Доля</th>')+'</tr></thead><tbody>' +
+    people.map(function(p){
+      var a = detailVal(def, r, [p]), b = detailVal(def, prev, [p]), d = num(a) && num(b) ? a - b : null;
+      return '<tr><td>'+nameHtml(p)+'</td><td>'+(a === null ? '—' : a + unit)+'</td><td>'+(b === null ? '—' : b + unit)+'</td>' +
+        '<td>'+(d === null ? '—' : '<span class="'+(d > 0 ? 'up' : d < 0 ? 'down' : '')+'">'+(d > 0 ? '+' : d < 0 ? '−' : '')+Math.abs(d)+(def.conv ? ' п.п.' : '')+'</span>')+'</td>' +
+        (def.conv ? '' : '<td>'+(num(a) && now ? Math.round(a / now * 100) + '%' : '—')+'</td>')+'</tr>';
+    }).join('') + '</tbody></table></div>' : '';
+  $('dDetail').innerHTML = '<div class="panel detail"><div class="detail-head"><h3>'+esc(name)+' · '+esc(rangeLabel(mode === 'day' ? 'week' : mode, mode === 'day' ? periodOf('week', r.from) : r))+'</h3>' +
+    '<button class="btn ghost sm" id="dDetailClose" aria-label="Закрыть подробности">×</button></div>' +
+    '<div class="detail-sum">'+sum.map(function(x){ return '<span>'+x[0]+': <b>'+esc(x[1])+'</b></span>'; }).join('')+'</div>' + s +
+    '<div class="legend"><span><i style="background:var(--accent)"></i>выбранный период</span><span><i style="background:var(--muted-bar)"></i>прошлый период</span></div>' +
+    (table ? '<h3 class="mt" style="font-size:15px">По рекрутерам</h3>' + table : '') + '</div>';
+}
+function toggleDetail(e){
+  var t = e.target.closest('[data-detail]'); if(!t) return;
+  if(e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+  if(e.type === 'keydown') e.preventDefault();
+  state.detail = state.detail === t.dataset.detail ? null : t.dataset.detail;
+  renderDay();
+  if(state.detail) $('dDetail').scrollIntoView({block:'nearest', behavior:'smooth'});
 }
 // Части периода для графика: неделя — по дням, месяц и квартал — по неделям, год — по месяцам
 function chartBuckets(mode, r){
@@ -1655,6 +1731,8 @@ $('tUserForm').onsubmit = addUser;
 $('mTable').onclick = metricEdit; $('mTable').onchange = metricEdit;
 $('mForm').onsubmit = addMetric;
 $('dTodo').onclick = todoClick;
+$('dTiles').onclick = $('dTiles').onkeydown = toggleDetail;
+$('dDetail').onclick = function(e){ if(e.target.id === 'dDetailClose'){ state.detail = null; renderDay(); } };
 $('dRemind').onclick = extendFromReminder; $('vRemind').onclick = extendFromReminder;
 $('oForm').onsubmit = addVacation; $('oTable').onclick = removeVacation;
 

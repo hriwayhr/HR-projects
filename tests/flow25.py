@@ -63,6 +63,15 @@ with sync_playwright() as p:
     pg.fill('#dFrom', '2026-10-03'); pg.dispatch_event('#dFrom', 'change'); pg.fill('#dTo', '2026-10-06'); pg.dispatch_event('#dTo', 'change'); pg.wait_for_timeout(100)
     assert pg.inner_text('#dayTitle') == '3 октября – 6 октября 2026' and '\t3\t' in pg.inner_text('#dTable tbody'), pg.inner_text('#dTable tbody')
     pg.click('#dPrev'); pg.wait_for_timeout(100); assert pg.inner_text('#dayTitle') == '29 сентября – 2 октября 2026'
+    # подробности по плитке: открывается по клику, график по неделям месяца и разбивка по людям, закрывается повторным кликом и «×»
+    pg.select_option('#dMode', 'month'); pg.wait_for_timeout(100)
+    pg.click('#dTiles [data-detail="Кандидаты на вакансию"]'); pg.wait_for_timeout(100)
+    det = pg.inner_text('#dDetail')
+    assert det.startswith('Кандидаты на вакансию · Октябрь 2026') and 'Прошлый период' in det and 'Юлия Немчинова' in det, det
+    assert pg.inner_html('#dDetail svg').count('<rect') >= 2 and pg.get_attribute('#dTiles [data-detail="Кандидаты на вакансию"]', 'aria-expanded') == 'true'
+    pg.click('#dTiles [data-detail="Кандидаты на вакансию"]'); pg.wait_for_timeout(100); assert pg.inner_text('#dDetail') == ''
+    pg.focus('#dTiles [data-detail="Звонки"]'); pg.keyboard.press('Enter'); pg.wait_for_timeout(100)
+    assert pg.inner_text('#dDetail').startswith('Звонки'); pg.click('#dDetailClose'); pg.wait_for_timeout(100); assert pg.inner_text('#dDetail') == ''
     pg.select_option('#dMode', 'day'); pg.wait_for_timeout(100)
     # новая вакансия сегодня — сразу в ячейках сегодняшнего дня
     pg.click('#tab_vac'); pg.click('#vAdd'); pg.fill('#v_title', 'D'); pg.fill('#v_manager', 'Юлия Немчинова')
