@@ -2153,11 +2153,18 @@ function backupDocs(){
 function bStatus(t, err){ $('bStat').className = 'status' + (err ? ' err' : ''); $('bStat').textContent = t; }
 function renderBackup(){ $('bImportPanel').hidden = !CLOUD; }
 $('bExport').onclick = function(){
-  var docs = backupDocs(), a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([JSON.stringify({format:'hr-metrics', at:new Date().toISOString(), docs:docs})], {type:'application/json'}));
-  a.download = 'hr-metrics-' + today() + '.json'; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
-  bStatus('Скачано документов: ' + Object.keys(docs).length + '.');
+  var docs = backupDocs(), name = 'hr-metrics-' + today() + '.json', data = JSON.stringify({format:'hr-metrics', at:new Date().toISOString(), docs:docs});
+  var done = 'Скачано документов: ' + Object.keys(docs).length + '.';
+  // на claude.ai файл отдаёт платформа (с подтверждением), в облаке — обычная ссылка
+  Promise.resolve(!CLOUD && window.claude ? window.claude.use('downloads') : null).then(function(dl){
+    if(dl) return dl.save({filename:name, data:data}).then(function(){ bStatus(done); },
+      function(err){ bStatus(err && err.code === 'declined' ? 'Скачивание отменено.' : 'Не удалось скачать файл, попробуйте ещё раз.', err && err.code !== 'declined'); });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([data], {type:'application/json'})); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+    bStatus(done);
+  });
 };
 var bLoaded = null;
 $('bFile').onchange = function(){
