@@ -174,6 +174,9 @@
   .remind[open] summary{margin-bottom:10px;}
   .month-head{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; margin-bottom:12px;}
   .month-head h3{margin:0;}
+  .month-block.wide{grid-template-columns:minmax(0,1fr);}   /* много столбцов (год по месяцам) — CV под таблицей */
+  .month-block.wide .cv{display:flex; flex-wrap:wrap; gap:8px 32px; align-items:baseline;}
+  .month-block.wide .cv div{border:0; padding:0;}
   .cv{display:grid; gap:10px; font-size:14px;}
   .cv div{display:flex; justify-content:space-between; gap:12px; border-bottom:1px solid var(--line); padding-bottom:6px;}
   .cv b{font-size:18px;}
@@ -288,12 +291,13 @@
     <div class="bar">
       <h2>Сводка</h2>
       <div class="datenav">
+        <select id="sGroup" aria-label="Разбивка"><option value="week">По неделям</option><option value="month">По месяцам</option><option value="quarter">По кварталам</option></select>
         <select id="sYear" aria-label="Год"></select>
         <select id="sPerson" aria-label="Рекрутер"></select>
       </div>
     </div>
     <div class="stack" id="sBlocks"></div>
-    <p class="hint mt">Неделя относится к месяцу, на который приходится её четверг (неделя 40 — 29.09–2.10 — в октябре). Вакантные места — «кандидатов на вакансию» на конец пятницы (последнего внесённого дня недели), как в листе sum; справа — среднее за месяц. Доходимость — прошедшие собеседования к назначенным, выходы — новые сотрудники к прошедшим собеседованиям.</p>
+    <p class="hint mt">По неделям — блок на каждый месяц; неделя относится к месяцу, на который приходится её четверг (неделя 40 — 29.09–2.10 — в октябре). По месяцам и по кварталам — один блок на год. Вакантные места — «кандидатов на вакансию» на последний внесённый день столбца (пятница, конец месяца или квартала), как в листе sum; рядом — среднее по столбцам. Доходимость — прошедшие собеседования к назначенным, выходы — новые сотрудники к прошедшим собеседованиям.</p>
   </section>
 
   <!-- Вакансии -->
@@ -895,11 +899,13 @@ function isoWeekNo(mon){
   return 1 + Math.floor((th - jan1) / 864e5 / 7);
 }
 function pctFine(a, b){ return b ? (Math.round(a / b * 1000) / 10).toString().replace('.', ',') + '%' : '—'; }
-function weeklyTotals(ps, extra){
+// Итоги по столбцам сводки: ключ — неделя (понедельник), месяц (YYYY-MM) или квартал (YYYY-Qn)
+function quarterKey(d){ return d.slice(0, 4) + '-Q' + (Math.floor((+d.slice(5, 7) - 1) / 3) + 1); }
+function periodTotals(ps, extra, keyOf){
   var out = {};
   dates().forEach(function(d){
     if(d < COLLECT_START) return;
-    var k = weekKey(d), r = out[k] || (out[k] = {vac:{}, pub:0, planned:0, done:0, hires:0, dis:0, x:{}, any:false});
+    var k = keyOf(d), r = out[k] || (out[k] = {vac:{}, pub:0, planned:0, done:0, hires:0, dis:0, x:{}, any:false});
     ps.forEach(function(p){
       var m = (byDate[d] || {})[p]; if(!m || !Object.keys(m).length) return; r.any = true;
       // вакантные места = «кандидатов на вакансию» (сколько людей нужно), как в листе sum; даты по порядку — остаётся пятница
@@ -960,59 +966,67 @@ function copyRich(html, text, st){
   }catch(err){}
   legacy();
 }
+// Блок сводки: столбцы-периоды, справа sum, рядом средние вакантные места и CV % — как лист sum
+function sumBlock(id, title, keys, T, head, cur, colName, vacName, who, extra){
+  var W = keys.map(function(k){ return T[k]; });
+  function total(f){ return W.reduce(function(s, r){ return s + f(r); }, 0); }
+  var lines = [[vacName, function(r){ return r.vacs; }, false], ['Новых вакансий', function(r){ return r.pub; }, true],
+    ['Назначенных собеседований', function(r){ return r.planned; }, true], ['Собеседований (факт)', function(r){ return r.done; }, true],
+    ['Выходов новых сотрудников', function(r){ return r.hires; }, true], ['Уволенных сотрудников', function(r){ return r.dis; }, true]]
+    .concat(extra.map(function(x){ return [x.t, function(r){ return num(r.x[x.k]) ? r.x[x.k] : null; }, true]; }));
+  var vacs = W.map(function(r){ return r.vacs; }).filter(num);
+  var avgVac = vacs.length ? Math.round(vacs.reduce(function(a, b){ return a + b; }, 0) / vacs.length * 100) / 100 : null;
+  var planned = total(function(r){ return r.planned; }), done = total(function(r){ return r.done; }), hires = total(function(r){ return r.hires; });
+  var heads = keys.map(head), avgText = avgVac === null ? '—' : String(avgVac).replace('.', ',');
+  sumReports[id] = {
+    title: title + ' — ' + (who ? fullName(who) : 'вся команда'), heads: heads,
+    rows: lines.map(function(l){ return [l[0]].concat(W.map(function(r){ var v = l[1](r); return v === null || v === undefined ? '—' : v; }), [l[2] ? total(function(r){ return l[1](r) || 0; }) : '']); }),
+    cv: [['Вакантных мест в среднем', avgText], ['Доходимость', pctFine(done, planned)], ['Выходы', pctFine(hires, done)]]
+  };
+  var th = '<thead><tr><th>'+colName+'</th>' + keys.map(function(k, i){ return '<th'+(k === cur ? ' class="now"' : '')+'>'+esc(heads[i][0].replace(/^Неделя /, ''))+(heads[i][1] ? '<small>'+esc(heads[i][1])+'</small>' : '')+'</th>'; }).join('') + '<th class="sum">sum</th></tr></thead>';
+  var body = lines.map(function(l){
+    return '<tr><td>'+esc(l[0])+'</td>' + W.map(function(r, i){ var v = l[1](r); return '<td'+(keys[i] === cur ? ' class="now"' : '')+'>'+(v === null || v === undefined ? '—' : v)+'</td>'; }).join('') +
+      '<td class="sum">'+(l[2] ? total(function(r){ return l[1](r) || 0; }) : '')+'</td></tr>';
+  }).join('');
+  return '<div class="panel"><div class="month-head"><h3>'+esc(title)+'</h3>' +
+    '<button class="btn ghost sm" data-copy="'+id+'">Скопировать для отчёта</button><span class="status" role="status"></span></div><div class="month-block'+(keys.length > 6 ? ' wide' : '')+'">' +
+    '<div class="scroll"><table class="wk">'+th+'<tbody>'+body+'</tbody></table></div>' +
+    '<div class="cv"><div><span>Вакантных мест в среднем</span><b>'+avgText+'</b></div>' +
+    '<div class="lbl">CV %</div><div><span>Доходимость</span><b>'+pctFine(done, planned)+'</b></div><div><span>Выходы</span><b>'+pctFine(hires, done)+'</b></div></div>' +
+    '</div></div>';
+}
+function weekHead(k){
+  var a = parse(k), b = parse(addDays(k, 4));
+  return ['Неделя ' + isoWeekNo(k), a.getDate()+'.'+String(a.getMonth()+1).padStart(2,'0')+'–'+b.getDate()+'.'+String(b.getMonth()+1).padStart(2,'0') + (k === weekKey(today()) ? ', идёт' : '')];
+}
 function renderSum(){
   sumReports = {};
-  var who = scope() || $('sPerson').value, extra = customMetrics();
+  var who = scope() || $('sPerson').value, extra = customMetrics(), group = $('sGroup').value;
   $('sPerson').hidden = !!scope();
-  var weeks = weeklyTotals(who ? [who] : recruiters(), extra.map(function(m){ return m.k; }));
-  var byMonth = {};
-  Object.keys(weeks).sort().forEach(function(k){ var m = weekThu(k).slice(0, 7); (byMonth[m] || (byMonth[m] = [])).push(k); });
-  var years = Object.keys(byMonth).map(function(m){ return m.slice(0, 4); }).filter(function(y, i, a){ return a.indexOf(y) === i; }).sort().reverse();
+  var ps = who ? [who] : recruiters(), xs = extra.map(function(m){ return m.k; });
+  var keyOf = group === 'month' ? function(d){ return d.slice(0, 7); } : group === 'quarter' ? quarterKey : weekKey;
+  var T = periodTotals(ps, xs, keyOf);
+  // год столбца: неделя — по четвергу (как в листе sum), месяц и квартал — по своей дате
+  function yearOf(k){ return group === 'week' ? weekThu(k).slice(0, 4) : k.slice(0, 4); }
+  var years = Object.keys(T).map(yearOf).filter(function(y, i, a){ return a.indexOf(y) === i; }).sort().reverse();
   var cy = $('sYear').value;
   $('sYear').innerHTML = years.map(function(y){ return '<option>'+y+'</option>'; }).join('');
   $('sYear').value = years.indexOf(cy) >= 0 ? cy : years[0] || '';
-  var year = $('sYear').value, curWeek = weekKey(today());
-  var ms = Object.keys(byMonth).filter(function(m){ return m.slice(0, 4) === year; }).sort().reverse();   // свежий месяц сверху
-  if(!ms.length){ $('sBlocks').innerHTML = '<div class="panel empty">Пока нет внесённых дней.</div>'; return; }
-  $('sBlocks').innerHTML = ms.map(function(m){
-    var wk = byMonth[m], W = wk.map(function(k){ return weeks[k]; });
-    function total(f){ return W.reduce(function(s, r){ return s + f(r); }, 0); }
-    function row(title, f, withSum){
-      return '<tr><td>'+title+'</td>' + W.map(function(r, i){ var v = f(r); return '<td'+(wk[i] === curWeek ? ' class="now"' : '')+'>'+(v === null || v === undefined ? '—' : v)+'</td>'; }).join('') +
-        '<td class="sum">'+(withSum ? total(function(r){ return f(r) || 0; }) : '')+'</td></tr>';
-    }
-    var vacs = W.map(function(r){ return r.vacs; }).filter(num);
-    var avgVac = vacs.length ? Math.round(vacs.reduce(function(a, b){ return a + b; }, 0) / vacs.length * 100) / 100 : null;
-    var planned = total(function(r){ return r.planned; }), done = total(function(r){ return r.done; }), hires = total(function(r){ return r.hires; });
-    var head = '<thead><tr><th>Неделя</th>' + wk.map(function(k){
-      var a = parse(k), b = parse(addDays(k, 4));
-      return '<th'+(k === curWeek ? ' class="now"' : '')+'>'+isoWeekNo(k)+'<small>'+a.getDate()+'.'+String(a.getMonth()+1).padStart(2,'0')+'–'+b.getDate()+'.'+String(b.getMonth()+1).padStart(2,'0')+(k === curWeek ? ', идёт' : '')+'</small></th>';
-    }).join('') + '<th class="sum">sum</th></tr></thead>';
-    var lines = [['Вакантных мест (на пятницу)', function(r){ return r.vacs; }, false], ['Новых вакансий', function(r){ return r.pub; }, true],
-      ['Назначенных собеседований', function(r){ return r.planned; }, true], ['Собеседований (факт)', function(r){ return r.done; }, true],
-      ['Выходов новых сотрудников', function(r){ return r.hires; }, true], ['Уволенных сотрудников', function(r){ return r.dis; }, true]]
-      .concat(extra.map(function(x){ return [x.t, function(r){ return num(r.x[x.k]) ? r.x[x.k] : null; }, true]; }));
-    sumReports[m] = {
-      title: MONTHS[+m.slice(5) - 1] + ' ' + m.slice(0, 4) + ' — ' + (who ? fullName(who) : 'вся команда'),
-      heads: wk.map(function(k){ var a = parse(k), b = parse(addDays(k, 4)); return ['Неделя ' + isoWeekNo(k), a.getDate()+'.'+String(a.getMonth()+1).padStart(2,'0')+'–'+b.getDate()+'.'+String(b.getMonth()+1).padStart(2,'0') + (k === curWeek ? ', идёт' : '')]; }),
-      rows: lines.map(function(l){ var vals = W.map(function(r){ var v = l[1](r); return v === null || v === undefined ? '—' : v; });
-        return [l[0]].concat(vals, [l[2] ? total(function(r){ return l[1](r) || 0; }) : '']); }),
-      cv: [['Вакантных мест в среднем', avgVac === null ? '—' : String(avgVac).replace('.', ',')], ['Доходимость', pctFine(done, planned)], ['Выходы', pctFine(hires, done)]]
-    };
-    var body = row('Вакантных мест (на пятницу)', function(r){ return r.vacs; }, false) +
-      row('Новых вакансий', function(r){ return r.pub; }, true) +
-      row('Назначенных собеседований', function(r){ return r.planned; }, true) +
-      row('Собеседований (факт)', function(r){ return r.done; }, true) +
-      row('Выходов новых сотрудников', function(r){ return r.hires; }, true) +
-      row('Уволенных сотрудников', function(r){ return r.dis; }, true) +
-      extra.map(function(x){ return row(esc(x.t), function(r){ return num(r.x[x.k]) ? r.x[x.k] : null; }, true); }).join('');
-    return '<div class="panel"><div class="month-head"><h3>'+MONTHS[+m.slice(5) - 1]+' '+m.slice(0, 4)+'</h3>' +
-      '<button class="btn ghost sm" data-copy="'+m+'">Скопировать для отчёта</button><span class="status" role="status"></span></div><div class="month-block">' +
-      '<div class="scroll"><table class="wk">'+head+'<tbody>'+body+'</tbody></table></div>' +
-      '<div class="cv"><div><span>Вакантных мест в среднем</span><b>'+(avgVac === null ? '—' : String(avgVac).replace('.', ','))+'</b></div>' +
-      '<div class="lbl">CV %</div><div><span>Доходимость</span><b>'+pctFine(done, planned)+'</b></div><div><span>Выходы</span><b>'+pctFine(hires, done)+'</b></div></div>' +
-      '</div></div>';
-  }).join('');
+  var year = $('sYear').value, keys = Object.keys(T).filter(function(k){ return yearOf(k) === year; }).sort();
+  if(!keys.length){ $('sBlocks').innerHTML = '<div class="panel empty">Пока нет внесённых дней.</div>'; return; }
+  if(group === 'week'){
+    var byMonth = {};
+    keys.forEach(function(k){ var m = weekThu(k).slice(0, 7); (byMonth[m] || (byMonth[m] = [])).push(k); });
+    $('sBlocks').innerHTML = Object.keys(byMonth).sort().reverse().map(function(m){   // свежий месяц сверху
+      return sumBlock(m, MONTHS[+m.slice(5) - 1] + ' ' + m.slice(0, 4), byMonth[m], T, weekHead, weekKey(today()), 'Неделя', 'Вакантных мест (на пятницу)', who, extra);
+    }).join('');
+  } else if(group === 'month'){
+    $('sBlocks').innerHTML = sumBlock(year + '-months', year + ' год по месяцам', keys, T, function(k){ return [MONTHS[+k.slice(5) - 1], k === today().slice(0, 7) ? 'идёт' : '']; },
+      today().slice(0, 7), 'Месяц', 'Вакантных мест (на конец месяца)', who, extra);
+  } else {
+    $('sBlocks').innerHTML = sumBlock(year + '-quarters', year + ' год по кварталам', keys, T, function(k){ return [k.slice(6) + ' квартал', k === quarterKey(today()) ? 'идёт' : '']; },
+      quarterKey(today()), 'Квартал', 'Вакантных мест (на конец квартала)', who, extra);
+  }
 }
 
 // ---------- вакансии ----------
@@ -1563,6 +1577,7 @@ function ingest(snap){
 
 // ---------- запуск ----------
 session = load('hrSession');
+$('sGroup').value = load('hrSumGroup') || 'week';
 state.mode = load('hrMode') || 'day'; $('dMode').value = state.mode;
 if(state.mode === 'custom'){ state.mode = 'day'; $('dMode').value = 'day'; }   // свой период не запоминаем — его даты не хранятся
 $('fDate').value = today();
@@ -1598,7 +1613,8 @@ $('dPrev').onclick = function(){ stepPeriod(-1); };
 $('dNext').onclick = function(){ stepPeriod(1); };
 $('fPerson').onchange = loadForm; $('fDate').onchange = loadForm;
 $('dayForm').onsubmit = saveDay;
-$('sYear').onchange = renderSum; $('sPerson').onchange = renderSum; $('sBlocks').onclick = copyReport;
+$('sYear').onchange = renderSum;
+$('sGroup').onchange = function(){ store('hrSumGroup', this.value); renderSum(); }; $('sPerson').onchange = renderSum; $('sBlocks').onclick = copyReport;
 $('vSearch').oninput = renderVac; $('vStatus').onchange = renderVac; $('vManager').onchange = renderVac;
 $('vAdd').onclick = function(){ openVac(null); };
 $('vCopy').onclick = function(){

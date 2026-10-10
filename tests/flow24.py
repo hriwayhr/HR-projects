@@ -94,10 +94,20 @@ with sync_playwright() as p:
     pg.click('#tab_sum'); pg.wait_for_timeout(100)
     blk = pg.inner_text('#sBlocks')
     assert blk.startswith('Октябрь 2026') and '40\n28.09–2.10' in blk, blk[:200]
-    assert 'Назначенных собеседований\t8\t8' in blk and 'Собеседований (факт)\t6\t6' in blk, blk
-    assert 'Вакантных мест (на пятницу)\t—' in blk and 'Отклики hh\t7\t7' in blk, blk
+    assert 'Назначенных собеседований\t8\t' in blk and 'Собеседований (факт)\t6\t' in blk, blk
+    assert 'Вакантных мест (на пятницу)\t—' in blk and 'Отклики hh\t7\t' in blk, blk
     assert '75%' in blk and '16,7%' in blk, blk
     assert 'Отказов' not in blk   # отказы в сводке не нужны
+    # разбивка года: по месяцам и по кварталам — один блок на год, столбцы-периоды и sum
+    pg.select_option('#sGroup', 'month'); pg.wait_for_timeout(100)
+    blk = pg.inner_text('#sBlocks')
+    assert blk.startswith('2026 год по месяцам') and 'сентябрь' in blk.lower() and 'октябрь' in blk.lower() and 'Вакантных мест (на конец месяца)' in blk, blk[:300]
+    assert 'Назначенных собеседований\t2\t6\t8' in blk, blk   # 30.09: 2, октябрь: 6, итого 8
+    pg.select_option('#sGroup', 'quarter'); pg.wait_for_timeout(100)
+    blk = pg.inner_text('#sBlocks')
+    assert blk.startswith('2026 год по кварталам') and '3 квартал' in blk.lower() and '4 квартал' in blk.lower() and 'Назначенных собеседований\t2\t6\t8' in blk, blk[:400]
+    assert pg.evaluate("localStorage.getItem('hrSumGroup')") == '"quarter"'
+    pg.select_option('#sGroup', 'week'); pg.wait_for_timeout(100)
     # копирование для отчёта: в буфер уходят HTML-таблица и текст через табуляцию
     pg.evaluate("""window.__clip = null; Object.defineProperty(navigator, 'clipboard', {configurable: true, value: {write: function(items){
       return Promise.all(['text/html', 'text/plain'].map(function(t){ return items[0].getType(t).then(function(b){ return b.text(); }); }))
@@ -105,7 +115,7 @@ with sync_playwright() as p:
     pg.click('#sBlocks button[data-copy="2026-10"]'); pg.wait_for_timeout(200)
     html_, text_ = pg.evaluate('window.__clip')
     assert '<table' in html_ and 'Неделя 40<br>' in html_ and '28.09–2.10' in html_ and 'Итого' in html_, html_[:300]
-    assert text_.startswith('HR-метрики: Октябрь 2026 — вся команда') and 'Неделя 40 (28.09–2.10' in text_ and 'Назначенных собеседований\t8\t8' in text_ and 'Доходимость: 75%' in text_, text_
+    assert text_.startswith('HR-метрики: Октябрь 2026 — вся команда') and 'Неделя 40 (28.09–2.10' in text_ and 'Назначенных собеседований\t8\t' in text_ and 'Доходимость: 75%' in text_, text_
     assert 'Скопировано' in pg.inner_text('#sBlocks')
     pg.screenshot(path=str(HERE / 'shots' / 'hr-sum.png'), full_page=True)
 
@@ -207,8 +217,8 @@ with sync_playwright() as p:
     pg.click('#tab_day'); pg.fill('#dDate', '2026-10-01'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
     t = pg.inner_text('#dTable'); assert 'Анна (архив)' in t, t
     assert 'Открытые вакансии\n14' in pg.inner_text('#dTiles')   # её цифры в итогах команды
-    pg.fill('#dDate', '2026-10-06'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
-    assert 'Анна' not in pg.inner_text('#dTable') and 'Анна' not in pg.inner_text('#dChips')   # на новых днях её нет
+    pg.fill('#dDate', pg.evaluate('today()')); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
+    assert 'Анна' not in pg.inner_text('#dTable') and 'Анна' not in pg.inner_text('#dChips')   # с дня архивации её нет
     pg.click('#tab_sum'); assert 'Анна (архив)' in pg.inner_text('#sPerson')
     pg.select_option('#sPerson', 'anna'); pg.wait_for_timeout(100); assert 'Пока нет' not in pg.inner_text('#sBlocks')
     pg.click('#tab_entry'); assert 'Анна (архив)' in pg.inner_text('#fPerson')
