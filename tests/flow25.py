@@ -76,9 +76,9 @@ with sync_playwright() as p:
     pg.click('#dTiles [data-detail="Кандидаты на вакансию"]'); pg.wait_for_timeout(100); assert pg.inner_text('#dDetail') == ''
     pg.focus('#dTiles [data-detail="Звонки"]'); pg.keyboard.press('Enter'); pg.wait_for_timeout(100)
     assert pg.inner_text('#dDetail').startswith('Звонки'); pg.click('#dDetailClose'); pg.wait_for_timeout(100); assert pg.inner_text('#dDetail') == ''
-    # пиковые дни недели: среднее за внесённый день, пик выделен; в режиме дня — 13 недель
+    # пиковые дни недели: сумма по дню недели, пик выделен; в режиме дня — 13 недель
     pk = pg.inner_text('#dPeak')
-    assert pk.startswith('Пиковые дни недели · Октябрь 2026') and 'Собеседования — четверг' in pk and 'Чаты — четверг' in pk and 'Выходы — четверг' in pk, pk
+    assert pk.startswith('Пиковые дни недели · Октябрь 2026') and 'Собеседования — четверг' in pk and pk.index('Чаты') < pk.index('Собеседования') < pk.index('Выходы') and 'Доходимость\t—' in pk and 'Чаты — четверг' in pk and 'Выходы — четверг' in pk, pk
     assert pg.query_selector_all('#dPeak td.peak').__len__() == 3
     pg.select_option('#dMode', 'day'); pg.wait_for_timeout(100)
     assert pg.inner_text('#dPeak').startswith('Пиковые дни недели · 13 недель по '), pg.inner_text('#dPeak')
