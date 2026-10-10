@@ -8,7 +8,8 @@ prev = HERE / 'preview-hr.html'
 prev.write_text('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>' + html + '</body></html>', encoding='utf-8')
 seed = {
   'config/team': {'people': {'yulia': {'name': 'Юлия', 'surname': 'Немчинова', 'login': 'y', 'hash': 'h', 'admin': True}}},
-  'months/yulia_2026-10': {'person': 'yulia', 'month': '2026-10', 'days': {'2026-10-02': {'vac_start': 40, 'cand_start': 50, 'int_planned': 1}}},
+  'months/yulia_2026-10': {'person': 'yulia', 'month': '2026-10', 'days': {'2026-10-02': {'vac_start': 40, 'cand_start': 50, 'int_planned': 1},
+                                                                         '2026-10-01': {'int_done': 2, 'chats': 5, 'hires': 1}}},
   # A: две публикации (вторая открыта 6.10), нужно 2
   'vacancies/a': {'title': 'A', 'status': 'активна', 'manager': 'Немчинова', 'publishedAt': '2026-10-01', 'rate': 2,
                   'links': [{'url': 'https://hh.ru/1', 'at': '2026-10-01'}, {'url': 'https://hh.ru/2', 'at': '2026-10-06'}]},
@@ -72,7 +73,12 @@ with sync_playwright() as p:
     pg.click('#dTiles [data-detail="Кандидаты на вакансию"]'); pg.wait_for_timeout(100); assert pg.inner_text('#dDetail') == ''
     pg.focus('#dTiles [data-detail="Звонки"]'); pg.keyboard.press('Enter'); pg.wait_for_timeout(100)
     assert pg.inner_text('#dDetail').startswith('Звонки'); pg.click('#dDetailClose'); pg.wait_for_timeout(100); assert pg.inner_text('#dDetail') == ''
+    # пиковые дни недели: среднее за внесённый день, пик выделен; в режиме дня — 13 недель
+    pk = pg.inner_text('#dPeak')
+    assert pk.startswith('Пиковые дни недели · Октябрь 2026') and 'Собеседования — четверг' in pk and 'Чаты — четверг' in pk and 'Выходы — четверг' in pk, pk
+    assert pg.query_selector_all('#dPeak td.peak').__len__() == 3
     pg.select_option('#dMode', 'day'); pg.wait_for_timeout(100)
+    assert pg.inner_text('#dPeak').startswith('Пиковые дни недели · 13 недель по '), pg.inner_text('#dPeak')
     # новая вакансия сегодня — сразу в ячейках сегодняшнего дня
     pg.click('#tab_vac'); pg.click('#vAdd'); pg.fill('#v_title', 'D'); pg.fill('#v_manager', 'Юлия Немчинова')
     pg.fill('#vLinks .v-link', 'https://hh.ru/5'); assert pg.input_value('#vLinks .v-link-at') == '2026-10-07'

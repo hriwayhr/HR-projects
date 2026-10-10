@@ -105,6 +105,8 @@
   @media (max-width:860px){ .grid2{grid-template-columns:minmax(0,1fr);} }
   .stack{display:grid; gap:16px;}
   .mt{margin-top:16px;}
+  #dPeak td.heat{background:color-mix(in srgb, var(--accent) var(--h), transparent);}
+  #dPeak td.peak{font-weight:700; color:var(--ink); box-shadow:inset 0 0 0 2px var(--accent);}
   .panel{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px; min-width:0;}
   .panel h3{font-size:16px; margin-bottom:12px;}
   .scroll{overflow-x:auto;}
@@ -277,6 +279,7 @@
         <div class="legend"><span><i style="background:var(--muted-bar)"></i>назначено</span><span><i style="background:var(--accent)"></i>прошло</span></div>
       </div>
     </div>
+    <div class="panel mt" id="dPeak"></div>
   </section>
 
   <!-- Ввод дня -->
@@ -782,6 +785,31 @@ function renderDay(){
   $('dTable').innerHTML = '<thead><tr><th>Рекрутер</th>'+cols.map(function(c){ return '<th>'+esc(c[0])+'</th>'; }).join('')+'</tr></thead><tbody>'+body+'</tbody>'+foot;
   renderChart(mode, r, ps);
   renderDetail(mode, r, prev, ps);
+  renderPeak(mode, r, ps);
+}
+// ---------- пиковые дни недели: среднее за внесённый день по каждому дню пн–пт ----------
+var WD_FULL = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+function renderPeak(mode, r, ps){
+  // день и неделя — слишком мало дней для закономерности, берём 13 недель по выбранную
+  var w = mode === 'day' || mode === 'week' ? {from:addDays(weekKey(r.from), -7 * 12), to:addDays(weekKey(r.from), 6)} : r;
+  var ms = [['Собеседования', 'int_done'], ['Выходы', 'hires'], ['Чаты', chats]], wds = [1, 2, 3, 4, 5];
+  var stat = ms.map(function(m){
+    var by = wds.map(function(){ return {s:0, n:0}; });
+    rDates(w).forEach(function(d){ var v = sum(d, ps, m[1]), i = parse(d).getDay() - 1; if(v !== null && by[i]){ by[i].s += v; by[i].n++; } });
+    var avg = by.map(function(x){ return x.n ? Math.round(x.s / x.n * 10) / 10 : null; }), top = Math.max.apply(null, avg.map(function(v){ return v || 0; }));
+    return {t:m[0], avg:avg, by:by, top:top};
+  });
+  function f(v){ return String(v).replace('.', ','); }
+  var lead = stat.filter(function(x){ return x.top > 0; }).map(function(x){
+    return x.t + ' — ' + x.avg.map(function(v, i){ return v === x.top ? WD_FULL[wds[i]] : null; }).filter(Boolean).join(', ');
+  });
+  $('dPeak').innerHTML = '<h3>Пиковые дни недели · ' + esc(mode === 'day' || mode === 'week' ? '13 недель по ' + shortDate(w.to) : rangeLabel(mode, r)) + '</h3>' +
+    (lead.length ? '<div class="detail-sum">' + lead.map(function(x){ return '<span><b>' + esc(x) + '</b></span>'; }).join('') + '</div>' +
+    '<div class="scroll"><table><thead><tr><th>В среднем за день</th>' + wds.map(function(d){ return '<th>' + WD[d] + '</th>'; }).join('') + '</tr></thead><tbody>' +
+    stat.map(function(x){ return '<tr><td>' + x.t + '</td>' + x.avg.map(function(v, i){
+      var h = v && x.top ? Math.round(v / x.top * 45) : 0;
+      return '<td class="heat' + (v && v === x.top ? ' peak' : '') + '" style="--h:' + h + '%" title="' + WD_FULL[wds[i]] + ': всего ' + x.by[i].s + ' за ' + x.by[i].n + ' дн.">' + (v === null ? '—' : f(v)) + '</td>';
+    }).join('') + '</tr>'; }).join('') + '</tbody></table></div>' : '<p class="sub">За период нет внесённых данных.</p>');
 }
 // ---------- подробности по плитке: график по частям периода и разбивка по людям ----------
 var DETAIL = {
