@@ -37,7 +37,7 @@ SHIM = r"""<script>
     try { localStorage.setItem(KEY, JSON.stringify(local)); error = ""; }
     catch (e) { error = "Браузеру не хватает места на этом ПК. Сохраните игру в файл."; }
   }
-  function changed() { if (window.__offlineChanged) window.__offlineChanged(); }
+  function changed() { if (window.__offlineChanged) window.__offlineChanged(); bar(); }
   function copy(o) { return JSON.parse(JSON.stringify(o)); }
   function esc(json) { return json.replace(/</g, "\\u003c"); }
   function makeFile(seed) {
@@ -147,6 +147,31 @@ SHIM = r"""<script>
     setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
     return Promise.resolve({ status: "saved" });
   } };
+
+  /* несохранённые изменения: плашка внизу, Ctrl+S и предупреждение при закрытии вкладки */
+  var barEl = null;
+  function bar() {
+    if (!document.body) return;
+    var show = !!(local && local.dirty);
+    if (!barEl) {
+      barEl = document.createElement("div"); barEl.id = "offlineBar"; barEl.setAttribute("role", "status");
+      barEl.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;" +
+        "padding:10px 16px calc(env(safe-area-inset-bottom,0px) + 10px);background:var(--bg-2);color:var(--ink);border-top:2px solid var(--gold);box-shadow:0 -6px 20px #0005";
+      barEl.addEventListener("click", function (e) { if (e.target.closest("button")) save().catch(function () {}); });
+      document.body.append(barEl);
+    }
+    barEl.hidden = !show;
+    document.documentElement.style.paddingBottom = show ? "64px" : "";
+    if (!show) return;
+    barEl.innerHTML = linked ? "<span>Сохраняю изменения в файл игры…</span>"
+      : "<span><b>Есть несохранённые изменения.</b> Сохраните их в файл игры, иначе на другом ПК их не будет.</span>" +
+        '<button class="btn primary" type="button">' + (canLink ? "Сохранить в файл" : "Скачать игру с данными") + "</button><small style=\"opacity:.7\">Ctrl+S</small>";
+  }
+  window.addEventListener("DOMContentLoaded", bar);
+  window.addEventListener("beforeunload", function (e) { if (local && local.dirty) { e.preventDefault(); e.returnValue = ""; } });
+  window.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "ы" || e.code === "KeyS")) { e.preventDefault(); save().catch(function () {}); }
+  });
 
   window.__offline = {
     save: save,
