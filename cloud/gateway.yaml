@@ -1,0 +1,24 @@
+# API Gateway: всё — в одну функцию. {{FUNCTION_ID}} и {{SA_ID}} подставляет deploy.sh.
+openapi: 3.0.0
+info:
+  title: hr-metrics
+  version: 1.0.0
+paths:
+  /:
+    get:
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: {{FUNCTION_ID}}
+        service_account_id: {{SA_ID}}
+  /{proxy+}:
+    x-yc-apigateway-any-method:
+      parameters:
+        - name: proxy
+          in: path
+          required: true
+          schema:
+            type: string
+      x-yc-apigateway-integration:
+        type: cloud_functions
+        function_id: {{FUNCTION_ID}}
+        service_account_id: {{SA_ID}}

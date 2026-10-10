@@ -1,17 +1,12 @@
 # Аналитика дашборда: воронка, тренд 12 месяцев, испытательный срок, нагрузка и прогноз выходов,
 # сроки закрытия по этапам, причины отказов из выгрузки Talantix (CSV и Excel). «Сегодня» — 7.10.2026.
 from playwright.sync_api import sync_playwright
-import pathlib, json, subprocess, datetime, openpyxl
+import pathlib, json, datetime, openpyxl
 HERE = pathlib.Path(__file__).resolve().parent
 html = (HERE.parent / 'src' / 'hr-metrics.html').read_text(encoding='utf-8')
 prev = HERE / 'preview-hr.html'
 prev.write_text('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>' + html + '</body></html>', encoding='utf-8')
-# SheetJS для чтения Excel страница берёт с cdnjs; в тесте — тот же файл из npm
 cache = HERE / '.cache'; cache.mkdir(exist_ok=True)
-xlsx_js = cache / 'package' / 'dist' / 'xlsx.full.min.js'
-if not xlsx_js.exists():
-    subprocess.run(['npm', 'pack', 'xlsx@0.18.5'], cwd=cache, check=True, capture_output=True)
-    subprocess.run(['tar', 'xzf', 'xlsx-0.18.5.tgz'], cwd=cache, check=True)
 csv = cache / 'talantix.csv'
 csv.write_text('Выгрузка из Talantix\nФИО;Ответственный;Дата отказа;Причина отказа\n'
                'А;Немчинова Юлия;01.10.2026 15:30;Не устроила зарплата\nБ;Немчинова Юлия;02.10.2026;"Не устроила зарплата"\nВ;Шулятицкая;02.10.2026;Нет опыта\nГ;;;\n', encoding='utf-8')
@@ -41,7 +36,7 @@ def start(b, who):
     pg = b.new_page(viewport={'width': 1280, 'height': 1000})
     pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.clock.set_fixed_time('2026-10-07T12:00:00')
-    pg.route('https://cdnjs.cloudflare.com/**', lambda r: r.fulfill(path=str(xlsx_js), content_type='application/javascript'))
+    pg.route('**/*', lambda r: r.abort() if r.request.url.startswith('http') else r.continue_())   # внешних загрузок нет
     pg.add_init_script(path=str(HERE / 'mockdb.js'))
     pg.add_init_script('if(!sessionStorage.seeded){ sessionStorage.seeded = 1; window.__store = ' + json.dumps(seed) + '; } localStorage.setItem("hrSession", JSON.stringify({id: "' + who + '"})); localStorage.setItem("hrMode", JSON.stringify("month"));')
     pg.goto('file://' + str(prev)); pg.wait_for_timeout(500)

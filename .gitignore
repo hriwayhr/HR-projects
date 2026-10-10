@@ -10,3 +10,6 @@ __pycache__/
 *.otf
 *.woff2
 tests/.cache/
+cloud/function/node_modules/
+cloud/function/static/
+cloud/dist/
