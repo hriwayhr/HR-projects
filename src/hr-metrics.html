@@ -259,6 +259,7 @@
         <button class="icon" id="dPrev" aria-label="Предыдущий период">‹</button>
         <input type="date" id="dDate" aria-label="Дата">
         <input type="month" id="dMonth" aria-label="Месяц" hidden>
+        <select id="dQuarter" aria-label="Квартал" hidden></select>
         <span id="dCustom" hidden><input type="date" id="dFrom" aria-label="С"> — <input type="date" id="dTo" aria-label="По"></span>
         <button class="icon" id="dNext" aria-label="Следующий период">›</button>
       </div>
@@ -742,7 +743,13 @@ function renderDay(){
   var partial = !isDay && r.from <= today() && r.to > today();
   if(partial){ var cut = addDays(prev.from, daysBetween(r.from, today())); if(cut < prev.to) prev = {from:prev.from, to:cut}; }
   $('dDate').value = day; $('dMonth').value = day.slice(0, 7); $('dFrom').value = state.from; $('dTo').value = state.to;
-  $('dDate').hidden = !(isDay || mode === 'week'); $('dMonth').hidden = mode !== 'month'; $('dCustom').hidden = mode !== 'custom';
+  $('dDate').hidden = !(isDay || mode === 'week'); $('dMonth').hidden = mode !== 'month'; $('dQuarter').hidden = mode !== 'quarter';
+  if(mode === 'quarter'){   // кварталы с начала учёта по текущий, новые сверху
+    var qs = []; for(var q = periodOf('quarter', today()).from; q >= COLLECT_START; q = addMonths(q, -3)) qs.push(q);
+    if(qs.indexOf(r.from) < 0) qs.push(r.from);
+    $('dQuarter').innerHTML = qs.map(function(f){ return '<option value="'+f+'">'+rangeLabel('quarter', {from:f, to:f})+'</option>'; }).join('');
+    $('dQuarter').value = r.from;
+  } $('dCustom').hidden = mode !== 'custom';
   $('dayTitle').textContent = rangeLabel(mode, r) + (isDay && day === today() ? ' · сегодня' : '');
   $('dayPrev').textContent = prev ? (isDay ? 'сравнение с ' + human(prev.from) : 'сравнение: ' + rangeLabel(mode, shiftPeriod(mode, r, -1)).replace(/^./, function(c){ return c.toLowerCase(); }) + (partial ? ' по ' + shortDate(prev.to).slice(0, 5) : '')) : '';
   $('dNext').disabled = isDay ? (!nextDate(day, ps) && day >= today()) : shiftPeriod(mode, r, 1).from > today();
@@ -1695,6 +1702,7 @@ $('logout').onclick = logout;
 $('loginForm').onsubmit = login;
 $('bootForm').onsubmit = bootstrap;
 $('dDate').onchange = function(){ if(this.value){ state.date = this.value; renderDay(); } };
+$('dQuarter').onchange = function(){ state.date = this.value; renderDay(); };
 $('dMonth').onchange = function(){ if(this.value){ state.date = this.value + '-01'; renderDay(); } };
 $('dFrom').onchange = function(){ if(!this.value) return; state.from = this.value; if(state.to < state.from) state.to = state.from; renderDay(); };
 $('dTo').onchange = function(){ if(!this.value) return; state.to = this.value; if(state.from > state.to) state.from = state.to; renderDay(); };

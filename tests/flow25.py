@@ -59,6 +59,9 @@ with sync_playwright() as p:
     pg.click('#dPrev'); pg.wait_for_timeout(100); assert pg.inner_text('#dayTitle') == 'Сентябрь 2026'
     pg.click('#dNext'); pg.wait_for_timeout(100); assert pg.inner_text('#dayTitle') == 'Октябрь 2026' and pg.is_disabled('#dNext')
     t, row = mode('quarter'); assert t == '4 квартал 2026' and '\t4\t' in row, (t, row)
+    assert pg.is_visible('#dQuarter') and pg.input_value('#dQuarter') == '2026-10-01' and pg.inner_text('#dQuarter').endswith('3 квартал 2024')
+    pg.select_option('#dQuarter', '2025-04-01'); pg.wait_for_timeout(100); assert pg.inner_text('#dayTitle') == '2 квартал 2025'
+    pg.select_option('#dQuarter', '2026-10-01'); pg.wait_for_timeout(100)
     t, row = mode('year'); assert t == '2026 год' and pg.inner_html('#dChart svg').count('<rect') == 2, (t, pg.inner_html('#dChart svg').count('<rect'))   # данные только за октябрь: 2 столбика
     t, row = mode('custom'); assert pg.is_visible('#dFrom') and pg.is_visible('#dTo')
     pg.fill('#dFrom', '2026-10-03'); pg.dispatch_event('#dFrom', 'change'); pg.fill('#dTo', '2026-10-06'); pg.dispatch_event('#dTo', 'change'); pg.wait_for_timeout(100)
