@@ -241,6 +241,10 @@ tr.bad .bar i{background:var(--bad)}
 .dot.m1{background:var(--ok);color:#06210F}.dot.m0_5{background:var(--warn);color:#06210F}.dot.m0{background:var(--bad);color:#fff}
 .ed-meta .fld.date{flex:0 0 190px}
 .hist{display:flex;flex-direction:column;gap:2px;margin-top:4px}
+.newbies .nb-list{display:flex;flex-wrap:wrap;gap:10px}
+.nb{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-radius:10px;border:2px solid var(--warn);background:var(--bg-2)}
+.nb small{color:var(--warn);font-weight:600}
+.tag.nb-tag{background:var(--warn);color:#1a1a1a;align-self:auto}
 .exam-marks{grid-template-columns:repeat(3,1fr);max-width:560px}
 .exam-marks .opt{padding:12px}
 .pass{font-weight:700}.pass.yes{color:var(--ok)}.pass.no{color:var(--bad)}
@@ -549,7 +553,7 @@ function vAdmin() {
   if (adminTab === "exams") return `${backBar("Администратор", tabs)}${dbNote()}${vExamAdmin()}`;
   if (adminTab === "players") {
     const totals = Object.fromEntries(ratingData().rows.map((r) => [r.name.toLowerCase(), r.total]));
-    const row = ([id, p]) => `<div class="res"><span class="who"><b>${esc(p.name)}</b></span><span class="when">${totals[norm(p.name).toLowerCase()] ?? 0} очков в рейтинге</span>
+    const row = ([id, p]) => `<div class="res"><span class="who"><b>${esc(p.name)}</b>${!p.archived && needsExam().some((n) => n.name === p.name) ? ' <span class="tag nb-tag">без аттестации</span>' : ""}</span><span class="when">${totals[norm(p.name).toLowerCase()] ?? 0} очков в рейтинге</span>
       <button class="btn${p.archived ? "" : " danger"}" data-arch="${id}">${p.archived ? "Вернуть" : "В архив"}</button></div>`;
     const act = roster(false), arch = roster(true);
     return `${backBar("Администратор", tabs)}${dbNote()}
@@ -653,6 +657,12 @@ function buildExam(used = new Set()) {
   if (!escal.length) return `В базе нет кейсов с темой «${ESCALATION}». Добавьте их во вкладке «База кейсов» — такой кейс всегда идёт 10-м.`;
   return [...pool.slice(0, 9), escal[0]].map(([id, c]) => ({ fromLib: id, topic: c.topic || "", kind: c.kind, text: c.text || "", task: c.task || "", qs: c.qs || [], media: c.media || null, mediaName: c.mediaName || "" }));
 }
+/* new employees: roster players never attested (players present at launch carry attested: true) */
+const examsOf = (name) => Object.values(exams).filter((e) => e.player === name);
+const needsExam = () => roster(false).filter(([, p]) => !p.attested && !examsOf(p.name).some((e) => e.status === "done" || e.attempts?.length))
+  .map(([, p]) => ({ name: p.name, planned: examsOf(p.name).find((e) => e.status !== "done") }));
+const newbiesBlock = (admin) => { const list = needsExam(); return list.length ? `<section class="step newbies"><h3>Новые сотрудники без аттестации · ${list.length}</h3><div class="nb-list">
+  ${list.map((n) => `<div class="nb"><b>${esc(n.name)}</b><small>${n.planned ? `назначена на ${fmtDate(n.planned.date)}` : "аттестация не назначена"}</small>${admin && !n.planned ? `<button class="btn primary" data-examfor="${esc(n.name)}"${examNew ? " disabled" : ""}>Назначить</button>` : ""}</div>`).join("")}</div></section>` : ""; };
 const attemptNo = (e) => (e.attempts?.length || 0) + 1;
 const retakeTag = (e) => e.attempts?.length ? `<span class="tag done">Пересдача · попытка ${attemptNo(e)}</span>` : "";
 const examHistory = (e) => e.attempts?.length ? `<div class="hist">${e.attempts.map((a, k) => `<small class="sub">Попытка ${k + 1} · ${fmtDate(a.date)} · ${a.score}% · ${a.passed ? "сдал" : "не сдал"}</small>`).join("")}</div>` : "";
@@ -662,7 +672,7 @@ function vExams() {
   const pending = list.filter(([, e]) => e.status !== "done").sort((a, b) => (a[1].date || "").localeCompare(b[1].date || ""));
   const done = list.filter(([, e]) => e.status === "done").sort((a, b) => b[1].score - a[1].score || (b[1].date || "").localeCompare(a[1].date || ""));
   const scores = done.map(([, e]) => e.score);
-  return `${backBar("Аттестация")}${dbNote()}
+  return `${backBar("Аттестация")}${dbNote()}${newbiesBlock(false)}
     <section class="step"><h3>Ожидают аттестации</h3>
       ${pending.length ? `<div class="picks">${pending.map(([id, e]) => { const n = (e.marks || []).filter((m) => m != null).length;
         return `<button class="pick" data-examopen="${id}"><span class="tag">${fmtDate(e.date)}</span><b>${esc(e.player)}</b>${e.attempts?.length ? `<small>Пересдача · попытка ${attemptNo(e)}</small>` : ""}<small>${n ? `Оценено ${n} из ${e.cases.length} · продолжить` : `${e.cases.length} кейсов · начать`}</small></button>`; }).join("")}</div>`
@@ -703,7 +713,7 @@ function vExam() {
 function vExamAdmin() {
   const list = Object.entries(exams).sort((a, b) => (b[1].date || "").localeCompare(a[1].date || "") || (b[1].createdAt || 0) - (a[1].createdAt || 0));
   const form = examNew ? `<section class="ed-cat"><div class="ed-head"><h4>${examNew.retakeOf ? `Пересдача · попытка ${attemptNo(exams[examNew.retakeOf]) + 1}` : "Новая аттестация"}</h4></div>
-      <div class="ed-meta"><label class="fld fmt"><span>Сотрудник</span><select class="inp" id="exPlayer" data-ex="player"${examNew.retakeOf ? " disabled" : ""}><option value="">— выберите сотрудника —</option>${roster(false).map(([, p]) => `<option${p.name === examNew.player ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>
+      <div class="ed-meta"><label class="fld fmt"><span>Сотрудник</span><select class="inp" id="exPlayer" data-ex="player"${examNew.retakeOf ? " disabled" : ""}><option value="">— выберите сотрудника —</option>${roster(false).map(([, p]) => `<option value="${esc(p.name)}"${p.name === examNew.player ? " selected" : ""}>${esc(p.name)}${needsExam().some((n) => n.name === p.name) ? " · новый, без аттестации" : ""}</option>`).join("")}</select></label>
         <label class="fld date"><span>Дата проведения</span><input class="inp" type="date" id="exDate" data-ex="date" value="${esc(examNew.date)}"></label>
         <button class="btn" id="examBuild">${examNew.cases ? "Пересобрать кейсы" : "Собрать кейсы"}</button></div>
       ${examNew.err ? `<p class="note err">${esc(examNew.err)}</p>` : ""}
@@ -712,7 +722,7 @@ function vExamAdmin() {
   return `<div class="ed-top"><p class="sub" style="flex:1;margin:0">Аттестация — 10 кейсов: 9 случайных из актуальных кейсов базы и 10-й всегда из темы «${ESCALATION}». Сотрудник проходит её из главного меню, оценки ставит экзаменатор.</p>
       <label class="fld" style="flex:0 0 170px"><span>Проходной балл, %</span><input class="inp" type="number" min="0" max="100" id="examPassInp" value="${examPass}"></label>
       <button class="btn" id="examPassSave">Сохранить</button><button class="btn primary" id="examNew"${examNew ? " disabled" : ""}>+ Новая аттестация</button></div>
-    ${form}
+    ${form}${newbiesBlock(true)}
     <section class="step"><h3>Все аттестации · ${list.length}</h3>
       ${list.length ? list.map(([id, e]) => `<div class="res"><span class="when">${fmtDate(e.date)}</span><span class="who"><b>${esc(e.player)}</b> ${retakeTag(e)}${examHistory(e)}</span>${examBadge(e)}
         <button class="btn" data-examopen="${id}">${e.status === "done" ? "Открыть" : "Провести"}</button>${e.status === "done" ? `<button class="btn" data-examretake="${id}"${examNew ? " disabled" : ""}>Перепройти</button>` : ""}<button class="btn danger" data-examdel="${id}">Удалить</button></div>`).join("")
@@ -1043,6 +1053,7 @@ document.addEventListener("click", (e) => {
     marks[examRun.i] = marks[examRun.i] === v ? null : v;
     saveExam({ marks }).catch(() => {});
   }
+  else if (d.examfor) { examNew = { player: d.examfor, date: new Date().toISOString().slice(0, 10), cases: null, err: "" }; render(); window.scrollTo(0, 0); }
   else if (d.examretake) { examNew = { player: exams[d.examretake].player, date: new Date().toISOString().slice(0, 10), cases: null, err: "", retakeOf: d.examretake }; render(); window.scrollTo(0, 0); }
   else if (d.examdel) ask(`Удалить аттестацию «${exams[d.examdel].player}» от ${fmtDate(exams[d.examdel].date)}?`, () => db.doc("exams/" + d.examdel).delete());
   else if (d.statsmode) { statsMode = d.statsmode; render(); }
