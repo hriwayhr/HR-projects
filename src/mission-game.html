@@ -234,6 +234,15 @@ table.rt{border-collapse:collapse;width:100%;font-variant-numeric:lining-nums ta
 .bar{display:inline-block;width:80px;height:8px;border-radius:4px;background:var(--line);vertical-align:middle;overflow:hidden}
 .bar i{display:block;height:100%;background:var(--gold)}
 tr.bad .bar i{background:var(--bad)}
+.dots{display:flex;gap:8px;flex-wrap:wrap}
+.dot{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--bg-2);font:15px/1 var(--f-display)}
+.dot.cur{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold) inset}
+.dot.esc{border-style:dashed;border-color:var(--gold)}
+.dot.m1{background:var(--ok);color:#06210F}.dot.m0_5{background:var(--warn);color:#06210F}.dot.m0{background:var(--bad);color:#fff}
+.ed-meta .fld.date{flex:0 0 190px}
+.exam-marks{grid-template-columns:repeat(3,1fr);max-width:560px}
+.exam-marks .opt{padding:12px}
+.pass{font-weight:700}.pass.yes{color:var(--ok)}.pass.no{color:var(--bad)}
 .lib-row{background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:flex;gap:16px;align-items:center}
 .lib-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
 .lib-main p{margin:0}
@@ -367,7 +376,8 @@ function connect() {
     d.collection("results").onSnapshot((s) => { results = Object.fromEntries(s.docs.map((x) => [x.id, x.data()])); live(); }, fail);
     d.collection("cases").onSnapshot((s) => { library = Object.fromEntries(s.docs.map((x) => [x.id, x.data()])); live(); }, fail);
     d.collection("players").onSnapshot((s) => { players = Object.fromEntries(s.docs.map((x) => [x.id, x.data()])); live(); }, fail);
-    d.collection("settings").onSnapshot((s) => { current = s.docs.find((x) => x.id === "app")?.data()?.current || null; live(); }, fail);
+    d.collection("exams").onSnapshot((s) => { exams = Object.fromEntries(s.docs.map((x) => [x.id, x.data()])); live(); }, fail);
+    d.collection("settings").onSnapshot((s) => { current = s.docs.find((x) => x.id === "app")?.data()?.current || null; examPass = s.docs.find((x) => x.id === "exam")?.data()?.pass ?? 80; live(); }, fail);
   });
 }
 
@@ -412,7 +422,8 @@ const dbNote = () => dbState === "off" ? `<p class="note err">Нет досту�
 function render() {
   const app = $("#app");
   document.documentElement.classList.toggle("light", view === "admin");
-  app.innerHTML = { home: vHome, setup: vSetup, board: vBoard, rating: vRating, admin: isAdmin() ? vAdmin : vLogin }[view]();
+  app.innerHTML = { home: vHome, setup: vSetup, board: vBoard, rating: vRating, exams: vExams, exam: vExam, admin: isAdmin() ? vAdmin : vLogin }[view]();
+  if (view === "exam") drawTimer();
   hydrateMedia(app);
   $("#topics").innerHTML = libTopics().map((t) => `<option value="${esc(t)}">`).join("");
   drawClock();
@@ -429,6 +440,7 @@ function vHome() {
       ${inGame ? `<button class="mi go" data-go="board"><span class="ic">▶</span><b>Продолжить игру</b><small>${esc(S.period)} · ${S.names.map(esc).join(", ")}</small></button>` : ""}
       <button class="mi${inGame ? "" : " go"}" data-go="setup"><span class="ic">+</span><b>Новая игра</b><small>Выбрать игру и вписать игроков</small></button>
       <button class="mi" data-go="rating"><span class="ic">★</span><b>Рейтинг</b><small>Очки игроков по кварталам</small></button>
+      <button class="mi" data-go="exams"><span class="ic">✓</span><b>Аттестация</b><small>${(() => { const n = Object.values(exams).filter((e) => e.status !== "done").length; return n ? `Ожидают аттестации: ${n}` : "Проверка знаний сотрудников"; })()}</small></button>
       <button class="mi" data-go="admin"><span class="ic">⚙</span><b>Администратор</b><small>Конструктор игрового поля и результаты</small></button>
       ${window.__offline ? offlineCard() : ""}
     </nav></section>`;
@@ -530,9 +542,10 @@ function vLogin() {
 
 const blankCase = () => ({ kind: "text", price: 300, text: "", task: "Опиши порядок дальнейших действий.", qs: [], media: null, mediaName: "", bag: false });
 function vAdmin() {
-  const tabs = `<button class="btn${adminTab === "games" ? " primary" : ""}" data-tab="games">Игры</button><button class="btn${adminTab === "results" ? " primary" : ""}" data-tab="results">Результаты</button><button class="btn${adminTab === "library" ? " primary" : ""}" data-tab="library">База кейсов</button><button class="btn${adminTab === "players" ? " primary" : ""}" data-tab="players">Игроки</button><button class="btn${adminTab === "stats" ? " primary" : ""}" data-tab="stats">Аналитика</button><button class="btn" id="logoutBtn">Выйти</button>`;
+  const tabs = `<button class="btn${adminTab === "games" ? " primary" : ""}" data-tab="games">Игры</button><button class="btn${adminTab === "results" ? " primary" : ""}" data-tab="results">Результаты</button><button class="btn${adminTab === "library" ? " primary" : ""}" data-tab="library">База кейсов</button><button class="btn${adminTab === "players" ? " primary" : ""}" data-tab="players">Игроки</button><button class="btn${adminTab === "stats" ? " primary" : ""}" data-tab="stats">Аналитика</button><button class="btn${adminTab === "exams" ? " primary" : ""}" data-tab="exams">Аттестация</button><button class="btn" id="logoutBtn">Выйти</button>`;
   if (adminTab === "library") return `${backBar("Администратор", tabs)}${dbNote()}${vLibrary()}`;
   if (adminTab === "stats") return `${backBar("Администратор", tabs)}${dbNote()}${vStats()}`;
+  if (adminTab === "exams") return `${backBar("Администратор", tabs)}${dbNote()}${vExamAdmin()}`;
   if (adminTab === "players") {
     const totals = Object.fromEntries(ratingData().rows.map((r) => [r.name.toLowerCase(), r.total]));
     const row = ([id, p]) => `<div class="res"><span class="who"><b>${esc(p.name)}</b></span><span class="when">${totals[norm(p.name).toLowerCase()] ?? 0} очков в рейтинге</span>
@@ -623,6 +636,90 @@ function vStats() {
         <td>${r.fromLib && library[r.fromLib] ? `<button class="btn" data-statsopen="${r.fromLib}">В базе</button>` : ""}</td></tr>`).join("")}</tbody></table></div>`
       : '<p class="note">Проблемных кейсов нет — все разыгранные кейсы в среднем набирают не меньше половины стоимости.</p>'}`;
 }
+/* ---------- attestation: exams/<id> = { player, date, cases[10], marks[10], status, score, passed } ---------- */
+const ESCALATION = "План эскалации";
+const MARKS = [[1, "Верно"], [0.5, "Частично"], [0, "Неверно"]];
+let exams = {}, examPass = 80, examRun = null, examNew = null;
+const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const fmtDate = (ymd) => ymd ? ymd.split("-").reverse().join(".") : "";
+const isEscalation = (c) => norm(c.topic || "").toLowerCase() === ESCALATION.toLowerCase();
+const examScore = (e) => Math.round(((e.marks || []).reduce((s, m) => s + (m || 0), 0) / e.cases.length) * 100);
+function buildExam() {
+  const pool = shuffle(Object.entries(library).filter(([, c]) => c.actual && !isEscalation(c)));
+  const escal = shuffle(Object.entries(library).filter(([, c]) => isEscalation(c)));
+  if (pool.length < 9) return `Нужно минимум 9 актуальных кейсов (кроме «${ESCALATION}»), а сейчас ${pool.length}. Отметьте кейсы актуальными в «Базе кейсов».`;
+  if (!escal.length) return `В базе нет кейсов с темой «${ESCALATION}». Добавьте их во вкладке «База кейсов» — такой кейс всегда идёт 10-м.`;
+  return [...pool.slice(0, 9), escal[0]].map(([id, c]) => ({ fromLib: id, topic: c.topic || "", kind: c.kind, text: c.text || "", task: c.task || "", qs: c.qs || [], media: c.media || null, mediaName: c.mediaName || "" }));
+}
+const examBadge = (e) => e.status === "done" ? `<span class="tag lv ${e.passed ? "lv-green" : "lv-red"}">${e.passed ? "Сдал" : "Не сдал"} · ${e.score}%</span>` : '<span class="tag review">Ожидает</span>';
+function vExams() {
+  const list = Object.entries(exams);
+  const pending = list.filter(([, e]) => e.status !== "done").sort((a, b) => (a[1].date || "").localeCompare(b[1].date || ""));
+  const done = list.filter(([, e]) => e.status === "done").sort((a, b) => b[1].score - a[1].score || (b[1].date || "").localeCompare(a[1].date || ""));
+  const scores = done.map(([, e]) => e.score);
+  return `${backBar("Аттестация")}${dbNote()}
+    <section class="step"><h3>Ожидают аттестации</h3>
+      ${pending.length ? `<div class="picks">${pending.map(([id, e]) => { const n = (e.marks || []).filter((m) => m != null).length;
+        return `<button class="pick" data-examopen="${id}"><span class="tag">${fmtDate(e.date)}</span><b>${esc(e.player)}</b><small>${n ? `Оценено ${n} из ${e.cases.length} · продолжить` : `${e.cases.length} кейсов · начать`}</small></button>`; }).join("")}</div>`
+        : dbState === "on" ? '<p class="note">Назначенных аттестаций нет. Их создаёт администратор во вкладке «Аттестация».</p>' : ""}
+    </section>
+    <section class="step"><h3>Рейтинг аттестаций · проходной балл ${examPass}%</h3>
+      ${done.length ? `<div class="tbl-wrap"><table class="rt"><thead><tr><th>#</th><th>Сотрудник</th><th>Дата</th><th>Результат</th><th>Итог</th></tr></thead><tbody>
+        ${done.map(([, e]) => `<tr><td>${rankOf(e.score, scores)}</td><td>${esc(e.player)}</td><td>${fmtDate(e.date)}</td><td class="tot">${e.score}%</td><td>${e.passed ? '<span class="pass yes">Сдал</span>' : '<span class="pass no">Не сдал</span>'}</td></tr>`).join("")}</tbody></table></div>`
+        : '<p class="note">Пока никто не прошёл аттестацию.</p>'}
+    </section>`;
+}
+function vExam() {
+  const e = exams[examRun?.id];
+  if (!e) { view = "exams"; return vExams(); }
+  const i = examRun.i, c = e.cases[i], marks = e.marks || [], n = marks.filter((m) => m != null).length, C = 2 * Math.PI * 52;
+  const paras = (c.text || "").split(/\n+/).filter((t) => t.trim());
+  return `<header class="top">${brand()}<span class="sep" aria-hidden="true"></span><button class="btn" data-go="exams">← Аттестация</button><h2>${esc(e.player)}</h2>
+      <div class="tools"><span class="sub">${fmtDate(e.date)}${e.status === "done" ? " · " + (e.passed ? "сдал" : "не сдал") + ` (${e.score}%)` : ""}</span></div></header>
+    <nav class="dots" aria-label="Кейсы аттестации">${e.cases.map((x, k) => `<button class="dot${k === i ? " cur" : ""}${marks[k] != null ? " m" + String(marks[k]).replace(".", "_") : ""}${isEscalation(x) ? " esc" : ""}" data-examgo="${k}" title="${isEscalation(x) ? ESCALATION : "Кейс " + (k + 1)}">${k + 1}</button>`).join("")}</nav>
+    <div class="case-head"><span class="chip">Кейс ${i + 1} из ${e.cases.length}</span>${c.topic ? `<span class="chip${isEscalation(c) ? " callchip" : ""}">${esc(c.topic)}</span>` : ""}</div>
+    <div class="case-body">
+      <div class="case-text">
+        ${c.kind === "audio" ? `<div class="audio-stub"><span class="ic" aria-hidden="true">☎</span><b>Аудио кейс</b><span>Экзаменатор проводит звонок голосом.</span></div>` : ""}
+        ${c.kind === "call" ? `<div class="call"><b>Кейс — звонок</b>${c.media ? `<audio controls data-media="${c.media}"></audio>` : '<span class="note err">Запись не загружена.</span>'}</div>` : ""}
+        ${c.kind === "image" && c.media ? `<img class="case-img" alt="Иллюстрация к кейсу" data-media="${c.media}">` : ""}
+        ${paras.map((t) => `<p>${esc(t)}</p>`).join("")}${c.task ? `<p class="task">${esc(c.task)}</p>` : ""}
+        ${c.qs?.length ? `<ul class="qs">${c.qs.map((q) => `<li>${esc(q)}</li>`).join("")}</ul>` : ""}</div>
+      <aside class="timer"><div class="ring" id="ring"><svg viewBox="0 0 120 120"><circle class="track" cx="60" cy="60" r="52"/><circle class="bar" cx="60" cy="60" r="52" stroke-dasharray="${C}"/></svg><span class="t"></span></div>
+        <div class="modes"><button class="opt" data-mode="answer" aria-pressed="${TIME === MODES.answer}"><b>3:00</b>Ответ</button><button class="opt" data-mode="extra" aria-pressed="${TIME === MODES.extra}"><b>1:00</b>Добивка</button></div>
+        <div class="row"><button class="btn primary" id="tGo"></button><button class="btn" id="tReset">Сброс</button></div></aside>
+    </div>
+    <div class="score-panel"><h3>Оценка экзаменатора</h3>
+      <div class="opts exam-marks">${MARKS.map(([v, l]) => `<button class="opt" data-exammark="${v}" aria-pressed="${marks[i] === v}"><b>${l}</b></button>`).join("")}</div>
+      <div class="finish"><span class="hint">Оценено ${n} из ${e.cases.length}</span>
+        <button class="btn" data-examgo="${i - 1}"${i ? "" : " disabled"}>← Назад</button><button class="btn" data-examgo="${i + 1}"${i < e.cases.length - 1 ? "" : " disabled"}>Дальше →</button>
+        <button class="btn primary" id="examFinish"${n === e.cases.length ? "" : " disabled"}>${e.status === "done" ? "Сохранить итог" : "Завершить аттестацию"}</button></div></div>`;
+}
+function vExamAdmin() {
+  const list = Object.entries(exams).sort((a, b) => (b[1].date || "").localeCompare(a[1].date || "") || (b[1].createdAt || 0) - (a[1].createdAt || 0));
+  const form = examNew ? `<section class="ed-cat"><div class="ed-head"><h4>Новая аттестация</h4></div>
+      <div class="ed-meta"><label class="fld fmt"><span>Сотрудник</span><select class="inp" id="exPlayer" data-ex="player"><option value="">— выберите сотрудника —</option>${roster(false).map(([, p]) => `<option${p.name === examNew.player ? " selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>
+        <label class="fld date"><span>Дата проведения</span><input class="inp" type="date" id="exDate" data-ex="date" value="${esc(examNew.date)}"></label>
+        <button class="btn" id="examBuild">${examNew.cases ? "Пересобрать кейсы" : "Собрать кейсы"}</button></div>
+      ${examNew.err ? `<p class="note err">${esc(examNew.err)}</p>` : ""}
+      ${examNew.cases ? `<div class="pick-list">${examNew.cases.map((c, k) => libRow([c.fromLib, { ...c, level: library[c.fromLib]?.level, actual: library[c.fromLib]?.actual, price: library[c.fromLib]?.price }], `<span class="tag ${isEscalation(c) ? "" : "done"}">${k + 1}</span>`)).join("")}</div>` : ""}
+      <div class="actions"><button class="btn" id="examCancel">Отмена</button><button class="btn primary" id="examSave"${examNew.cases ? "" : " disabled"}>Сохранить аттестацию</button></div></section>` : "";
+  return `<div class="ed-top"><p class="sub" style="flex:1;margin:0">Аттестация — 10 кейсов: 9 случайных из актуальных кейсов базы и 10-й всегда из темы «${ESCALATION}». Сотрудник проходит её из главного меню, оценки ставит экзаменатор.</p>
+      <label class="fld" style="flex:0 0 170px"><span>Проходной балл, %</span><input class="inp" type="number" min="0" max="100" id="examPassInp" value="${examPass}"></label>
+      <button class="btn" id="examPassSave">Сохранить</button><button class="btn primary" id="examNew"${examNew ? " disabled" : ""}>+ Новая аттестация</button></div>
+    ${form}
+    <section class="step"><h3>Все аттестации · ${list.length}</h3>
+      ${list.length ? list.map(([id, e]) => `<div class="res"><span class="when">${fmtDate(e.date)}</span><span class="who"><b>${esc(e.player)}</b></span>${examBadge(e)}
+        <button class="btn" data-examopen="${id}">${e.status === "done" ? "Открыть" : "Провести"}</button><button class="btn danger" data-examdel="${id}">Удалить</button></div>`).join("")
+        : '<p class="note">Аттестаций пока нет. Создайте первую кнопкой «Новая аттестация».</p>'}</section>`;
+}
+function openExam(id) {
+  const e = exams[id], marks = e.marks || [];
+  const first = marks.findIndex((m) => m == null);
+  examRun = { id, i: first < 0 ? 0 : first };
+  go("exam"); setMode("answer");
+}
+function saveExam(patch) { return db.doc("exams/" + examRun.id).set({ ...exams[examRun.id], ...patch }); }
 function vLibrary() {
   if (libEdit) {
     const exists = !!library[libEdit.id];
@@ -934,6 +1031,14 @@ document.addEventListener("click", (e) => {
   else if (d.picktopic) { pickTopic = d.picktopic; render(); }
   else if (d.picklevel) { pickLevel = d.picklevel; render(); }
   else if (d.liblevel) { libLevel = d.liblevel; render(); }
+  else if (d.examopen) { if (view === "admin") leaveDraft(() => openExam(d.examopen)); else openExam(d.examopen); }
+  else if (d.examgo != null && d.examgo !== "") { const k = +d.examgo; if (examRun && k >= 0 && k < exams[examRun.id].cases.length) { examRun.i = k; render(); setMode("answer"); window.scrollTo(0, 0); } }
+  else if (d.exammark != null && d.exammark !== "") {
+    const e = exams[examRun.id], marks = [...(e.marks || Array(e.cases.length).fill(null))], v = +d.exammark;
+    marks[examRun.i] = marks[examRun.i] === v ? null : v;
+    saveExam({ marks }).catch(() => {});
+  }
+  else if (d.examdel) ask(`Удалить аттестацию «${exams[d.examdel].player}» от ${fmtDate(exams[d.examdel].date)}?`, () => db.doc("exams/" + d.examdel).delete());
   else if (d.statsmode) { statsMode = d.statsmode; render(); }
   else if (d.statsopen) { adminTab = "library"; libEdit = { id: d.statsopen, obj: clone(library[d.statsopen]) }; dirty = false; busy = ""; render(); window.scrollTo(0, 0); }
   else if (d.libactualf) { libActual = d.libactualf; render(); }
@@ -966,6 +1071,26 @@ document.addEventListener("click", (e) => {
     }
     case "libDel": ask("Удалить кейс из базы? В уже собранных играх его копии останутся.", () => db.doc("cases/" + libEdit.id).delete().then(() => { dirty = false; libEdit = null; render(); })); break;
     case "pickClose": pickFor = null; render(); break;
+    case "examNew": examNew = { player: "", date: new Date().toISOString().slice(0, 10), cases: null, err: "" }; render(); break;
+    case "examCancel": examNew = null; render(); break;
+    case "examBuild": {
+      if (!examNew.player || !examNew.date) { examNew.err = "Выберите сотрудника и дату проведения."; render(); break; }
+      const r = buildExam(); if (typeof r === "string") { examNew.err = r; examNew.cases = null; } else { examNew.err = ""; examNew.cases = r; }
+      render(); break;
+    }
+    case "examSave": {
+      const { player, date, cases } = examNew;
+      db.doc("exams/" + uid()).set({ player, date, cases, marks: cases.map(() => null), status: "planned", createdAt: Date.now() })
+        .then(() => { examNew = null; render(); }, () => { examNew.err = "Не удалось сохранить. Проверьте доступ к странице."; render(); });
+      break;
+    }
+    case "examPassSave": { const v = Math.max(0, Math.min(100, +$("#examPassInp").value || 0)); db.doc("settings/exam").set({ pass: v }); break; }
+    case "examFinish": {
+      const e = exams[examRun.id], score = examScore(e), passed = score >= examPass;
+      ask(`Итог: ${score}% — ${passed ? "сдал" : "не сдал"} (проходной балл ${examPass}%). ${e.status === "done" ? "Сохранить?" : "Завершить аттестацию?"}`,
+        () => saveExam({ status: "done", score, passed, finishedAt: e.finishedAt || Date.now() }).then(() => go("exams")));
+      break;
+    }
     case "saveFileBtn": window.__offline.save().catch(() => {}).then(render); break;
     case "publishBtn": publishRating(); break;
     case "startBtn": {
@@ -1004,6 +1129,7 @@ document.addEventListener("input", (e) => {
   const el = e.target, d = el.dataset;
   if (d.pn) { names[+d.pn] = el.value; render(); $("#pn" + d.pn).focus(); }
   else if (el.id === "showArch") { showArchived = el.checked; render(); }
+  else if (d.ex && examNew) examNew[d.ex] = el.value;
   else if (d.path && draft) {
     setPath(d.path, d.bool != null ? el.checked : d.num != null ? +el.value || 0 : d.lines != null ? el.value.split("\n").map((s) => s.trim()).filter(Boolean) : el.value);
     if (d.rerender != null) { dirty = true; render(); } else markDirty();
@@ -1047,7 +1173,7 @@ document.addEventListener("submit", (e) => {
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && pickFor !== null) { pickFor = null; render(); return; }
   if (e.key === "Escape") { if (!$("#confirm").hidden) $("#confirm").hidden = true; else if (document.querySelector(".screen:not([hidden])")) closeScreens(); }
-  if (e.key === " " && $("#ring") && !$("#caseScreen").hidden && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { e.preventDefault(); toggleTimer(); }
+  if (e.key === " " && $("#ring") && (view === "exam" || !$("#caseScreen").hidden) && !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)) { e.preventDefault(); toggleTimer(); }
 });
 window.addEventListener("beforeunload", (e) => { if (dirty) e.preventDefault(); });
 
