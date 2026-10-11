@@ -20,7 +20,7 @@ errs, ext = [], []
 with sync_playwright() as p:
     b = p.chromium.launch(executable_path='/opt/pw-browsers/chromium')
     ctx = b.new_context(viewport={'width': 1280, 'height': 1000}, accept_downloads=True)
-    ctx.add_init_script('delete window.showSaveFilePicker;')     # как в браузерах без доступа к файлам — копия скачивается
+    ctx.add_init_script('delete window.showOpenFilePicker;')     # как в браузерах без доступа к файлам — копия скачивается
     ctx.route('http*://**', lambda r: (ext.append(r.request.url), r.abort()))
     pg = ctx.new_page(); pg.on('pageerror', lambda e: errs.append(str(e)))
     pg.clock.set_fixed_time('2026-10-07T12:00:00')

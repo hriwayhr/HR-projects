@@ -6,9 +6,10 @@
 Как живут данные:
   * команда, метрики, вакансии, отпуска и отказы вшиты в сам файл (SEED);
   * изменения сразу пишутся в хранилище браузера этого ПК (localStorage);
-  * «Сохранить в файл» (Ctrl+S) перезаписывает сам HTML-файл с текущими данными
-    (Chrome/Edge: File System Access API, дальше — автоматически после каждого
-    изменения); в других браузерах скачивается обновлённая копия файла.
+  * «Подключить файл» (Chrome/Edge, File System Access API): дальше страница сама записывает
+    изменения в файл и каждые несколько секунд перечитывает его, сливая правки коллег по полям —
+    так с одним файлом в общей папке могут работать несколько человек одновременно;
+    в других браузерах скачивается обновлённая копия файла.
   * Файл умеет пересобрать себя: в нём лежит его же шаблон (TEMPLATE).
 
 Запуск:  python3 tools/build_offline.py <каталог-снимка-базы> [выходной.html]
@@ -24,48 +25,77 @@ SRC = ROOT / "src" / "hr-metrics.html"
 
 # __SEED__ и __TEMPLATE__ должны встречаться в шаблоне впервые именно здесь
 SHIM = r"""<script>
-/* версия для ПК: данные в самом файле + localStorage этого ПК вместо общей базы claude.ai */
+/* версия для ПК: данные в самом файле + localStorage этого ПК вместо общей базы claude.ai.
+   Совместная работа: файл лежит в общей папке, каждый подключает его (Chrome/Edge). Страница раз в
+   несколько секунд перечитывает файл, сливает чужие изменения со своими по полям и записывает результат. */
 (function () {
   var SEED = __SEED__;
   var TEMPLATE = __TEMPLATE__;
-  var KEY = "hr-offline-db", local = null, handle = null, linked = false, error = "", timer = null, subs = [];
+  var KEY = "hr-offline-db", POLL = window.__hrPoll || 5000;
+  var local = null, handle = null, linked = false, error = "", timer = null, busy = null, subs = [];
   try { local = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
 
   function persist() {
-    try { localStorage.setItem(KEY, JSON.stringify(local)); error = ""; }
-    catch (e) { error = "Браузеру не хватает места на этом ПК. Сохраните данные в файл."; }
+    try { localStorage.setItem(KEY, JSON.stringify(local)); }
+    catch (e) { error = "Браузеру не хватает места на этом ПК. Подключите файл, чтобы сохранить изменения."; }
   }
-  function changed() { if (window.__offlineChanged) window.__offlineChanged(); bar(); }
-  function copy(o) { return JSON.parse(JSON.stringify(o)); }
+  function changed() { bar(); }
+  function copy(o) { return o === undefined ? undefined : JSON.parse(JSON.stringify(o)); }
+  function isObj(o) { return o !== null && typeof o === "object" && !Array.isArray(o); }
+  // сравнение без учёта порядка ключей
+  function canon(o) { return isObj(o) ? "{" + Object.keys(o).sort().map(function (k) { return JSON.stringify(k) + ":" + canon(o[k]); }).join(",") + "}" : Array.isArray(o) ? "[" + o.map(canon).join(",") + "]" : JSON.stringify(o === undefined ? null : o); }
+  function same(a, b) { return canon(a) === canon(b); }
   function esc(json) { return json.replace(/</g, "\\u003c"); }
   function makeFile(seed) {
     return TEMPLATE
       .replace("__SEED__", function () { return esc(JSON.stringify(seed)); })
       .replace("__TEMPLATE__", function () { return esc(JSON.stringify(TEMPLATE)); });
   }
-  function fmt(t) { return new Date(t).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" }); }
+  function readSeed(text) { var a = text.indexOf("var SEED = "), z = text.indexOf(";\n  var TEMPLATE = "); return JSON.parse(text.slice(a + 11, z)); }
+  function fmt(t) { return new Date(t).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }); }
 
-  /* какие данные открыть. Файл и ПК могли разойтись (копию возили на другой ПК):
-     этот ПК помнит пути, изменённые после последнего сохранения в файл (local.changed),
-     и накладывает их поверх данных более нового файла — ничьи результаты не теряются. */
-  var notice = "";
-  function fresh() { return { fileStamp: SEED.stamp, dirty: false, changed: [], data: copy(SEED.data) }; }
-  function choose() {
-    if (!local || !local.data) local = fresh();
-    else if (local.fileStamp === SEED.stamp) { /* тот же файл: продолжаем с этого ПК */ }
-    else if (SEED.stamp > (local.fileStamp || 0)) {                          // файл новее: берём его + свои несохранённые правки
-      try { localStorage.setItem(KEY + "-prev", JSON.stringify(local)); } catch (e) {}
-      var mine = local.changed || [], data = copy(SEED.data);
-      mine.forEach(function (p) { if (p in local.data) data[p] = local.data[p]; else delete data[p]; });
-      local = { fileStamp: SEED.stamp, dirty: mine.length > 0, changed: mine, changedAt: local.changedAt, data: data };
-      notice = mine.length ? "Открыт файл от " + fmt(SEED.stamp) + ", к нему добавлены несохранённые изменения этого ПК." : "";
-    } else notice = "Это старая копия файла. Показаны более новые данные этого ПК.";
-    local.changed = local.changed || [];
-    persist();
-    return Promise.resolve();
+  /* слияние трёх версий: base — как было до моей правки, mine — моя, theirs — сейчас в файле.
+     Поменял только я — берём моё, только коллега — его, оба разные поля — оба.
+     Одно и то же поле: побеждает более поздняя правка — моя, пока она не записана (tw = false),
+     и чужая, если моя уже была в файле и её поменяли после (tw = true). */
+  function merge3(b, m, t, tw) {
+    if (same(m, b)) return copy(t);
+    if (same(t, b) || same(t, m)) return copy(m);
+    if (isObj(m) && isObj(t)) {
+      var bo = isObj(b) ? b : {}, out = {}, keys = {};
+      [bo, m, t].forEach(function (o) { Object.keys(o).forEach(function (k) { keys[k] = 1; }); });
+      Object.keys(keys).forEach(function (k) { var v = merge3(bo[k], m[k], t[k], tw); if (v !== undefined) out[k] = v; });
+      return out;
+    }
+    return copy(tw ? t : m);
   }
+  /* мои правки: pending — путь → {base, mid?, mine}. base — документ до моих правок, mid — то, что я уже
+     записал в файл (ещё не подтверждено чтением), mine — текущее. Записанный слой (base → mid) при конфликте
+     уступает более поздней чужой правке, а если его затёрли одновременной записью — возвращается;
+     незаписанный (mid → mine) побеждает. */
+  function written(x) { return "mid" in x; }
+  function mergeOne(x, t) {
+    if (!written(x)) return merge3(x.base, x.mine, t, false);
+    return merge3(x.mid, x.mine, merge3(x.base, x.mid, t, true), false);
+  }
+  function applyPending(theirs) {
+    var out = copy(theirs);
+    Object.keys(local.pending).forEach(function (p) { var v = mergeOne(local.pending[p], theirs[p]); if (v === undefined) delete out[p]; else out[p] = v; });
+    return out;
+  }
+  function diff(a, b) { var ks = {}; Object.keys(a).concat(Object.keys(b)).forEach(function (k) { ks[k] = 1; }); return Object.keys(ks).filter(function (k) { return !same(a[k], b[k]); }); }
 
-  /* запоминаем выбранный файл между запусками (Chrome/Edge) */
+  if (!local || !local.data) local = { pending: {} };
+  if (local.changed && !local.pending) {                     // правки из прежней версии файла для ПК
+    local.pending = {};
+    local.changed.forEach(function (p) { local.pending[p] = { base: copy(SEED.data[p]), mine: copy(local.data[p]) }; });
+  }
+  local.pending = local.pending || {}; delete local.changed; delete local.fileStamp; delete local.dirty;
+  local.data = applyPending(SEED.data);
+  persist();
+  var ready = Promise.resolve();
+
+  /* подключённый файл запоминается между запусками (Chrome/Edge) */
   function idb(mode, val) {
     return new Promise(function (ok) {
       try {
@@ -80,40 +110,64 @@ SHIM = r"""<script>
       } catch (e) { ok(null); }
     });
   }
-  var canLink = typeof window.showSaveFilePicker === "function";
+  var canLink = typeof window.showOpenFilePicker === "function";
   if (canLink) idb("readonly").then(function (h) {
     if (!h) return;
     handle = h;
-    h.queryPermission({ mode: "readwrite" }).then(function (p) { linked = p === "granted"; changed(); }, function () {});
+    h.queryPermission({ mode: "readwrite" }).then(function (p) { if (p === "granted") start(); else changed(); }, function () {});
   });
 
-  function writeFile() {
-    var stamp = Date.now(), html = makeFile({ stamp: stamp, data: local.data });
-    return handle.createWritable().then(function (w) { return w.write(html).then(function () { return w.close(); }); }).then(function () {
-      local.fileStamp = stamp; local.savedAt = stamp; local.dirty = false; local.changed = []; notice = ""; persist(); changed();
-    }, function (e) { linked = false; error = "Не удалось записать файл. Нажмите, чтобы выбрать его снова."; changed(); throw e; });
+  function writeData(data) {
+    var html = makeFile({ stamp: Date.now(), data: data });
+    return handle.createWritable().then(function (w) { return w.write(html).then(function () { return w.close(); }); });
   }
-  function schedule() {
-    if (!linked) return;
-    clearTimeout(timer); timer = setTimeout(function () { writeFile().catch(function () {}); }, 1200);
+  // прочитать файл → слить → записать, если в нём не хватает моих правок → показать чужие
+  function sync() {
+    if (!linked) return Promise.resolve();
+    if (busy) return busy;
+    busy = handle.getFile().then(function (f) { return f.text(); }).then(function (text) {
+      var theirs = readSeed(text).data, merged = applyPending(theirs);
+      // записанный слой, который файл уже содержит (или который после поменяли), больше не ждёт
+      Object.keys(local.pending).forEach(function (p) {
+        var x = local.pending[p];
+        if (!written(x) || !same(merge3(x.base, x.mid, theirs[p], true), theirs[p])) return;
+        if (same(x.mine, x.mid)) delete local.pending[p]; else { x.base = x.mid; delete x.mid; }
+      });
+      var sent = {}; Object.keys(local.pending).forEach(function (p) { sent[p] = canon(local.pending[p].mine); });
+      return (same(merged, theirs) ? Promise.resolve() : writeData(merged)).then(function () {
+        // отмечаем записанное; удалим, когда следующее чтение покажет его в файле — если коллега затёр его
+        // одновременной записью, оно вернётся
+        Object.keys(sent).forEach(function (p) { var x = local.pending[p]; if (x && canon(x.mine) === sent[p]) x.mid = copy(x.mine); });
+        var view = applyPending(merged), ch = diff(local.data, view);
+        local.data = view; local.syncedAt = Date.now(); error = ""; persist();
+        if (ch.length) notify(ch);
+        changed();
+      });
+    }).catch(function () {
+      linked = false; error = "Нет доступа к файлу — подключите его снова."; changed();
+    }).then(function () { busy = null; });
+    return busy;
   }
-  function save() {
+  var poller = null;
+  function start() { linked = true; error = ""; clearInterval(poller); poller = setInterval(sync, POLL); return sync(); }
+  function link() {
     error = "";
-    if (!canLink) {                                                         // другие браузеры: скачать копию с данными
-      var stamp = Date.now(), url = URL.createObjectURL(new Blob([makeFile({ stamp: stamp, data: local.data })], { type: "text/html" }));
-      var a = document.createElement("a"); a.href = url; a.download = "HR-метрики.html"; document.body.append(a); a.click(); a.remove();
-      setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
-      local.fileStamp = stamp; local.savedAt = stamp; local.dirty = false; local.changed = []; notice = ""; persist(); changed();
-      return Promise.resolve();
-    }
     var pick = handle
       ? handle.requestPermission({ mode: "readwrite" }).then(function (p) { if (p !== "granted") throw new Error("denied"); })
-      : window.showSaveFilePicker({ suggestedName: "HR-метрики.html", types: [{ description: "HR-метрики", accept: { "text/html": [".html"] } }] })
-          .then(function (h) { handle = h; return idb("readwrite", h); });
-    return pick.then(function () { linked = true; return writeFile(); });
+      : window.showOpenFilePicker({ types: [{ description: "HR-метрики", accept: { "text/html": [".html"] } }] })
+          .then(function (hs) { handle = hs[0]; return handle.requestPermission({ mode: "readwrite" }); })
+          .then(function (p) { if (p !== "granted") throw new Error("denied"); return idb("readwrite", handle); });
+    return pick.then(start, function () { changed(); });
   }
+  function download() {                                      // браузеры без доступа к файлам: скачать копию с данными
+    var url = URL.createObjectURL(new Blob([makeFile({ stamp: Date.now(), data: local.data })], { type: "text/html" }));
+    var a = document.createElement("a"); a.href = url; a.download = "HR-метрики.html"; document.body.append(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+    local.pending = {}; persist(); changed();
+  }
+  function save() { return canLink ? (linked ? sync() : link()) : (download(), Promise.resolve()); }
+  function schedule() { if (!linked) return; clearTimeout(timer); timer = setTimeout(sync, 800); }
 
-  var ready = choose();
   function snap(p) { var d = local.data[p]; return { id: p.split("/").pop(), exists: !!d, data: function () { return d ? copy(d) : undefined; } }; }
   function query(c) {
     var n = c.split("/").length + 1;
@@ -121,12 +175,12 @@ SHIM = r"""<script>
     return { docs: docs, size: docs.length, empty: !docs.length };
   }
   function fire(s) { s.cb(s.p ? snap(s.p) : query(s.c)); }
+  function notify(paths) { subs.slice().forEach(function (s) { if (paths.some(function (p) { return s.p ? s.p === p : p.indexOf(s.c + "/") === 0; })) fire(s); }); }
   function write(p, d) {
+    if (!(p in local.pending)) local.pending[p] = { base: copy(local.data[p]) };
+    local.pending[p].mine = copy(d);
     if (d === undefined) delete local.data[p]; else local.data[p] = copy(d);
-    if (local.changed.indexOf(p) < 0) local.changed.push(p);
-    local.dirty = true; local.changedAt = Date.now(); persist();
-    subs.slice().forEach(function (s) { if (s.p ? s.p === p : p.indexOf(s.c + "/") === 0) fire(s); });
-    changed(); schedule();
+    persist(); notify([p]); changed(); schedule();
     return Promise.resolve();
   }
   function listen(s) { subs.push(s); ready.then(function () { setTimeout(function () { fire(s); }); }); return function () { subs.splice(subs.indexOf(s), 1); }; }
@@ -153,11 +207,12 @@ SHIM = r"""<script>
     return Promise.resolve({ status: "saved" });
   } };
 
-  /* несохранённые изменения: плашка внизу, Ctrl+S и предупреждение при закрытии вкладки */
+  /* плашка внизу: файл не подключён / есть несохранённое / ошибка; Ctrl+S; вопрос при закрытии с несохранённым */
   var barEl = null;
+  function pending() { return Object.keys(local.pending).length; }
   function bar() {
     if (!document.body) return;
-    var show = !!(local && local.dirty);
+    var show = !linked && (canLink || pending() > 0) || !!error;
     if (!barEl) {
       barEl = document.createElement("div"); barEl.id = "offlineBar"; barEl.setAttribute("role", "status");
       barEl.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;" +
@@ -168,19 +223,21 @@ SHIM = r"""<script>
     barEl.hidden = !show;
     document.documentElement.style.paddingBottom = show ? "64px" : "";
     if (!show) return;
-    barEl.innerHTML = linked ? "<span>Сохраняю изменения в файл…</span>"
-      : "<span><b>Есть несохранённые изменения.</b> Сохраните их в файл, иначе на другом ПК их не будет.</span>" +
-        '<button class="btn" type="button">' + (canLink ? "Сохранить в файл" : "Скачать файл с данными") + "</button><small style=\"opacity:.7\">Ctrl+S</small>";
+    barEl.innerHTML = error ? "<span>" + error + "</span><button class=\"btn\" type=\"button\">Подключить файл</button>"
+      : canLink ? "<span>" + (pending() ? "<b>Есть несохранённые изменения.</b> " : "") + "Подключите этот файл, чтобы сохранять изменения и видеть правки коллег.</span>" +
+          "<button class=\"btn\" type=\"button\">Подключить файл</button><small style=\"opacity:.7\">Ctrl+S</small>"
+      : "<span><b>Есть несохранённые изменения.</b> Этот браузер не умеет сохранять в файл — скачайте копию (совместная работа — в Chrome или Edge).</span>" +
+          "<button class=\"btn\" type=\"button\">Скачать файл с данными</button>";
   }
   window.addEventListener("DOMContentLoaded", bar);
-  window.addEventListener("beforeunload", function (e) { if (local && local.dirty) { e.preventDefault(); e.returnValue = ""; } });
+  window.addEventListener("beforeunload", function (e) { if (pending()) { if (linked) sync(); e.preventDefault(); e.returnValue = ""; } });
   window.addEventListener("keydown", function (e) {
     if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "ы" || e.code === "KeyS")) { e.preventDefault(); save().catch(function () {}); }
   });
 
   window.__offline = {
-    save: save,
-    status: function () { return { linked: linked, canLink: canLink, hasHandle: !!handle, dirty: !!(local && local.dirty), savedAt: local && (local.savedAt || local.fileStamp), error: error || notice }; }
+    save: save, sync: sync,
+    status: function () { return { linked: linked, canLink: canLink, pending: pending(), syncedAt: local.syncedAt || null, error: error }; }
   };
   window.claude = { use: function (n) { return ready.then(function () { return n === "db" ? db : n === "downloads" ? downloads : null; }); } };
 })();
