@@ -1,7 +1,7 @@
 'use strict';
 // То же хранилище на настоящей YDB. Запускается, только если задан YDB_TEST (локальная YDB в Docker):
 //   docker run -d -p 2136:2136 -e GRPC_PORT=2136 -e YDB_USE_IN_MEMORY_PDISKS=true ydbplatform/local-ydb
-//   YDB_TEST=grpc://localhost:2136/local YDB_ANONYMOUS_CREDENTIALS=1 node --test test/
+//   YDB_TEST=grpc://localhost:2136/local YDB_ANONYMOUS_CREDENTIALS=1 node --test test/*.test.js
 const test = require('node:test');
 const assert = require('node:assert');
 const { ydbStore } = require('../store');

@@ -99,9 +99,9 @@ OAUTH_CLIENT_ID=…  OAUTH_CLIENT_SECRET=…  ./deploy.sh
 
 ```bash
 cd cloud/function && npm install
-node --test test/                       # сервер: вход, права, сессии, синхронизация, копии
+node --test test/*.test.js              # сервер: вход, права, сессии, синхронизация, копии
 python3 ../../tests/flow27.py           # страница + сервер целиком в браузере
 # хранилище на настоящей YDB (локально в Docker):
 docker run -d --network host -e GRPC_PORT=2136 -e YDB_USE_IN_MEMORY_PDISKS=true ydbplatform/local-ydb
-YDB_TEST=grpc://localhost:2136/local YDB_ANONYMOUS_CREDENTIALS=1 node --test test/
+YDB_TEST=grpc://localhost:2136/local YDB_ANONYMOUS_CREDENTIALS=1 node --test test/*.test.js
 ```

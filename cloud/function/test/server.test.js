@@ -1,5 +1,5 @@
 'use strict';
-// Сервер без облака: хранилище в памяти, Яндекс ID — подставной. Запуск: node --test test/
+// Сервер без облака: хранилище в памяти, Яндекс ID — подставной. Запуск: node --test test/*.test.js
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -9,7 +9,7 @@ const acl = require('../acl');
 const { forTests } = require('../index');
 
 const dir = path.join(__dirname, '..', 'static');
-if (!fs.existsSync(path.join(dir, 'index.html'))) { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, 'index.html'), '<!doctype html><script>1</script>'); }
+if (!fs.existsSync(path.join(dir, 'page.html'))) { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, 'page.html'), '<title>t</title><script>1</script>'); }
 
 const SECRET = 'x'.repeat(40);
 const cfg = forTests.config({ BASE_URL: 'https://hr.example', OAUTH_CLIENT_ID: 'id', OAUTH_CLIENT_SECRET: 'sec', SESSION_SECRET: SECRET, ALLOWED_DOMAINS: 'iway.ru', ADMIN_EMAILS: 'boss@iway.ru' });

@@ -1,0 +1,21 @@
+# Приложение и Caddy (HTTPS с бесплатным сертификатом Let's Encrypt). Наружу открыты только 80 и 443.
+services:
+  app:
+    build: { context: .., dockerfile: server/Dockerfile }
+    env_file: .env
+    volumes: [ "./data:/data" ]
+    read_only: true
+    tmpfs: [ "/tmp" ]
+    cap_drop: [ ALL ]
+    security_opt: [ "no-new-privileges:true" ]
+    restart: unless-stopped
+  caddy:
+    image: caddy:2-alpine
+    depends_on: [ app ]
+    ports: [ "80:80", "443:443" ]
+    environment: [ "DOMAIN=${DOMAIN}" ]
+    volumes: [ "./Caddyfile:/etc/caddy/Caddyfile:ro", "caddy_data:/data", "caddy_config:/config" ]
+    restart: unless-stopped
+volumes:
+  caddy_data: {}
+  caddy_config: {}

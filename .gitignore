@@ -13,3 +13,4 @@ tests/.cache/
 cloud/function/node_modules/
 cloud/function/static/
 cloud/dist/
+dist/

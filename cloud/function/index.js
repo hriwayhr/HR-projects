@@ -23,13 +23,15 @@ function config(env = process.env) {
   };
 }
 
-let STATIC = null;
-function staticFiles() {
-  if (!STATIC) {
-    const dir = path.join(__dirname, 'static');
-    STATIC = { html: fs.readFileSync(path.join(dir, 'index.html'), 'utf8') };
+// Страница — src/hr-metrics.html как есть; здесь она получает документ и флаг облачного режима
+let PAGE = null;
+function pageHtml() {
+  if (!PAGE) {
+    const raw = fs.readFileSync(process.env.PAGE_SRC || path.join(__dirname, 'static', 'page.html'), 'utf8');
+    PAGE = '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>' +
+      '<script>window.HR_CLOUD = true;</script>' + raw + '</body></html>';
   }
-  return STATIC;
+  return PAGE;
 }
 
 const BASE_HEADERS = {
@@ -52,7 +54,7 @@ const redirect = (to, cookies) => respond(302, '', { Location: to }, cookies ? {
 
 function page() {
   const nonce = crypto.randomBytes(16).toString('base64');
-  const html = staticFiles().html.replace(/<script>/g, '<script nonce="' + nonce + '">');
+  const html = pageHtml().replace(/<script>/g, '<script nonce="' + nonce + '">');
   return respond(200, html, {
     'Content-Type': 'text/html; charset=utf-8',
     'Content-Security-Policy': "default-src 'none'; script-src 'nonce-" + nonce + "'; style-src 'unsafe-inline'; img-src 'self' data:; font-src data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
@@ -182,4 +184,6 @@ module.exports.handler = (event, context) => {
   }
   return prod(event, context);
 };
+module.exports.create = (store, cfg, f) => withLogout(makeHandler(store, cfg, f));
+module.exports.config = config;
 module.exports.forTests = { makeHandler: (store, cfg, f) => withLogout(makeHandler(store, cfg, f)), config, memoryStore };

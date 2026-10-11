@@ -12,17 +12,22 @@ function newVer() { lastVer = Math.max(lastVer + 1, Date.now() * 1000); return l
 // ---------- в памяти: для тестов и локального запуска ----------
 function memoryStore() {
   const rows = new Map(), audit = [];
+  let queue = Promise.resolve();
   return {
     audit,
     async get(path) { const r = rows.get(path); return r && !r.deleted ? JSON.parse(r.data) : null; },
-    async tx(path, fn, who) {
-      const r = rows.get(path), prev = r && !r.deleted ? JSON.parse(r.data) : null;
-      const next = await fn(prev);
-      if (next === undefined) return null;
-      const ver = newVer();
-      rows.set(path, { data: JSON.stringify(next === null ? {} : next), ver, deleted: next === null });
-      audit.push({ ts: ver, who, op: next === null ? 'delete' : 'set', path });
-      return ver;
+    tx(path, fn, who) {
+      const run = queue.then(async () => {
+        const r = rows.get(path), prev = r && !r.deleted ? JSON.parse(r.data) : null;
+        const next = await fn(prev);
+        if (next === undefined) return null;
+        const ver = newVer();
+        rows.set(path, { data: JSON.stringify(next === null ? {} : next), ver, deleted: next === null });
+        audit.push({ ts: ver, who, op: next === null ? 'delete' : 'set', path });
+        return ver;
+      });
+      queue = run.catch(() => {});
+      return run;
     },
     async changes(since) {
       return [...rows.entries()].filter(([, r]) => r.ver > since).sort((a, b) => a[1].ver - b[1].ver)
@@ -110,4 +115,46 @@ function ydbStore(connectionString) {
   };
 }
 
-module.exports = { memoryStore, ydbStore, newVer };
+// ---------- SQLite: для своего сервера (Selectel и т. п.), встроена в Node.js 22 ----------
+// Один процесс: записи выстраиваются в очередь, так что «прочитать → проверить → записать» не пересекаются.
+function sqliteStore(file) {
+  const { DatabaseSync } = require('node:sqlite');
+  const db = new DatabaseSync(file);
+  db.exec(`PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;
+    CREATE TABLE IF NOT EXISTS docs (path TEXT PRIMARY KEY, data TEXT NOT NULL, ver INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0);
+    CREATE INDEX IF NOT EXISTS docs_ver ON docs (ver);
+    CREATE TABLE IF NOT EXISTS audit (ts INTEGER NOT NULL, who TEXT, op TEXT, path TEXT);`);
+  const q = {
+    get: db.prepare('SELECT data, deleted FROM docs WHERE path = ?'),
+    put: db.prepare('INSERT INTO docs (path, data, ver, deleted) VALUES (?, ?, ?, ?) ON CONFLICT (path) DO UPDATE SET data = excluded.data, ver = excluded.ver, deleted = excluded.deleted'),
+    audit: db.prepare('INSERT INTO audit (ts, who, op, path) VALUES (?, ?, ?, ?)'),
+    changes: db.prepare('SELECT path, data, ver, deleted FROM docs WHERE ver > ? ORDER BY ver'),
+    count: db.prepare('SELECT COUNT(*) AS n FROM docs WHERE deleted = 0'),
+  };
+  const read = path => { const r = q.get.get(path); return r && !r.deleted ? JSON.parse(r.data) : null; };
+  let queue = Promise.resolve();
+  return {
+    async get(path) { return read(path); },
+    tx(path, fn, who) {
+      const run = queue.then(async () => {
+        const next = await fn(read(path));
+        if (next === undefined) return null;
+        const ver = newVer();
+        db.exec('BEGIN');
+        try {
+          q.put.run(path, JSON.stringify(next === null ? {} : next), ver, next === null ? 1 : 0);
+          q.audit.run(ver, who || '', next === null ? 'delete' : 'set', path);
+          db.exec('COMMIT');
+        } catch (e) { db.exec('ROLLBACK'); throw e; }
+        return ver;
+      });
+      queue = run.catch(() => {});
+      return run;
+    },
+    async changes(since) { return q.changes.all(since).map(r => ({ path: r.path, ver: r.ver, data: r.deleted ? null : JSON.parse(r.data) })); },
+    async count() { return q.count.get().n; },
+    close() { db.close(); },
+  };
+}
+
+module.exports = { memoryStore, ydbStore, sqliteStore, newVer };
