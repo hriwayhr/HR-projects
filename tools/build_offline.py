@@ -13,6 +13,9 @@
   * Файл умеет пересобрать себя: в нём лежит его же шаблон (TEMPLATE).
 
 Запуск:  python3 tools/build_offline.py <каталог-снимка-базы> [выходной.html]
+         python3 tools/build_offline.py --update [выходной.html]   — обновление программы без данных:
+         открыть его и «Подключить файл» с рабочим файлом — данные берутся из рабочего файла, программа
+         в нём заменяется на новую (VERSION — время сборки; файл новее открытой вкладки не перезаписывается).
 Снимок — каталог вида <коллекция>/<документ>.json (как сохраняет ArtifactData с out_dir).
 """
 import json
@@ -31,6 +34,7 @@ SHIM = r"""<script>
 (function () {
   var SEED = __SEED__;
   var TEMPLATE = __TEMPLATE__;
+  var VERSION = __VERSION__;                                  // время сборки программы
   var KEY = "hr-offline-db", POLL = window.__hrPoll || 5000;
   var local = null, handle = null, linked = false, error = "", timer = null, busy = null, subs = [];
   try { local = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
@@ -126,6 +130,11 @@ SHIM = r"""<script>
     if (!linked) return Promise.resolve();
     if (busy) return busy;
     busy = handle.getFile().then(function (f) { return f.text(); }).then(function (text) {
+      var fileVer = +((text.match(/var VERSION = (\d+);/) || [])[1] || 0);
+      if (fileVer > VERSION) {                                 // файл уже записан более новой программой — не откатываем
+        clearInterval(poller); linked = false; error = "Файл обновлён до новой версии программы — перезагрузите страницу (F5)."; changed();
+        return;
+      }
       var theirs = readSeed(text).data, merged = applyPending(theirs);
       // записанный слой, который файл уже содержит (или который после поменяли), больше не ждёт
       Object.keys(local.pending).forEach(function (p) {
@@ -134,7 +143,7 @@ SHIM = r"""<script>
         if (same(x.mine, x.mid)) delete local.pending[p]; else { x.base = x.mid; delete x.mid; }
       });
       var sent = {}; Object.keys(local.pending).forEach(function (p) { sent[p] = canon(local.pending[p].mine); });
-      return (same(merged, theirs) ? Promise.resolve() : writeData(merged)).then(function () {
+      return (same(merged, theirs) && fileVer === VERSION ? Promise.resolve() : writeData(merged)).then(function () {
         // отмечаем записанное; удалим, когда следующее чтение покажет его в файле — если коллега затёр его
         // одновременной записью, оно вернётся
         Object.keys(sent).forEach(function (p) { var x = local.pending[p]; if (x && canon(x.mine) === sent[p]) x.mid = copy(x.mine); });
@@ -266,7 +275,7 @@ def template():
 
     swap("<title>HR-метрики i’way</title>", "<title>HR-метрики i’way — на ПК</title>")
     assert "__SEED__" not in html and "__TEMPLATE__" not in html
-    swap("\n<script>\n", "\n" + SHIM + "<script>\n")      # подмена базы — перед основным скриптом
+    swap("\n<script>\n", "\n" + SHIM.replace("__VERSION__", str(int(time.time() * 1000))) + "<script>\n")      # подмена базы — перед основным скриптом
     return ('<!doctype html>\n<html lang="ru">\n<head>\n<meta charset="utf-8">\n'
             '<meta name="viewport" content="width=device-width, initial-scale=1">\n</head>\n<body>\n'
             + html + "\n</body>\n</html>\n")
@@ -280,8 +289,9 @@ def make_file(tpl, seed):
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         sys.exit(__doc__)
-    snap = pathlib.Path(sys.argv[1])
-    out = pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 else ROOT / "dist" / "HR-метрики.html"
+    update = sys.argv[1] == "--update"
+    out = pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 else ROOT / "dist" / ("HR-метрики (обновление).html" if update else "HR-метрики.html")
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(make_file(template(), {"stamp": int(time.time() * 1000), "data": load_snapshot(snap)}), encoding="utf-8")
+    data = {} if update else load_snapshot(pathlib.Path(sys.argv[1]))
+    out.write_text(make_file(template(), {"stamp": int(time.time() * 1000), "data": data}), encoding="utf-8")
     print(f"{out}  {out.stat().st_size // 1024} КБ")
