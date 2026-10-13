@@ -53,7 +53,20 @@ with sync_playwright() as p:
     D = b.new_context(); D.add_init_script(FAKE.replace("requestPermission: async () => 'granted'", "requestPermission: async () => 'denied'")); d = D.new_page()
     d.goto(upd.as_uri()); d.wait_for_selector('#offlineBar button'); d.click('#offlineBar button'); d.wait_for_timeout(300)
     assert 'не дал доступ' in d.inner_text('#offlineBar'), d.inner_text('#offlineBar')
-    W.close(); D.close()
+    # браузер не даёт работать с файлами (открыт внутри приложения, политика) — понятное сообщение, а не тишина;
+    # запасной путь: «Загрузить рабочий файл» скачивает его же с новой программой
+    X = b.new_context(accept_downloads=True); X.add_init_script("window.showOpenFilePicker = function () { throw new DOMException('blocked', 'SecurityError'); };"); x = X.new_page()
+    x.on('pageerror', lambda e: errs.append(str(e)))
+    x.goto(upd.as_uri()); x.wait_for_selector('#offlineBar button'); x.click('#offlineBar button:has-text("Подключить файл")'); x.wait_for_timeout(300)
+    assert 'не даёт этой странице работать с файлами' in x.inner_text('#offlineBar'), x.inner_text('#offlineBar')
+    with x.expect_file_chooser() as fc: x.click('#offlineBar button:has-text("Загрузить рабочий файл")')
+    with x.expect_download() as dl: fc.value.set_files(str(work))
+    got = pathlib.Path(dl.value.path()).read_text(encoding='utf-8')
+    assert dl.value.suggested_filename == 'HR-метрики.html' and ver(got) == v2
+    gd = json.loads(got[got.index('var SEED = ') + 11:got.index(';\n  var TEMPLATE = ')])['data']
+    assert gd['vacancies/a1']['title'] == 'До обновления' and 'config/team' in gd
+    assert 'Готово' in x.inner_text('#offlineBar') and x.is_visible('#lLogin')
+    W.close(); D.close(); X.close()
     B = pc(b); B.goto(upd.as_uri()); B.wait_for_selector('#offlineBar button')
     B.click('#offlineBar button'); login(B)                     # команда пришла из рабочего файла — можно войти
     t = work.read_text(encoding='utf-8')

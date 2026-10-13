@@ -169,19 +169,42 @@ SHIM = r"""<script>
   }
   var poller = null;
   function start() { linked = true; error = ""; clearInterval(poller); poller = setInterval(sync, POLL); return sync(); }
+  var NO_ACCESS = "Браузер не даёт этой странице работать с файлами. Откройте файл двойным щелчком в Chrome или Edge (не внутри другого приложения) — или обновите через «Загрузить рабочий файл».";
   function link() {
-    error = "";
-    var pick = handle
-      ? handle.requestPermission({ mode: "readwrite" }).then(function (p) { if (p !== "granted") throw new Error("denied"); })
-      : window.showOpenFilePicker({ types: [{ description: "HR-метрики", accept: { "text/html": [".html"] } }] })
-          .then(function (hs) { handle = hs[0]; return handle.requestPermission({ mode: "readwrite" }); })
-          .then(function (p) { if (p !== "granted") throw new Error("denied"); return idb("readwrite", handle); });
-    return pick.then(start, function (e) {
-      if (!(e && e.name === "AbortError")) error = e && e.name === "SecurityError"
-        ? "Браузер не открывает файлы из этой папки. Перенесите рабочий файл, например, в «Документы» или на общий диск и подключите снова."
-        : "Браузер не дал доступ к файлу. Нажмите «Подключить файл» ещё раз и разрешите изменение файла.";
+    error = ""; note = "Открываю выбор файла…"; changed();
+    var stored = !!handle, pick;
+    try {
+      pick = stored
+        ? handle.requestPermission({ mode: "readwrite" }).then(function (p) { if (p !== "granted") throw new Error("denied"); })
+        : window.showOpenFilePicker({ types: [{ description: "HR-метрики", accept: { "text/html": [".html"] } }] })
+            .then(function (hs) { handle = hs[0]; return handle.requestPermission({ mode: "readwrite" }); })
+            .then(function (p) { if (p !== "granted") throw new Error("denied"); return idb("readwrite", handle); });
+    } catch (e) { pick = Promise.reject({ blocked: true }); }                 // открыт внутри другого приложения, доступ к файлам выключен политикой
+    return pick.then(function () { note = ""; return start(); }, function (e) {
+      note = "";
+      if (stored) handle = null;                                 // запомненный файл недоступен (перенесли, удалили) — выбрать заново
+      if (!(e && e.name === "AbortError")) error = e && e.blocked ? NO_ACCESS : stored ? "Не удалось открыть прежний файл. Нажмите «Подключить файл» ещё раз и выберите рабочий файл."
+        : e && e.name === "SecurityError" && window.top === window ? "Браузер не открывает файлы из этой папки. Перенесите рабочий файл, например, в «Документы» или на общий диск и подключите снова."
+        : e && /denied/.test(e.message || "") ? "Браузер не дал доступ к файлу. Нажмите «Подключить файл» ещё раз и разрешите изменение файла."
+        : NO_ACCESS;
       changed();
     });
+  }
+  /* запасной путь без доступа к файлам: прочитать рабочий файл обычной загрузкой и скачать
+     новый файл — программа отсюда, данные оттуда плюс несохранённое с этого ПК */
+  var note = "";
+  function loadWork(f) {
+    error = "";
+    return f.text().then(function (text) {
+      var merged = applyPending(readSeed(text).data);
+      if (!merged["config/team"]) throw { bad: true };
+      var url = URL.createObjectURL(new Blob([makeFile({ stamp: Date.now(), data: merged })], { type: "text/html" }));
+      var a = document.createElement("a"); a.href = url; a.download = "HR-метрики.html"; document.body.append(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+      var ch = diff(local.data, merged); local.data = merged; persist(); if (ch.length) notify(ch);
+      note = "Готово: скачан файл «HR-метрики.html» с вашими данными и новой программой. Замените им рабочий файл (старый сохраните как копию).";
+      changed();
+    }).catch(function () { error = "Выбран не тот файл: нужен рабочий файл HR-метрик с данными."; changed(); });
   }
   function download() {                                      // браузеры без доступа к файлам: скачать копию с данными
     var url = URL.createObjectURL(new Blob([makeFile({ stamp: Date.now(), data: local.data })], { type: "text/html" }));
@@ -236,26 +259,34 @@ SHIM = r"""<script>
   function pending() { return Object.keys(local.pending).length; }
   function bar() {
     if (!document.body) return;
-    var show = !linked && (canLink || pending() > 0) || !!error;
+    var show = !linked && (canLink || pending() > 0 || isUpdate()) || !!error || !!note;
     if (!barEl) {
       barEl = document.createElement("div"); barEl.id = "offlineBar"; barEl.setAttribute("role", "status");
       barEl.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;" +
         "padding:10px 16px calc(env(safe-area-inset-bottom,0px) + 10px);background:var(--surface);color:var(--ink);border-top:2px solid var(--accent);box-shadow:0 -6px 20px #0003;font-size:14px";
-      barEl.addEventListener("click", function (e) { if (e.target.closest("button")) save().catch(function () {}); });
+      barEl.addEventListener("click", function (e) {
+        var btn = e.target.closest("button"); if (!btn) return;
+        if (btn.dataset.load) { var inp = document.createElement("input"); inp.type = "file"; inp.accept = ".html,text/html"; inp.onchange = function () { if (inp.files[0]) loadWork(inp.files[0]); }; inp.click(); return; }
+        save().catch(function () {});
+      });
       document.body.append(barEl);
     }
     barEl.hidden = !show;
     document.documentElement.style.paddingBottom = show ? "64px" : "";
     if (!show) return;
-    barEl.innerHTML = error ? "<span>" + error + "</span><button class=\"btn\" type=\"button\">Подключить файл</button>"
+    var loadBtn = isUpdate() || error ? "<button class=\"btn ghost\" type=\"button\" data-load=\"1\">Загрузить рабочий файл</button>" : "";
+    if (note) { barEl.innerHTML = "<span><b>" + note + "</b></span>" + (/^Готово/.test(note) ? "" : loadBtn); return; }
+    barEl.innerHTML = error ? "<span>" + error + "</span>" + (canLink ? "<button class=\"btn\" type=\"button\">Подключить файл</button>" : "") + loadBtn
       : canLink ? "<span>" + (isUpdate() ? "<b>" + UPDATE_HINT + "</b>" : (pending() ? "<b>Есть несохранённые изменения.</b> " : "") + "Подключите этот файл, чтобы сохранять изменения и видеть правки коллег.") + "</span>" +
-          "<button class=\"btn\" type=\"button\">Подключить файл</button><small style=\"opacity:.7\">Ctrl+S</small>"
+          "<button class=\"btn\" type=\"button\">Подключить файл</button>" + loadBtn + "<small style=\"opacity:.7\">Ctrl+S</small>"
+      : isUpdate() ? "<span><b>Это обновление программы.</b> Выберите ваш рабочий файл — скачается он же с новой программой.</span>" + loadBtn
       : "<span><b>Есть несохранённые изменения.</b> Этот браузер не умеет сохранять в файл — скачайте копию (совместная работа — в Chrome или Edge).</span>" +
           "<button class=\"btn\" type=\"button\">Скачать файл с данными</button>";
   }
   window.addEventListener("DOMContentLoaded", function () {
     var w = document.getElementById("bootWait");                // вместо «Администраторов ещё нет»
-    if (w && isUpdate()) w.textContent = canLink ? UPDATE_HINT : "Это обновление программы. Откройте его в Chrome или Edge — в этом браузере подключить рабочий файл нельзя.";
+    if (w && isUpdate()) w.textContent = canLink ? UPDATE_HINT + " Если кнопка не срабатывает — «Загрузить рабочий файл»: скачается обновлённый файл, им заменить рабочий."
+      : "Это обновление программы. Нажмите «Загрузить рабочий файл» внизу и выберите ваш рабочий файл — скачается он же с новой программой; замените им рабочий.";
     bar();
   });
   window.addEventListener("beforeunload", function (e) { if (pending()) { if (linked) sync(); e.preventDefault(); e.returnValue = ""; } });
