@@ -45,6 +45,15 @@ with sync_playwright() as p:
     # обновление: пустая сборка, подключить рабочий файл
     build('--update', upd); v2 = ver(upd.read_text(encoding='utf-8')); assert v2 > v1
     assert json.loads(upd.read_text(encoding='utf-8').split('var SEED = ')[1].split(';\n  var TEMPLATE = ')[0])['data'] == {}
+    # подсказки: что это за файл; не тот файл; браузер не дал доступ
+    W = b.new_context(); W.add_init_script(FAKE.replace("await window.fsRead()", "'<html>не тот файл</html>'")); w = W.new_page()
+    w.goto(upd.as_uri()); w.wait_for_selector('#offlineBar button')
+    assert 'Это обновление программы' in w.inner_text('#offlineBar') and 'Это обновление программы' in w.inner_text('#bootWait')
+    w.click('#offlineBar button'); w.wait_for_timeout(300); assert 'не тот файл' in w.inner_text('#offlineBar'), w.inner_text('#offlineBar')
+    D = b.new_context(); D.add_init_script(FAKE.replace("requestPermission: async () => 'granted'", "requestPermission: async () => 'denied'")); d = D.new_page()
+    d.goto(upd.as_uri()); d.wait_for_selector('#offlineBar button'); d.click('#offlineBar button'); d.wait_for_timeout(300)
+    assert 'не дал доступ' in d.inner_text('#offlineBar'), d.inner_text('#offlineBar')
+    W.close(); D.close()
     B = pc(b); B.goto(upd.as_uri()); B.wait_for_selector('#offlineBar button')
     B.click('#offlineBar button'); login(B)                     # команда пришла из рабочего файла — можно войти
     t = work.read_text(encoding='utf-8')

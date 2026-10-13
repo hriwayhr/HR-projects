@@ -55,7 +55,14 @@ SHIM = r"""<script>
       .replace("__SEED__", function () { return esc(JSON.stringify(seed)); })
       .replace("__TEMPLATE__", function () { return esc(JSON.stringify(TEMPLATE)); });
   }
-  function readSeed(text) { var a = text.indexOf("var SEED = "), z = text.indexOf(";\n  var TEMPLATE = "); return JSON.parse(text.slice(a + 11, z)); }
+  function readSeed(text) {
+    var a = text.indexOf("var SEED = "), z = text.indexOf(";\n  var TEMPLATE = ");
+    if (a < 0 || z < 0) throw { bad: true };
+    return JSON.parse(text.slice(a + 11, z));
+  }
+  // файл обновления: программа без данных — данные придут из подключённого рабочего файла
+  function isUpdate() { return !local.data["config/team"]; }
+  var UPDATE_HINT = "Это обновление программы, данных в нём нет. Нажмите «Подключить файл» и выберите ваш рабочий файл с данными — данные появятся здесь, а программа в рабочем файле обновится.";
   function fmt(t) { return new Date(t).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }); }
 
   /* слияние трёх версий: base — как было до моей правки, mine — моя, theirs — сейчас в файле.
@@ -152,8 +159,11 @@ SHIM = r"""<script>
         if (ch.length) notify(ch);
         changed();
       });
-    }).catch(function () {
-      linked = false; error = "Нет доступа к файлу — подключите его снова."; changed();
+    }).catch(function (e) {
+      linked = false; clearInterval(poller);
+      if (e && e.bad) { handle = null; error = "Выбран не тот файл: нужен рабочий файл HR-метрик с данными (HTML-файл, в котором вы работаете)."; }
+      else error = "Нет доступа к файлу — нажмите «Подключить файл» и разрешите изменение.";
+      changed();
     }).then(function () { busy = null; });
     return busy;
   }
@@ -166,7 +176,12 @@ SHIM = r"""<script>
       : window.showOpenFilePicker({ types: [{ description: "HR-метрики", accept: { "text/html": [".html"] } }] })
           .then(function (hs) { handle = hs[0]; return handle.requestPermission({ mode: "readwrite" }); })
           .then(function (p) { if (p !== "granted") throw new Error("denied"); return idb("readwrite", handle); });
-    return pick.then(start, function () { changed(); });
+    return pick.then(start, function (e) {
+      if (!(e && e.name === "AbortError")) error = e && e.name === "SecurityError"
+        ? "Браузер не открывает файлы из этой папки. Перенесите рабочий файл, например, в «Документы» или на общий диск и подключите снова."
+        : "Браузер не дал доступ к файлу. Нажмите «Подключить файл» ещё раз и разрешите изменение файла.";
+      changed();
+    });
   }
   function download() {                                      // браузеры без доступа к файлам: скачать копию с данными
     var url = URL.createObjectURL(new Blob([makeFile({ stamp: Date.now(), data: local.data })], { type: "text/html" }));
@@ -233,12 +248,16 @@ SHIM = r"""<script>
     document.documentElement.style.paddingBottom = show ? "64px" : "";
     if (!show) return;
     barEl.innerHTML = error ? "<span>" + error + "</span><button class=\"btn\" type=\"button\">Подключить файл</button>"
-      : canLink ? "<span>" + (pending() ? "<b>Есть несохранённые изменения.</b> " : "") + "Подключите этот файл, чтобы сохранять изменения и видеть правки коллег.</span>" +
+      : canLink ? "<span>" + (isUpdate() ? "<b>" + UPDATE_HINT + "</b>" : (pending() ? "<b>Есть несохранённые изменения.</b> " : "") + "Подключите этот файл, чтобы сохранять изменения и видеть правки коллег.") + "</span>" +
           "<button class=\"btn\" type=\"button\">Подключить файл</button><small style=\"opacity:.7\">Ctrl+S</small>"
       : "<span><b>Есть несохранённые изменения.</b> Этот браузер не умеет сохранять в файл — скачайте копию (совместная работа — в Chrome или Edge).</span>" +
           "<button class=\"btn\" type=\"button\">Скачать файл с данными</button>";
   }
-  window.addEventListener("DOMContentLoaded", bar);
+  window.addEventListener("DOMContentLoaded", function () {
+    var w = document.getElementById("bootWait");                // вместо «Администраторов ещё нет»
+    if (w && isUpdate()) w.textContent = canLink ? UPDATE_HINT : "Это обновление программы. Откройте его в Chrome или Edge — в этом браузере подключить рабочий файл нельзя.";
+    bar();
+  });
   window.addEventListener("beforeunload", function (e) { if (pending()) { if (linked) sync(); e.preventDefault(); e.returnValue = ""; } });
   window.addEventListener("keydown", function (e) {
     if ((e.ctrlKey || e.metaKey) && (e.key === "s" || e.key === "ы" || e.code === "KeyS")) { e.preventDefault(); save().catch(function () {}); }
