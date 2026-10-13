@@ -157,4 +157,111 @@ function sqliteStore(file) {
   };
 }
 
-module.exports = { memoryStore, ydbStore, sqliteStore, newVer };
+// ---------- журнал правок в общей папке: локальная версия (Windows, сетевая папка) ----------
+// Базу нельзя открывать с двух ПК по сети, поэтому каждый ПК пишет только свой файл changes-<ПК>.jsonl
+// (дописывает строки) и читает файлы других. Строка — правка одного поля: {ts, pc, n, path, at: [ключи], v | del}.
+// Значение поля — из правки с наибольшим (ts, pc, n): одинаково на всех ПК, разные поля не мешают друг другу.
+function logStore(dir, pc) {
+  const fs = require('fs'), pathm = require('path');
+  fs.mkdirSync(dir, { recursive: true });
+  const mineFile = 'changes-' + pc + '.jsonl';
+  const ops = new Map(), docs = new Map(), offsets = {}, rests = {};
+  let lastTs = 0, n = 0, polledAt = 0, queue = Promise.resolve();
+  const isObj = o => o !== null && typeof o === 'object' && !Array.isArray(o);
+  const canon = o => isObj(o) ? '{' + Object.keys(o).sort().map(k => JSON.stringify(k) + ':' + canon(o[k])).join(',') + '}' : Array.isArray(o) ? '[' + o.map(canon).join(',') + ']' : JSON.stringify(o === undefined ? null : o);
+  const same = (a, b) => (a === undefined) === (b === undefined) && canon(a) === canon(b);
+  const order = (a, b) => a.ts - b.ts || (a.pc < b.pc ? -1 : a.pc > b.pc ? 1 : 0) || a.n - b.n;
+  function put(doc, at, v) {
+    if (!at.length) return v === undefined ? undefined : JSON.parse(JSON.stringify(v));
+    const out = isObj(doc) ? Object.assign({}, doc) : {}, k = at[0], child = put(out[k], at.slice(1), v);
+    if (child === undefined) delete out[k]; else out[k] = child;
+    return out;
+  }
+  function diffOps(a, b, at, out) {
+    if (same(a, b)) return out;
+    if (isObj(a) && isObj(b)) { new Set(Object.keys(a).concat(Object.keys(b))).forEach(k => diffOps(a[k], b[k], at.concat(k), out)); return out; }
+    out.push(b === undefined ? { at, del: true } : { at, v: b });
+    return out;
+  }
+  function ingest(o, touched) {
+    if (!o || typeof o.path !== 'string' || !Array.isArray(o.at)) return;
+    if (!ops.has(o.path)) ops.set(o.path, []);
+    ops.get(o.path).push(o); touched.add(o.path);
+    if (o.pc === pc) { lastTs = Math.max(lastTs, o.ts); n = Math.max(n, o.n + 1); }
+  }
+  function rebuild(touched) {
+    touched.forEach(p => {
+      let doc; ops.get(p).slice().sort(order).forEach(o => { doc = put(doc, o.at, o.del ? undefined : o.v); });
+      const cur = docs.get(p);
+      if (!cur || !same(cur.data, doc)) docs.set(p, { data: doc, ver: newVer() });
+    });
+  }
+  // дочитать новые строки во всех журналах (свой — только при запуске: свои правки уже в памяти)
+  function poll(force) {
+    if (!force && Date.now() - polledAt < 1000) return;
+    polledAt = Date.now();
+    const touched = new Set();
+    let files = [];
+    try { files = fs.readdirSync(dir).filter(f => /^changes-.+\.jsonl$/.test(f)); } catch (e) { return; }   // папка недоступна — работаем с тем, что в памяти
+    for (const f of files) {
+      if (f === mineFile && f in offsets) continue;
+      try {
+        const size = fs.statSync(pathm.join(dir, f)).size, from = offsets[f] || 0;
+        if (size <= from) continue;   // shortcut: усечённый или подменённый журнал не перечитывается — журналы только дописываются
+        const fd = fs.openSync(pathm.join(dir, f), 'r'), buf = Buffer.alloc(size - from);
+        fs.readSync(fd, buf, 0, buf.length, from); fs.closeSync(fd);
+        const all = rests[f] ? Buffer.concat([rests[f], buf]) : buf, end = all.lastIndexOf(10) + 1;   // недописанная строка — до следующего раза
+        rests[f] = all.subarray(end); offsets[f] = size;
+        all.subarray(0, end).toString('utf8').split('\n').forEach(line => { if (line) try { ingest(JSON.parse(line), touched); } catch (e) {} });
+      } catch (e) { /* файл занят или исчез — в следующий раз */ }
+    }
+    if (!(mineFile in offsets)) offsets[mineFile] = 0;
+    rebuild(touched);
+  }
+  poll(true);
+  const read = path => { const d = docs.get(path); return d && d.data !== undefined ? JSON.parse(JSON.stringify(d.data)) : null; };
+  return {
+    async get(path) { poll(); return read(path); },
+    tx(path, fn, who) {
+      const run = queue.then(async () => {
+        poll(true);
+        const prev = read(path), next = await fn(read(path));   // fn может поменять документ на месте — сравниваем с отдельной копией
+        if (next === undefined) return null;
+        const list = diffOps(prev === null ? undefined : prev, next === null ? undefined : next, [], []);
+        if (!list.length) return docs.has(path) ? docs.get(path).ver : null;
+        const ts = lastTs = Math.max(Date.now(), lastTs + 1), touched = new Set();
+        const rows = list.map(o => Object.assign({ ts, pc, n: n++, who: who || '', path }, o));
+        fs.appendFileSync(pathm.join(dir, mineFile), rows.map(r => JSON.stringify(r)).join('\n') + '\n');   // ошибка записи — до пользователя: «не сохранилось»
+        rows.forEach(r => ingest(r, touched)); rebuild(touched);
+        return docs.get(path).ver;
+      });
+      queue = run.catch(() => {});
+      return run;
+    },
+    async changes(since) {
+      poll();
+      return [...docs.entries()].filter(([, d]) => d.ver > since).sort((a, b) => a[1].ver - b[1].ver)
+        .map(([path, d]) => ({ path, ver: d.ver, data: d.data === undefined ? null : JSON.parse(JSON.stringify(d.data)) }));
+    },
+    async count() { poll(true); return [...docs.values()].filter(d => d.data !== undefined).length; },   // для «база пустая?» — всегда свежее
+  };
+}
+
+// Ежедневная копия всей базы в dir/hr-ГГГГ-ММ-ДД.json; старше keepDays дней — удаляются
+async function dailyBackup(store, dir, keepDays) {
+  const fs = require('fs'), pathm = require('path');
+  const day = new Date().toISOString().slice(0, 10), file = pathm.join(dir, 'hr-' + day + '.json');
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  if (!fs.existsSync(file)) {
+    const docs = {};
+    (await store.changes(0)).forEach(d => { if (d.data !== null) docs[d.path] = d.data; });
+    if (!Object.keys(docs).length) return;   // пустую базу не копируем — иначе за этот день копия так и останется пустой
+    fs.writeFileSync(file + '.tmp', JSON.stringify({ format: 'hr-metrics', at: new Date().toISOString(), docs }), { mode: 0o600 });
+    fs.renameSync(file + '.tmp', file);
+    console.log('копия: ' + file + ' (' + Object.keys(docs).length + ' документов)');
+  }
+  const old = Date.now() - keepDays * 864e5;
+  fs.readdirSync(dir).filter(f => /^hr-\d{4}-\d{2}-\d{2}\.json$/.test(f) && Date.parse(f.slice(3, 13)) < old).forEach(f => fs.unlinkSync(pathm.join(dir, f)));
+}
+
+module.exports = { memoryStore, ydbStore, sqliteStore, logStore, dailyBackup, newVer };

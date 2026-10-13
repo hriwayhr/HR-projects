@@ -19,11 +19,12 @@ function ownerOf(manager, people) {
 }
 
 // Кто из команды: по корпоративной почте; в архиве — не пускаем
-function userByEmail(people, email) {
+// field — по чему узнаём человека: почта (вход через Яндекс) или логин (локальная версия с паролями)
+function userByEmail(people, email, field = 'email') {
   const e = norm(email);
-  const pid = Object.keys(people || {}).find(p => norm(people[p].email) === e);
+  const pid = Object.keys(people || {}).find(p => norm(people[p][field]) === e);
   if (!pid || people[pid].archived) return null;
-  return { pid, email: e, admin: !!people[pid].admin };
+  return { pid, email: e, admin: !!people[pid].admin, field };
 }
 
 const PUBLIC_PERSON = ['name', 'surname', 'order', 'admin', 'recruiter', 'archived', 'archivedAt', 'since'];
@@ -95,9 +96,11 @@ function teamError(user, next) {
       if (seen[e]) return 'Почта «' + e + '» уже у другого человека.';
       seen[e] = 1;
     }
+    const l = norm(ps[p].login);
+    if (l) { if (seen['login:' + l]) return 'Логин «' + l + '» уже у другого человека.'; seen['login:' + l] = 1; }
   }
   // по почте, а не по id: при переносе данных администратор становится человеком из загруженной команды
-  const me = Object.keys(ps).find(p => norm(ps[p].email) === user.email);
+  const me = Object.keys(ps).find(p => norm(ps[p][user.field || 'email']) === user.email);
   if (!me || ps[me].archived || !ps[me].admin) return 'Нельзя снять права администратора или вход с самого себя.';
   return '';
 }

@@ -149,6 +149,17 @@ test('рекрутер пишет только своё', async () => {
   assert.equal((await s.put(s.boss, 'months/x', { person: 'ann', month: '2026-10' })).status, 403);
 });
 
+test('правка с устаревшего вида страницы не затирает то, что коллега успел изменить', async () => {
+  const s = await seeded();
+  const seen = (await s.docs(s.ann))['months/ann_2026-10'];                      // так страница Анны видит месяц
+  await s.call(s.boss, 'POST', '/api/doc', { path: 'months/ann_2026-10', op: 'set', base: seen,
+    data: Object.assign({}, seen, { days: Object.assign({}, seen.days, { '2026-10-02': { calls: 1 } }) }) });
+  const r = await s.call(s.ann, 'POST', '/api/doc', { path: 'months/ann_2026-10', op: 'set', base: seen,
+    data: Object.assign({}, seen, { days: Object.assign({}, seen.days, { '2026-10-03': { calls: 2 } }) }) });
+  assert.equal(r.status, 200);
+  assert.deepEqual(Object.keys((await s.docs(s.boss))['months/ann_2026-10'].days).sort(), ['2026-10-01', '2026-10-02', '2026-10-03']);
+});
+
 test('без заголовка X-HR запись не проходит (защита от подделки запроса с чужого сайта)', async () => {
   const s = await seeded();
   const r = await s.h({ httpMethod: 'POST', path: '/api/doc', headers: { Cookie: s.boss }, body: JSON.stringify({ path: 'config/metrics', op: 'set', data: { list: [] } }) });

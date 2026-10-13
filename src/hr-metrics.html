@@ -258,6 +258,12 @@
       <div class="actions"><button class="btn" type="submit">Создать и войти</button><span class="status err" id="bErr" role="status"></span></div>
     </form>
     <p class="login hint" id="bootWait" hidden>Администраторов ещё нет — первого создаёт владелец страницы.</p>
+    <div class="login panel" id="lImport" hidden>
+      <h2>Первый запуск</h2>
+      <p>Данных в папке ещё нет. Загрузите ваш файл «HR-метрики.html» (версия для ПК) — команда, логины, пароли и все данные перенесутся.</p>
+      <div class="actions"><label class="btn" for="lImportFile">Выбрать файл</label><input type="file" id="lImportFile" accept=".html,.json" hidden></div>
+      <p class="status err" id="lImportErr" role="status"></p>
+    </div>
     <div class="login panel" id="yaLogin" hidden>
       <h2>Вход</h2>
       <p>Войдите корпоративным аккаунтом Яндекс 360.</p>
@@ -524,7 +530,9 @@ var WD = ['вс','пн','вт','ср','чт','пт','сб'];
 
 var db = null, isOwner = false;
 // Облачная версия (Yandex Cloud): вход через Яндекс ID, права проверяет сервер; страница та же
-var CLOUD = !!window.HR_CLOUD, cloudEmail = null;
+var CLOUD = !!window.HR_CLOUD || !!window.HR_LOCAL, cloudEmail = null;
+// Локальная версия (Windows, сетевая папка): тот же сервер, но на этом ПК и вход по логину и паролю
+var LOCAL = !!window.HR_LOCAL, YA = CLOUD && !LOCAL, localEmpty = false;
 var team = {}, teamLoaded = false; // id → {name, surname, login, salt, hash, order, admin, recruiter, archived}
 var metrics = null;                // [{k, t, g, off, custom}] из config/metrics; null — встроенный набор
 var vacancies = {};                // id → вакансия
@@ -1745,24 +1753,24 @@ function loginError(login){
 function roleText(t){ return t.admin && t.recruiter !== false ? 'администратор, вносит метрики' : t.admin ? 'администратор' : 'рекрутер'; }
 function renderTeam(){
   var act = allPeople().filter(function(p){ return !team[p].archived; }), arch = allPeople().filter(function(p){ return team[p].archived; });
-  $('tUsers').innerHTML = '<thead><tr><th>Имя</th><th class="l">Фамилия</th><th class="l">'+(CLOUD ? 'Почта Яндекс 360' : 'Логин')+'</th><th class="l">Администратор</th><th class="l">Вносит метрики</th><th class="l">Вход</th><th></th></tr></thead><tbody>' +
+  $('tUsers').innerHTML = '<thead><tr><th>Имя</th><th class="l">Фамилия</th><th class="l">'+(YA ? 'Почта Яндекс 360' : 'Логин')+'</th><th class="l">Администратор</th><th class="l">Вносит метрики</th><th class="l">Вход</th><th></th></tr></thead><tbody>' +
     act.map(function(p){
       var t = team[p], self = session && session.id === p;
       return '<tr><td>'+esc(t.name)+(self ? ' <span class="hint">(вы)</span>' : '')+'</td>' +
         '<td class="l"><input type="text" value="'+esc(t.surname||'')+'" data-p="'+p+'" data-f="surname" aria-label="Фамилия" size="12"></td>' +
-        (CLOUD ? '<td class="l"><input type="email" value="'+esc(t.email||'')+'" data-p="'+p+'" data-f="email" aria-label="Почта" size="22" autocapitalize="none" placeholder="почта@компании"'+(self ? ' disabled title="Свою почту не сменить — так не потерять вход"' : '')+'></td>'
+        (YA ? '<td class="l"><input type="email" value="'+esc(t.email||'')+'" data-p="'+p+'" data-f="email" aria-label="Почта" size="22" autocapitalize="none" placeholder="почта@компании"'+(self ? ' disabled title="Свою почту не сменить — так не потерять вход"' : '')+'></td>'
           : '<td class="l"><input type="text" value="'+esc(t.login||'')+'" data-p="'+p+'" data-f="login" aria-label="Логин" size="14" autocapitalize="none" placeholder="задайте логин"></td>') +
         '<td class="l"><input type="checkbox" data-p="'+p+'" data-f="admin" aria-label="Администратор"'+(t.admin ? ' checked' : '')+(self ? ' disabled title="Свои права снять нельзя"' : '')+'></td>' +
         '<td class="l"><input type="checkbox" data-p="'+p+'" data-f="recruiter" aria-label="Вносит метрики"'+(t.recruiter !== false ? ' checked' : '')+'></td>' +
-        '<td class="l"><span class="pill '+(canLogin(t) ? 'active' : 'long')+'">'+(CLOUD ? (t.email ? 'через Яндекс' : 'нет почты') : t.hash ? 'есть пароль' : 'нет пароля')+'</span></td>' +
-        '<td><div class="row-actions">'+(CLOUD ? '' : '<button class="btn ghost sm" data-act="reset" data-p="'+p+'"'+(t.login ? '' : ' disabled title="Сначала задайте логин"')+'>'+(t.hash ? 'Новый пароль' : 'Выдать пароль')+'</button>') +
+        '<td class="l"><span class="pill '+(canLogin(t) ? 'active' : 'long')+'">'+(YA ? (t.email ? 'через Яндекс' : 'нет почты') : t.hash ? 'есть пароль' : 'нет пароля')+'</span></td>' +
+        '<td><div class="row-actions">'+(YA ? '' : '<button class="btn ghost sm" data-act="reset" data-p="'+p+'"'+(t.login ? '' : ' disabled title="Сначала задайте логин"')+'>'+(t.hash ? 'Новый пароль' : 'Выдать пароль')+'</button>') +
           (self ? '' : '<button class="btn danger sm" data-act="archive" data-p="'+p+'">В архив</button>')+'</div></td></tr>';
     }).join('') + '</tbody>';
   $('tArchivePanel').hidden = !arch.length;
   $('tArchive').innerHTML = '<thead><tr><th>Имя</th><th class="l">Логин</th><th class="l">Роль</th><th>Дней с метриками</th><th>В архиве с</th><th></th></tr></thead><tbody>' +
     arch.map(function(p){
       var t = team[p], n = dates().filter(function(d){ return byDate[d][p]; }).length;
-      return '<tr class="off"><td>'+esc(t.name)+'</td><td class="l">'+esc((CLOUD ? t.email : t.login)||'—')+'</td><td class="l">'+roleText(t)+'</td><td>'+n+'</td><td>'+shortDate(t.archivedAt)+'</td>' +
+      return '<tr class="off"><td>'+esc(t.name)+'</td><td class="l">'+esc((YA ? t.email : t.login)||'—')+'</td><td class="l">'+roleText(t)+'</td><td>'+n+'</td><td>'+shortDate(t.archivedAt)+'</td>' +
         '<td><div class="row-actions"><button class="btn ghost sm" data-act="restore" data-p="'+p+'">Вернуть</button></div></td></tr>';
     }).join('') + '</tbody>';
 }
@@ -1807,10 +1815,10 @@ function teamEdit(e){
 }
 function addUser(e){
   e.preventDefault();
-  var name = $('tName').value.trim(), login = norm($('tLogin').value), pw = newPassword(), bad = CLOUD ? emailError(login) : loginError(login);
+  var name = $('tName').value.trim(), login = norm($('tLogin').value), pw = newPassword(), bad = YA ? emailError(login) : loginError(login);
   if(bad){ tStat(esc(bad), true); return; }
   var id = 'p' + Date.now().toString(36);
-  if(CLOUD){
+  if(YA){
     var cr = {name:name, surname:$('tSurname').value.trim(), email:login, order:allPeople().length + 1, admin:$('tAdmin').checked, recruiter:$('tRecr').checked, since:today()}, cn = Object.assign({}, team); cn[id] = cr;
     saveTeam(cn).then(function(){ tStat('Добавлен(а) ' + esc(name) + ' (' + roleText(cr) + '): входит через Яндекс с почтой ' + esc(login) + '.'); $('tUserForm').reset(); },
                      function(err){ tStat(esc(writeError(err)), true); });
@@ -1859,6 +1867,11 @@ function login(e){
   e.preventDefault();
   var l = norm($('lLogin').value), pw = $('lPass').value, err = $('lErr');
   err.textContent = '';
+  if(LOCAL){
+    fetch('/api/plogin', {method:'POST', headers:{'X-HR':'1', 'Content-Type':'application/json'}, body:JSON.stringify({login:l, password:pw})})
+      .then(function(r){ return r.json().then(function(j){ if(r.ok) location.reload(); else err.textContent = j.error || 'Не получилось войти.'; }); }, function(){ err.textContent = 'Программа на этом ПК не отвечает — запустите её снова.'; });
+    return;
+  }
   if(!db){ err.textContent = 'База недоступна.'; return; }
   var pid = Object.keys(team).filter(function(p){ return team[p].login === l; })[0];
   (!pid ? Promise.resolve(null) : team[pid].archived ? Promise.resolve('archived') :
@@ -1887,7 +1900,7 @@ function logout(){
 }
 // Сессия жива, пока учётная запись есть и не отключена (в облаке это проверяет и сервер — на каждом запросе)
 function validSession(){ var t = me(); return !!(t && !t.archived && (CLOUD || t.hash)); }
-function canLogin(t){ return CLOUD ? !!t.email : !!t.hash; }
+function canLogin(t){ return YA ? !!t.email : !!t.hash; }
 
 // ---------- маршрутизация ----------
 var TABS = {
@@ -1901,6 +1914,13 @@ function inSettings(v){ return isAdmin() && SETTINGS.indexOf(v) >= 0; }
 function route(){
   if(!teamLoaded) return;   // ждём базу
   if(session && !validSession()){ session = null; store('hrSession', null); }
+  if(!session && LOCAL){   // вход по паролю проверяет программа на этом ПК; пустая база — сначала загрузить данные
+    $('yaLogin').hidden = $('bootForm').hidden = $('bootWait').hidden = true;
+    $('loginForm').hidden = localEmpty; $('lImport').hidden = !localEmpty;
+    $('tabs').innerHTML = ''; $('me').hidden = true;
+    showView('login');
+    return;
+  }
   if(!session && CLOUD){
     $('loginForm').hidden = $('bootForm').hidden = $('bootWait').hidden = true; $('yaLogin').hidden = false;
     $('tabs').innerHTML = ''; $('me').hidden = true;
@@ -2083,7 +2103,8 @@ function cloudDb(){
         return r.json().then(function(j){ if(!r.ok) throw {code:r.status === 403 ? 'permission_denied' : 'unavailable', message:j.error}; return j; });
       });
   }
-  function snapDoc(path){ var d = cache[path]; return {id:path.split('/').pop(), exists:!!d, data:function(){ return d; }}; }
+  // копия: страница может менять полученное на месте, а cache — это «как было», от него считается правка
+  function snapDoc(path){ var d = cache[path]; return {id:path.split('/').pop(), exists:!!d, data:function(){ return d ? JSON.parse(JSON.stringify(d)) : d; }}; }
   function snapColl(c){ var docs = Object.keys(cache).filter(function(p){ return p.indexOf(c + '/') === 0; }).sort().map(snapDoc); return {docs:docs, size:docs.length, empty:!docs.length}; }
   function fire(s){ s.seen = true; s.cb(s.doc ? snapDoc(s.doc) : snapColl(s.coll)); }
   function sync(full){
@@ -2102,14 +2123,15 @@ function cloudDb(){
       subs.forEach(function(s){ if(full || changed.some(function(p){ return s.doc ? p === s.doc : p.indexOf(s.coll + '/') === 0; })) fire(s); });
     });
   }
-  function schedule(){ clearTimeout(timer); timer = setTimeout(function(){ (document.hidden ? Promise.resolve() : sync().catch(function(){})).then(schedule); }, 60000); }
+  function schedule(){ clearTimeout(timer); timer = setTimeout(function(){ (document.hidden ? Promise.resolve() : sync().catch(function(){})).then(schedule); }, LOCAL ? 2000 : 60000); }
   document.addEventListener('visibilitychange', function(){ if(!document.hidden && first) sync().catch(function(){}); });
   function sub(s){
     subs.push(s);
     (first || (first = sync(true).then(schedule))).then(function(){ if(!s.seen) fire(s); }, s.err || function(){});
     return function(){ subs = subs.filter(function(x){ return x !== s; }); };
   }
-  function write(path, op, data){ return req('POST', '/api/doc', {path:path, op:op, data:data}).then(function(){ return sync(); }); }
+  // base — документ, как его видела страница: сервер применит только сделанные здесь изменения
+  function write(path, op, data){ return req('POST', '/api/doc', {path:path, op:op, data:data, base:cache[path] || null}).then(function(){ return sync(); }); }
   function doc(path){
     return {id:path.split('/').pop(), path:path,
       get:function(){ return Promise.resolve(snapDoc(path)); },
@@ -2122,7 +2144,11 @@ function cloudDb(){
   }};
 }
 function cloudStart(){
-  $('offline').textContent = 'Сервер недоступен — данные не загрузились. Обновите страницу через минуту.';
+  $('offline').textContent = LOCAL ? 'Программа на этом ПК не отвечает — запустите «Запустить HR-метрики» снова.' : 'Сервер недоступен — данные не загрузились. Обновите страницу через минуту.';
+  if(LOCAL) return fetch('/api/me', {credentials:'same-origin'}).then(function(r){ return r.json().then(function(j){ return r.ok ? j : (localEmpty = !!j.empty, null); }); }).then(function(m){
+    session = m ? {id:m.pid} : null;
+    return session ? cloudDb() : null;
+  });
   $('yaBtn').onclick = function(){ location.href = '/api/login'; };
   var why = (location.search.match(/[?&]login=(\w+)/) || [])[1];
   if(why){
@@ -2151,7 +2177,7 @@ function backupDocs(){
   return docs;
 }
 function bStatus(t, err){ $('bStat').className = 'status' + (err ? ' err' : ''); $('bStat').textContent = t; }
-function renderBackup(){ $('bImportPanel').hidden = !CLOUD; }
+function renderBackup(){ $('bImportPanel').hidden = !YA; }
 $('bExport').onclick = function(){
   var docs = backupDocs(), name = 'hr-metrics-' + today() + '.json', data = JSON.stringify({format:'hr-metrics', at:new Date().toISOString(), docs:docs});
   var done = 'Скачано документов: ' + Object.keys(docs).length + '.';
@@ -2226,6 +2252,18 @@ buildForm();
 $('tabs').onclick = $('subTabs').onclick = function(e){ var b = e.target.closest('button[data-view]'); if(b) showView(b.dataset.view); };
 $('logout').onclick = logout;
 $('loginForm').onsubmit = login;
+// локальная версия, первый запуск: данные из версии для ПК (HTML) или резервной копии (JSON)
+$('lImportFile').onchange = function(){
+  var f = this.files[0], err = $('lImportErr'); this.value = ''; if(!f) return;
+  err.textContent = 'Загружаю…';
+  f.text().then(function(t){
+    var a = t.indexOf('var SEED = '), z = t.indexOf(';\n  var TEMPLATE = ');
+    var docs = a >= 0 && z > a ? JSON.parse(t.slice(a + 11, z)).data : JSON.parse(t).docs;
+    if(!docs || !docs['config/team']) throw new Error('bad');
+    return fetch('/api/import-initial', {method:'POST', headers:{'X-HR':'1', 'Content-Type':'application/json'}, body:JSON.stringify({docs:docs})})
+      .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error); }); });
+  }).then(function(){ location.reload(); }, function(e){ err.textContent = e.message && e.message !== 'bad' && e.name !== 'SyntaxError' ? e.message : 'Это не файл HR-метрик.'; });
+};
 $('bootForm').onsubmit = bootstrap;
 $('dDate').onchange = function(){ if(this.value){ state.date = this.value; renderDay(); } };
 $('dTrend').onclick = function(e){ var b = e.target.closest('[data-trend]'); if(b){ state.trend = +b.dataset.trend; renderDay(); } };

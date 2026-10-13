@@ -8,7 +8,7 @@ const path = require('path');
 const APP = fs.existsSync(path.join(__dirname, 'app')) ? './app' : '../cloud/function';
 if (APP !== './app' && !process.env.PAGE_SRC) process.env.PAGE_SRC = path.join(__dirname, '..', 'src', 'hr-metrics.html');
 const { create, config } = require(APP + '/index');
-const { sqliteStore } = require(APP + '/store');
+const { sqliteStore, dailyBackup } = require(APP + '/store');
 
 const DATA = process.env.DATA_DIR || '/data', PORT = +process.env.PORT || 8080, KEEP = +process.env.BACKUP_KEEP_DAYS || 30;
 const MAX_BODY = 4 * 1024 * 1024;
@@ -32,19 +32,6 @@ http.createServer((req, res) => {
   });
 }).listen(PORT, () => console.log('HR-метрики слушают порт ' + PORT));
 
-// ночная копия: раз в сутки файл hr-ГГГГ-ММ-ДД.json, старше KEEP дней — удаляются
-async function backup() {
-  const dir = path.join(DATA, 'backups'), day = new Date().toISOString().slice(0, 10), file = path.join(dir, 'hr-' + day + '.json');
-  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  if (!fs.existsSync(file)) {
-    const docs = {};
-    (await store.changes(0)).forEach(d => { if (d.data !== null) docs[d.path] = d.data; });
-    fs.writeFileSync(file + '.tmp', JSON.stringify({ format: 'hr-metrics', at: new Date().toISOString(), docs }), { mode: 0o600 });
-    fs.renameSync(file + '.tmp', file);
-    console.log('копия: ' + file + ' (' + Object.keys(docs).length + ' документов)');
-  }
-  const old = Date.now() - KEEP * 864e5;
-  fs.readdirSync(dir).filter(f => /^hr-\d{4}-\d{2}-\d{2}\.json$/.test(f) && Date.parse(f.slice(3, 13)) < old).forEach(f => fs.unlinkSync(path.join(dir, f)));
-}
-const runBackup = () => backup().catch(e => console.error('копия не сделана:', e.message));
+// ночная копия: раз в сутки файл hr-ГГГГ-ММ-ДД.json в DATA_DIR/backups, старше KEEP дней — удаляются
+const runBackup = () => dailyBackup(store, path.join(DATA, 'backups'), KEEP).catch(e => console.error('копия не сделана:', e.message));
 runBackup(); setInterval(runBackup, 3600e3);

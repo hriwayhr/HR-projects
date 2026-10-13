@@ -20,16 +20,17 @@ function config(env = process.env) {
     baseUrl: String(env.BASE_URL || '').replace(/\/$/, ''),
     clientId: env.OAUTH_CLIENT_ID, clientSecret: env.OAUTH_CLIENT_SECRET, sessionSecret: env.SESSION_SECRET,
     domains: list(env.ALLOWED_DOMAINS), admins: list(env.ADMIN_EMAILS), bucket: env.BACKUP_BUCKET,
+    local: env.LOCAL === '1',   // локальная версия: сервер на этом ПК, вход по логину и паролю из «Команды»
   };
 }
 
 // Страница — src/hr-metrics.html как есть; здесь она получает документ и флаг облачного режима
 let PAGE = null;
-function pageHtml() {
+function pageHtml(local) {
   if (!PAGE) {
     const raw = fs.readFileSync(process.env.PAGE_SRC || path.join(__dirname, 'static', 'page.html'), 'utf8');
     PAGE = '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>' +
-      '<script>window.HR_CLOUD = true;</script>' + raw + '</body></html>';
+      '<script>window.' + (local ? 'HR_LOCAL' : 'HR_CLOUD') + ' = true;</script>' + raw + '</body></html>';
   }
   return PAGE;
 }
@@ -52,9 +53,9 @@ function respond(status, body, headers = {}, extra = {}) {
 const json = (status, body) => respond(status, body);
 const redirect = (to, cookies) => respond(302, '', { Location: to }, cookies ? { multiValueHeaders: { 'Set-Cookie': cookies } } : {});
 
-function page() {
+function page(local) {
   const nonce = crypto.randomBytes(16).toString('base64');
-  const html = pageHtml().replace(/<script>/g, '<script nonce="' + nonce + '">');
+  const html = pageHtml(local).replace(/<script>/g, '<script nonce="' + nonce + '">');
   return respond(200, html, {
     'Content-Type': 'text/html; charset=utf-8',
     'Content-Security-Policy': "default-src 'none'; script-src 'nonce-" + nonce + "'; style-src 'unsafe-inline'; img-src 'self' data:; font-src data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
@@ -67,7 +68,7 @@ async function currentUser(cfg, store, headers) {
   const email = auth.sessionEmail(cfg.sessionSecret, headers);
   if (!email) return null;
   const team = await store.get('config/team');
-  const user = acl.userByEmail((team || {}).people, email);
+  const user = acl.userByEmail((team || {}).people, email, cfg.local ? 'login' : 'email');
   return user ? Object.assign(user, { people: (team || {}).people || {} }) : null;
 }
 
@@ -109,12 +110,30 @@ async function sync(user, store, since) {
   return { ver: docs.reduce((m, d) => Math.max(m, d.ver), since), docs: docs.filter(d => since || d.data !== null).map(d => ({ path: d.path, data: d.data })) };
 }
 
+// Слияние трёх версий: base — документ, как его видела страница до правки, mine — с правкой, theirs — сейчас в базе.
+// Применяется только то, что человек поменял: поля, которые за это время поменял коллега, не затираются.
+const isObj = o => o !== null && typeof o === 'object' && !Array.isArray(o);
+const canon = o => isObj(o) ? '{' + Object.keys(o).sort().map(k => JSON.stringify(k) + ':' + canon(o[k])).join(',') + '}' : Array.isArray(o) ? '[' + o.map(canon).join(',') + ']' : JSON.stringify(o === undefined ? null : o);
+const same = (a, b) => (a === undefined) === (b === undefined) && canon(a) === canon(b);
+function merge3(b, m, t) {
+  if (same(m, b)) return t;
+  if (same(t, b) || same(t, m)) return m;
+  if (isObj(m) && isObj(t)) {
+    const bo = isObj(b) ? b : {}, out = {};
+    new Set(Object.keys(bo).concat(Object.keys(m), Object.keys(t))).forEach(k => { const v = merge3(bo[k], m[k], t[k]); if (v !== undefined) out[k] = v; });
+    return out;
+  }
+  return m;   // одно и то же поле поменяли оба — побеждает эта правка
+}
+
 async function write(user, store, body) {
   const { path: p, op, data } = body || {};
   if (typeof p !== 'string' || !['set', 'update', 'delete'].includes(op)) return json(400, { error: 'Неверный запрос.' });
   let err = '';
   const ver = await store.tx(p, prev => {
-    let next = op === 'delete' ? null : op === 'update' ? Object.assign({}, prev || {}, data) : data;
+    let next = op === 'delete' ? null : op === 'update' ? Object.assign({}, prev || {}, data)
+      : 'base' in body ? merge3(body.base === null ? undefined : body.base, data, prev === null ? undefined : prev) : data;
+    if (next === undefined) next = null;
     if (op === 'update' && !prev) { err = 'Документа нет.'; return undefined; }
     if (next && typeof next === 'object') next = JSON.parse(JSON.stringify(next));   // только JSON, без прототипов
     err = acl.writeError(user, p, prev, next, user.people);
@@ -136,26 +155,52 @@ async function backup(cfg, store, context, fetchFn = fetch) {
   return { statusCode: 200, body: key + ': ' + Object.keys(docs).length };
 }
 
+// ---------- локальная версия: вход по паролю и первичная загрузка данных ----------
+// Пароль — тот же SHA-256(salt + '::' + пароль), что выдаёт «Команда»; проверяет сервер, страница хешей не получает.
+async function passwordLogin(cfg, store, b) {
+  const people = ((await store.get('config/team')) || {}).people || {}, login = acl.norm(b.login);
+  const pid = Object.keys(people).find(p => acl.norm(people[p].login) === login), t = pid && people[pid];
+  const want = Buffer.from(String((t && t.hash) || '')), got = Buffer.from(crypto.createHash('sha256').update(String((t && t.salt) || '') + '::' + String(b.password || '')).digest('hex'));
+  if (!t || !t.hash || want.length !== got.length || !crypto.timingSafeEqual(want, got)) {
+    await new Promise(r => setTimeout(r, 400));             // перебор паролей — медленно
+    return json(401, { error: 'Неверный логин или пароль.' });
+  }
+  if (t.archived) return json(403, { error: 'Учётная запись в архиве — обратитесь к администратору.' });
+  return respond(200, { ok: true }, {}, { multiValueHeaders: { 'Set-Cookie': [auth.sessionCookie(cfg.sessionSecret, login)] } });
+}
+// Только в пустую базу: данные из версии для ПК или резервной копии; нужен администратор с паролем
+async function importInitial(store, b) {
+  if ((await store.count()) > 0) return json(403, { error: 'В папке уже есть данные.' });
+  const docs = b.docs, people = ((docs || {})['config/team'] || {}).people || {};
+  if (!Object.keys(people).some(p => people[p].admin && people[p].login && people[p].hash && !people[p].archived))
+    return json(400, { error: 'В файле нет администратора с паролем — загрузите версию для ПК «HR-метрики.html».' });
+  const paths = Object.keys(docs).filter(p => acl.PATH_RE.test(p) && docs[p] && typeof docs[p] === 'object' && !Array.isArray(docs[p]));
+  for (const p of paths) await store.tx(p, () => JSON.parse(JSON.stringify(docs[p])), 'import');
+  return json(200, { ok: true, docs: paths.length });
+}
+
 function makeHandler(store, cfg, fetchFn) {
   return async function handler(event, context) {
     try {
       if (event && (event.messages || (event.event_metadata && /Timer/.test(event.event_metadata.event_type || '')))) return await backup(cfg, store, context, fetchFn);
       // API Gateway: в url — настоящий адрес запроса, в path — шаблон маршрута ("/{proxy+}")
       const method = event.httpMethod, url = String(event.url || event.path || '/').split('?')[0], headers = event.headers || {}, query = event.queryStringParameters || {};
-      if (method === 'GET' && url === '/') return page();
-      if (method === 'GET' && url === '/api/login') return auth.loginRedirect(cfg);
-      if (method === 'GET' && url === '/api/callback') return await callback(cfg, store, query, headers, fetchFn);
+      if (method === 'GET' && url === '/') return page(cfg.local);
+      if (!cfg.local && method === 'GET' && url === '/api/login') return auth.loginRedirect(cfg);
+      if (!cfg.local && method === 'GET' && url === '/api/callback') return await callback(cfg, store, query, headers, fetchFn);
       if (!url.startsWith('/api/')) return respond(404, 'Не найдено');
       // запись — только со своей страницы: свой заголовок кросс-доменный сайт без разрешения CORS не пошлёт
       if (method !== 'GET' && auth.headerOf(headers, 'x-hr') !== '1') return json(403, { error: 'Запрос не со страницы приложения.' });
+      const body = () => { try { return JSON.parse(event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || ''); } catch (e) { return null; } };
+      if (cfg.local && method === 'POST' && url === '/api/plogin') return await passwordLogin(cfg, store, body() || {});
+      if (cfg.local && method === 'POST' && url === '/api/import-initial') return await importInitial(store, body() || {});
       const user = await currentUser(cfg, store, headers);
-      if (!user) return json(401, { error: 'Нужно войти.' });
+      if (!user) return json(401, { error: 'Нужно войти.', empty: cfg.local ? (await store.count()) === 0 : undefined });
       if (method === 'GET' && url === '/api/me') return json(200, { pid: user.pid, email: user.email, admin: user.admin });
       if (method === 'GET' && url === '/api/sync') return json(200, await sync(user, store, Math.max(0, Number(query.since) || 0)));
       if (method === 'POST' && url === '/api/doc') {
-        let body;
-        try { body = JSON.parse(event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || ''); } catch (e) { return json(400, { error: 'Неверный JSON.' }); }
-        return await write(user, store, body);
+        const b = body();
+        return b ? await write(user, store, b) : json(400, { error: 'Неверный JSON.' });
       }
       return json(404, { error: 'Не найдено.' });
     } catch (e) {

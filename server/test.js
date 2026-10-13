@@ -5,7 +5,7 @@ const assert = require('node:assert');
 const { spawn } = require('child_process');
 const fs = require('fs'); const os = require('os'); const path = require('path');
 
-test('сервер: страница, защита, вход через Яндекс, копия', async () => {
+test('сервер: страница, защита, вход через Яндекс', async () => {
   const data = fs.mkdtempSync(path.join(os.tmpdir(), 'hr-srv-'));
   const env = Object.assign({}, process.env, { DATA_DIR: data, PORT: '8799', BASE_URL: 'https://hr.example.ru', ALLOWED_DOMAINS: 'example.ru',
     ADMIN_EMAILS: 'boss@example.ru', OAUTH_CLIENT_ID: 'id', OAUTH_CLIENT_SECRET: 'sec', SESSION_SECRET: 's'.repeat(48), NODE_NO_WARNINGS: '1' });
@@ -22,9 +22,7 @@ test('сервер: страница, защита, вход через Янде
     const login = await fetch(base + '/api/login', { redirect: 'manual' });
     assert.match(login.headers.get('location'), /^https:\/\/oauth\.yandex\.ru\/authorize\?.*redirect_uri=https%3A%2F%2Fhr\.example\.ru%2Fapi%2Fcallback/);
     assert.equal((await fetch(base + '/api/doc', { method: 'POST', body: 'x'.repeat(5 * 1024 * 1024) }).catch(() => ({ status: 413 }))).status, 413);
-    const files = fs.readdirSync(path.join(data, 'backups'));
-    assert.equal(files.length, 1); assert.match(files[0], /^hr-\d{4}-\d{2}-\d{2}\.json$/);
-    assert.equal((fs.statSync(path.join(data, 'backups', files[0])).mode & 0o777).toString(8), '600');
+    assert.deepEqual(fs.readdirSync(path.join(data, 'backups')), []);   // пустую базу не копируем
   } finally { p.kill(); }
   // без настроек сервер не стартует
   const bad = spawn(process.execPath, [path.join(__dirname, 'server.js')], { env: Object.assign({}, process.env, { DATA_DIR: data, SESSION_SECRET: '' }) });
