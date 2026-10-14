@@ -27,7 +27,7 @@ function userByEmail(people, email, field = 'email') {
   return { pid, email: e, admin: !!people[pid].admin, field };
 }
 
-const PUBLIC_PERSON = ['name', 'surname', 'order', 'admin', 'recruiter', 'archived', 'archivedAt', 'since'];
+const PUBLIC_PERSON = ['name', 'surname', 'order', 'admin', 'recruiter', 'archived', 'archivedAt', 'since', 'syncFrom'];
 
 // Что пользователь увидит из документа; null — ничего
 function readable(user, path, data, people) {
