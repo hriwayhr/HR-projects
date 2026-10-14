@@ -1423,7 +1423,9 @@ function offersOf(v){
 }
 function openSeats(v){ return v.seats.filter(function(x){ return !x.startAt; }); }
 function seatStart(v, x){ return x.requestedAt || vacStart(v); }
-function needOf(v){ return isMulti(v) ? openSeats(v).length : (num(v.rate) ? v.rate : 1); }
+// «не актуальна» и «архив» — никого не ищем: незакрытые единицы не считаются ставками, которые нужно закрыть
+var NOT_HIRING = {'не актуальна':1, 'архив':1};
+function needOf(v){ return NOT_HIRING[v.status] ? 0 : isMulti(v) ? openSeats(v).length : (num(v.rate) ? v.rate : 1); }
 // Закрытые единицы для скорости закрытия: у обычной вакансии — она сама, у многоставочной — каждая вышедшая
 function closedUnits(v){
   if(isMulti(v)) return v.seats.filter(function(x){ return x.startAt && seatStart(v, x); })
@@ -1651,12 +1653,12 @@ function readSeats(){
 }
 function setSeats(list){ $('vSeats').innerHTML = list.map(seatRow).join(''); seatSummary(); }
 function seatSummary(){
-  var all = readSeats(), open = all.filter(function(x){ return !x.startAt; }).length;
-  $('vSeatSum').textContent = 'Всего ' + all.length + ', в поиске ' + open + ', закрыто ' + (all.length - open);
+  var all = readSeats(), open = all.filter(function(x){ return !x.startAt; }).length, idle = NOT_HIRING[$('v_status').value];
+  $('vSeatSum').textContent = 'Всего ' + all.length + ', в поиске ' + (idle ? 0 : open) + ', закрыто ' + (all.length - open) + (idle && open ? ', не ищем ' + open + ' (вакансия «' + $('v_status').value + '»)' : '');
   document.querySelectorAll('#vSeats .seat').forEach(function(el, i){
     var done = !!el.querySelector('.s-startAt').value, pill = el.querySelector('.pill');
     el.querySelector('.seat-n').textContent = 'Единица ' + (i + 1);
-    pill.className = 'pill ' + (done ? 'hire' : 'active'); pill.textContent = done ? 'закрыта — сотрудник вышел' : 'в поиске';
+    pill.className = 'pill ' + (done ? 'hire' : idle ? '' : 'active'); pill.textContent = done ? 'закрыта — сотрудник вышел' : idle ? 'не ищем' : 'в поиске';
     el.querySelector('.s-pubWrap').classList.toggle('hide', el.querySelector('.s-pub').checked);
   });
 }
@@ -1679,7 +1681,7 @@ function registryDay(p, d){
       if(!openOn(sp[0], sp[1], d, eod)) return;
       var sfx = eod ? '_end' : '_start';
       links.forEach(function(l){ if(linkOpen(l, sp[0], d, eod) && !seen[sfx][l.url]){ seen[sfx][l.url] = 1; r['vac' + sfx]++; } });
-      r['cand' + sfx] += isMulti(v) ? v.seats.filter(function(x){ return openOn(seatStart(v, x), x.startAt, d, eod); }).length : needOf(v);
+      if(!NOT_HIRING[v.status]) r['cand' + sfx] += isMulti(v) ? v.seats.filter(function(x){ return openOn(seatStart(v, x), x.startAt, d, eod); }).length : needOf(v);
     });
     links.forEach(function(l){ if((l.at || sp[0]) === d && !seen.pub[l.url]){ seen.pub[l.url] = 1; r.vac_published++; } });
   });
@@ -1739,7 +1741,7 @@ function saveVac(e){
   if(lastArch) v.archivedAt = lastArch;
   if(links.length) v.extensions = links.reduce(function(s, l){ return s + (l.ext || 0); }, 0);
   var open = seats.filter(function(x){ return !x.startAt; }).length;
-  v.multi = true; v.seats = seats; v.rate = open;
+  v.multi = true; v.seats = seats; v.rate = NOT_HIRING[v.status] ? 0 : open;
   // статус следует за единицами: все вышли — «выход сотрудника», появилась новая — снова «активна»
   if(!open && v.status === 'активна') v.status = 'выход сотрудника';
   if(open && v.status === 'выход сотрудника') v.status = 'активна';
@@ -2342,6 +2344,7 @@ $('vSeatAdd').onclick = function(){
   $('vSeats').lastElementChild.querySelector('input').focus();
 };
 $('vSeats').onclick = function(e){ var b = e.target.closest('[data-del-seat]'); if(b){ b.closest('.seat').remove(); seatSummary(); } };
+$('v_status').onchange = seatSummary;   // «не актуальна» — единицы «не ищем»
 $('vSeats').onchange = function(e){ if(e.target.classList.contains('s-pub')) seatPubToggle(e.target); else seatSummary(); };
 $('vLinkAdd').onclick = function(){ $('vLinks').insertAdjacentHTML('beforeend', linkRow(null)); $('vLinks').lastElementChild.querySelector('input').focus(); syncPubFields(); };
 $('vLinks').onclick = function(e){

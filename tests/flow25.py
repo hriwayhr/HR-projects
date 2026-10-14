@@ -153,6 +153,14 @@ with sync_playwright() as p:
     pg.wait_for_timeout(300)
     after = pg.evaluate("registryDay('yulia', '2026-10-07')")
     assert after['vac_end'] == before['vac_end'] + 1 and after['cand_end'] == before['cand_end'] + 2, (before, after)
+    # «не актуальна»: незакрытые единицы не считаются — ни в «нужно людей», ни в вакантных ставках
+    before = pg.evaluate("registryDay('yulia', '2026-10-07')")
+    pg.click('#vAdd'); pg.fill('#v_title', 'Не ищем'); pg.fill('#v_manager', 'Немчинова'); pg.select_option('#v_status', 'не актуальна')
+    assert pg.inner_text('#vSeats .pill') == 'не ищем' and 'в поиске 0' in pg.inner_text('#vSeatSum'), pg.inner_text('#vSeatSum')
+    pg.click('#vSave'); pg.wait_for_timeout(300); pg.click('#vCancel')
+    nv = [v for k, v in pg.evaluate('window.__store').items() if k.startswith('vacancies/') and v.get('title') == 'Не ищем'][0]
+    assert nv['rate'] == 0 and pg.evaluate("registryDay('yulia', '2026-10-07')")['cand_end'] == before['cand_end'], nv
+    assert pg.evaluate("needOf(Object.values(vacancies).find(v => v.title === 'Не ищем'))") == 0
     # фильтр «активна» показывает и «не актуальные» с висящей публикацией на hh.ru; со снятой или истёкшей — нет
     for vid, closed, stopped in (('n1', '2026-11-01', False), ('n2', '2026-10-01', False), ('n3', '2026-10-07', True)):
         pg.evaluate("claude.use('db').then(db => db.doc('vacancies/%s').set({title: 'Неакт %s', manager: 'Немчинова', status: 'не актуальна', links: [{url: 'https://hh.ru/%s', at: '2026-09-01', closedAt: '%s'%s}]}))" % (vid, vid, vid, closed, ', stopped: true' if stopped else ''))
