@@ -1469,8 +1469,11 @@ function renderVac(){
     tile('Потрачено на hh.ru', null, null, {text:rub(st.spent), note:'на вакансии в работе: ' + rub(st.spentActive)});
 
   var q = norm($('vSearch').value), fs = $('vStatus').value, fm = $('vManager').value;
+  // «активна» — ещё и «не актуальные», у которых публикация на hh.ru пока висит: её надо снять или продолжить
+  function livePub(v){ return linkObjs(v).some(function(l){ return !l.stopped && linkOpen(l, vacStart(v), today(), true); }); }
+  function statusOk(v){ return !fs || (v.status || '') === fs || (fs === 'активна' && v.status === 'не актуальна' && livePub(v)); }
   var list = all.filter(function(v){
-    return (!q || norm(v.title + ' ' + v.dept + ' ' + (v.customer || '')).indexOf(q) >= 0) && (!fs || (v.status || '') === fs) && (!fm || managerLabel(v) === fm);
+    return (!q || norm(v.title + ' ' + v.dept + ' ' + (v.customer || '')).indexOf(q) >= 0) && statusOk(v) && (!fm || managerLabel(v) === fm);
   }).sort(function(a, b){
     return (isActive(a) ? 0 : 1) - (isActive(b) ? 0 : 1) || (vacStart(b) || '').localeCompare(vacStart(a) || '');
   });
