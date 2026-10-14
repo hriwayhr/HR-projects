@@ -122,7 +122,7 @@ with sync_playwright() as p:
     # 6. вакансии: в работе 1 (нужно 2 человека), скорость (30+50)/2 = 40
     pg.click('#tab_vac'); pg.wait_for_timeout(200)
     vt = pg.inner_text('#vTiles')
-    assert 'вакансий в работе: 1' in vt and 'Нужно людей\n2' in vt and 'Скорость закрытия\n40' in vt and 'медиана 40' in vt, vt
+    assert 'вакансий в работе: 1' in vt and 'План найма\n2' in vt and 'Скорость закрытия\n40' in vt and 'медиана 40' in vt, vt
     pg.click('#vAdd'); pg.fill('#v_title', 'Тестировщик'); pg.fill('#v_manager', 'Шулятицкая'); pg.click('#vSave'); pg.wait_for_timeout(300)
     assert 'вакансий в работе: 2' in pg.inner_text('#vTiles')
     # «Шулятицкая» и «Катя Шулятицкая» — один ответственный: строка по пользователю, а не по тексту

@@ -1472,8 +1472,8 @@ function renderVac(){
   $('vManager').hidden = !!p;
   $('vByMgr').closest('.panel').hidden = !!p;
   $('vTiles').innerHTML =
-    tile('Публикаций в работе', livePubs(all).length, null, {hero:true, note:'вакансий в работе: ' + st.active + (st.active ? ' · дольше всех — ' + st.oldest + ' дн.' : '')}) +
-    tile('Нужно людей', st.need, null, {note:'по ставкам активных'}) +
+    tile('План найма', st.need, null, {hero:true, note:'человек нужно по активным вакансиям'}) +
+    tile('Публикаций в работе', livePubs(all).length, null, {note:'вакансий в работе: ' + st.active + (st.active ? ' · дольше всех — ' + st.oldest + ' дн.' : '')}) +
     tile('Скорость закрытия', st.mean, null, {suffix:' <small>дн.</small>', note: st.median !== null ? 'медиана ' + st.median + ' дн., закрыто ' + st.closed : 'нет закрытых с датами'}) +
     tile('Закрыто за 90 дней', st.recent, null, {note:'выход сотрудника или архив'}) +
     tile('Потрачено на hh.ru', null, null, {text:rub(st.spent), note:'на вакансии в работе: ' + rub(st.spentActive)});
