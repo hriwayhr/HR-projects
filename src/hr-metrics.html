@@ -1472,7 +1472,7 @@ function renderVac(){
   $('vManager').hidden = !!p;
   $('vByMgr').closest('.panel').hidden = !!p;
   $('vTiles').innerHTML =
-    tile('В работе', st.active, null, {hero:true, note: st.active ? 'дольше всех — ' + st.oldest + ' дн.' : 'активных нет'}) +
+    tile('Публикаций в работе', livePubs(all).length, null, {hero:true, note:'вакансий в работе: ' + st.active + (st.active ? ' · дольше всех — ' + st.oldest + ' дн.' : '')}) +
     tile('Нужно людей', st.need, null, {note:'по ставкам активных'}) +
     tile('Скорость закрытия', st.mean, null, {suffix:' <small>дн.</small>', note: st.median !== null ? 'медиана ' + st.median + ' дн., закрыто ' + st.closed : 'нет закрытых с датами'}) +
     tile('Закрыто за 90 дней', st.recent, null, {note:'выход сотрудника или архив'}) +
@@ -1480,7 +1480,7 @@ function renderVac(){
 
   var q = norm($('vSearch').value), fs = vacStatusSel(), fm = $('vManager').value;
   // «активна» — ещё и «не актуальные», у которых публикация на hh.ru пока висит: её надо снять или продолжить
-  function livePub(v){ return linkObjs(v).some(function(l){ return !l.stopped && linkOpen(l, vacStart(v), today(), true); }); }
+  function livePub(v){ return livePubs([v]).length > 0; }
   function statusOk(v){ return !fs.length || fs.indexOf(v.status || '') >= 0 || (fs.indexOf('активна') >= 0 && v.status === 'не актуальна' && livePub(v)); }
   var list = all.filter(function(v){
     return (!q || norm(v.title + ' ' + v.dept + ' ' + (v.customer || '')).indexOf(q) >= 0) && statusOk(v) && (!fm || managerLabel(v) === fm);
@@ -1575,6 +1575,15 @@ function addMonths(s, n){
   var d = parse(s), day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + n);
   d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate())); return iso(d);
 }
+// Публикация в работе на день d: у неё есть срок (дата архивации), он не вышел и её не сняли —
+// независимо от статуса вакансии. Старые ссылки без дат — только пока сама вакансия открыта.
+function pubLive(l, v, d, eod){
+  if(l.stopped && l.closedAt && (eod ? l.closedAt <= d : l.closedAt < d)) return false;
+  var sp = vacSpan(v);
+  return l.closedAt ? linkOpen(l, sp[0], d, eod) : openOn(sp[0], sp[1], d, eod) && linkOpen(l, sp[0], d, eod);
+}
+// Уникальные публикации в работе сегодня среди вакансий list (одна ссылка на несколько вакансий — одна)
+function livePubs(list){ var u = {}; list.forEach(function(v){ linkObjs(v).forEach(function(l){ if(l.url && l.closedAt && pubLive(l, v, today(), true)) u[l.url] = 1; }); }); return Object.keys(u); }
 function linkOpen(l, start, d, eod){ return openOn(l.at || start, l.closedAt, d, eod) && !(l.gaps || []).some(function(g){ return openOn(g[0], g[1], d, eod); }); }
 // expired — срок вышел (в день архивации публикация уже не висит), soon — до архивации ≤ 5 дней, nodate — дата не указана
 function linkState(l){
@@ -1678,9 +1687,9 @@ function registryDay(p, d){
     var v = vacancies[id]; if(vacOwner(v) !== p) return;
     var sp = vacSpan(v), links = linkObjs(v);
     [true, false].forEach(function(eod){
-      if(!openOn(sp[0], sp[1], d, eod)) return;
       var sfx = eod ? '_end' : '_start';
-      links.forEach(function(l){ if(linkOpen(l, sp[0], d, eod) && !seen[sfx][l.url]){ seen[sfx][l.url] = 1; r['vac' + sfx]++; } });
+      links.forEach(function(l){ if(pubLive(l, v, d, eod) && !seen[sfx][l.url]){ seen[sfx][l.url] = 1; r['vac' + sfx]++; } });
+      if(!openOn(sp[0], sp[1], d, eod)) return;
       if(!NOT_HIRING[v.status]) r['cand' + sfx] += isMulti(v) ? v.seats.filter(function(x){ return openOn(seatStart(v, x), x.startAt, d, eod); }).length : needOf(v);
     });
     links.forEach(function(l){ if((l.at || sp[0]) === d && !seen.pub[l.url]){ seen.pub[l.url] = 1; r.vac_published++; } });

@@ -164,8 +164,14 @@ with sync_playwright() as p:
     # фильтр «активна» показывает и «не актуальные» с висящей публикацией на hh.ru; со снятой или истёкшей — нет
     for vid, closed, stopped in (('n1', '2026-11-01', False), ('n2', '2026-10-01', False), ('n3', '2026-10-07', True)):
         pg.evaluate("claude.use('db').then(db => db.doc('vacancies/%s').set({title: 'Неакт %s', manager: 'Немчинова', status: 'не актуальна', links: [{url: 'https://hh.ru/%s', at: '2026-09-01', closedAt: '%s'%s}]}))" % (vid, vid, vid, closed, ', stopped: true' if stopped else ''))
+    pg.evaluate("claude.use('db').then(db => db.doc('vacancies/n4').set({title: 'Неакт n4', manager: 'Немчинова', status: 'не актуальна', link: 'https://hh.ru/old-nodate'}))")
     pg.wait_for_timeout(300); pg.evaluate("setVacStatus(['активна'])"); pg.wait_for_timeout(100)
-    vt = pg.inner_text('#vTable'); assert 'Неакт n1' in vt and 'Неакт n2' not in vt and 'Неакт n3' not in vt and 'x1' in vt, vt
+    vt = pg.inner_text('#vTable'); assert 'Неакт n1' in vt and 'Неакт n2' not in vt and 'Неакт n3' not in vt and 'Неакт n4' not in vt and 'x1' in vt, vt   # старая ссылка без дат — не «в работе»
+    # «Публикаций в работе»: уникальные действующие ссылки любых вакансий — shared одна, n1 (не актуальна) считается
+    live = pg.evaluate("livePubs(Object.values(vacancies))")
+    assert 'https://hh.ru/shared' in live and 'https://hh.ru/n1' in live and 'https://hh.ru/n2' not in live and 'https://hh.ru/n3' not in live and 'https://hh.ru/old-nodate' not in live, live
+    assert ('Публикаций в работе\n%d' % len(live)) in pg.inner_text('#vTiles'), pg.inner_text('#vTiles')
+    assert pg.evaluate("registryDay('yulia', '2026-10-07').vac_end") >= after['vac_end'] + 1   # n1 — у менеджера в работе, хоть вакансия и не актуальна
     pg.evaluate("setVacStatus(['не актуальна'])"); pg.wait_for_timeout(100); assert all(('Неакт ' + v) in pg.inner_text('#vTable') for v in ('n1', 'n2', 'n3'))
     # несколько статусов галочками: «активна» + «не актуальна» — все неактуальные и активные; снять всё — все статусы
     pg.click('#vStatusSum'); pg.uncheck('#vStatus input[value="не актуальна"]'); pg.check('#vStatus input[value="активна"]'); pg.check('#vStatus input[value="не актуальна"]'); pg.wait_for_timeout(100)
