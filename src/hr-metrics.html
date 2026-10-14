@@ -368,6 +368,8 @@
           <label class="f">Название<input type="text" id="v_title" required></label>
           <label class="f">Отдел<input type="text" id="v_dept" list="deptList"></label>
           <label class="f">Статус<select id="v_status"></select></label>
+          <label class="f">Причина открытия ставки<select id="v_reason"><option value="">—</option><option>новая ставка</option><option>увольнение сотрудника</option><option>замена сотрудника (резерв)</option></select></label>
+          <label class="f">Статус поиска<select id="v_search"><option value="">—</option><option>активный</option><option>поиск в резерв</option></select></label>
           <label class="f">Ответственный менеджер<input type="text" id="v_manager" list="mgrList"></label>
           <label class="f" id="vRateWrap">Ставка (сколько нужно человек)<input type="number" min="0" step="0.5" id="v_rate"></label>
           <label class="f">Заказчик (кто запросил вакансию)<input type="text" id="v_customer" list="custList" placeholder="Имя сотрудника"></label>
@@ -521,7 +523,7 @@ var BUILTIN = [
 var GROUPS = {start:'Начало дня', work:'Работа за день', end:'Итоги дня'};
 var VAC_STATUSES = ['активна', 'выход сотрудника', 'архив', 'не актуальна'];
 var CLOSED = {'выход сотрудника':1, 'архив':1};
-var VAC_FIELDS = ['title','dept','status','manager','customer','rate','requestedAt','publishedAt','archivedAt','closedAt','startAt','person','extensions','offersSent','offersAccepted','comment'];
+var VAC_FIELDS = ['title','dept','status','reason','search','manager','customer','rate','requestedAt','publishedAt','archivedAt','closedAt','startAt','person','extensions','offersSent','offersAccepted','comment'];
 var NUM_FIELDS = {rate:1, extensions:1, offersSent:1, offersAccepted:1};
 var LOGIN_RE = /^[a-z0-9._-]{2,40}$/;
 var MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];

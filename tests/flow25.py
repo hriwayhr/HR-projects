@@ -85,8 +85,10 @@ with sync_playwright() as p:
     # новая вакансия сегодня — сразу в ячейках сегодняшнего дня
     pg.click('#tab_vac'); pg.click('#vAdd'); pg.fill('#v_title', 'D'); pg.fill('#v_manager', 'Юлия Немчинова')
     pg.fill('#vLinks .v-link', 'https://hh.ru/5'); assert pg.input_value('#vLinks .v-link-at') == '2026-10-07'
+    pg.select_option('#v_reason', 'замена сотрудника (резерв)'); pg.select_option('#v_search', 'поиск в резерв')
     pg.click('#vSave'); pg.wait_for_timeout(300)
     d = [v for k, v in pg.evaluate('window.__store').items() if k.startswith('vacancies/') and v.get('title') == 'D'][0]
+    assert d['reason'] == 'замена сотрудника (резерв)' and d['search'] == 'поиск в резерв', d
     assert d['links'] == [{'url': 'https://hh.ru/5', 'at': '2026-10-07', 'closedAt': '2026-11-07'}] and d['archivedAt'] == '2026-11-07', d   # архивация через месяц
     assert pg.evaluate("byDate['2026-10-07'].yulia") == {'vac_start': 3, 'cand_start': 3, 'vac_end': 4, 'cand_end': 4, 'vac_published': 1}, pg.evaluate("byDate['2026-10-07'].yulia")
     # снятая публикация перестаёт считаться со дня снятия
