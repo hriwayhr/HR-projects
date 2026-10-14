@@ -517,8 +517,8 @@ var VAC_STATUSES = ['активна', 'выход сотрудника', 'арх
 var CLOSED = {'выход сотрудника':1, 'архив':1};
 var VAC_FIELDS = ['title','dept','status','manager','customer','comment'];
 // Единица найма: каждый человек, которого нужно нанять; закрыта успешно, когда есть дата выхода
-var SEAT_FIELDS = ['requestedAt','publishedAt','reason','search','offerSentAt','offerAcceptedAt','person','startAt'];
-var REASONS = ['новая ставка', 'увольнение сотрудника', 'переход сотрудника', 'замена сотрудника (резерв)'], SEARCHES = ['активный', 'поиск в резерв'];
+var SEAT_FIELDS = ['requestedAt','publishedAt','reason','search','source','offerSentAt','offerAcceptedAt','person','startAt'];
+var REASONS = ['новая ставка', 'увольнение сотрудника', 'переход сотрудника', 'замена сотрудника (резерв)'], SEARCHES = ['активный', 'поиск в резерв'], SOURCES = ['отклик', 'рекомендация сотрудника', 'холодный поиск', 'резерв'];
 var LOGIN_RE = /^[a-z0-9._-]{2,40}$/;
 var MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 var MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
@@ -1623,6 +1623,7 @@ function seatRow(x){
     f('Дата публикации вакансии', date('publishedAt'), 's-pubWrap' + (x.publishedAt ? '' : ' hide')) +
     f('Причина открытия', '<select class="s-reason">'+seatOptions(REASONS, x.reason)+'</select>') +
     f('Статус поиска', '<select class="s-search">'+seatOptions(SEARCHES, x.search)+'</select>') +
+    f('Источник поиска', '<select class="s-source">'+seatOptions(SOURCES, x.source)+'</select>') +
     f('Дата отправки оффера', date('offerSentAt')) + f('Дата принятия оффера', date('offerAcceptedAt')) +
     f('Кто вышел', '<input type="text" class="s-person" value="'+esc(x.person || '')+'" placeholder="Имя сотрудника">') + f('Дата выхода', date('startAt')) +
     '</div></div>';

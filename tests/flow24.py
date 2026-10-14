@@ -162,7 +162,7 @@ with sync_playwright() as p:
     pg.fill(s1 + '.s-requestedAt', ago(30)); assert pg.is_hidden(s1 + '.s-publishedAt')
     pg.check(s1 + '.s-pub'); assert pg.input_value(s1 + '.s-publishedAt') == dt.date.today().isoformat()   # без публикаций — сегодня
     pg.fill(s1 + '.s-publishedAt', ago(25))
-    pg.select_option(s1 + '.s-reason', 'увольнение сотрудника'); pg.select_option(s1 + '.s-search', 'активный')
+    pg.select_option(s1 + '.s-reason', 'увольнение сотрудника'); pg.select_option(s1 + '.s-search', 'активный'); pg.select_option(s1 + '.s-source', 'рекомендация сотрудника')
     pg.fill(s1 + '.s-offerSentAt', ago(15)); pg.fill(s1 + '.s-offerAcceptedAt', ago(14))
     pg.click('#vSeatAdd'); pg.click('#vSeatAdd')                       # руководитель попросил ещё двоих
     assert 'Всего 3, в поиске 3' in pg.inner_text('#vSeatSum') and pg.inner_text('#vSeats .seat:nth-child(3) .seat-n') == 'Единица 3'
@@ -174,7 +174,7 @@ with sync_playwright() as p:
     vid = [k for k, v in pg.evaluate('window.__store').items() if k.startswith('vacancies/') and v.get('title', '').startswith('Менеджер отдела бронирования')][0]
     v = pg.evaluate("window.__store['%s']" % vid)
     assert v['multi'] and v['rate'] == 1 and v['status'] == 'активна' and v['publishedAt'] == ago(25) and v['requestedAt'] == ago(30), v
-    assert v['seats'][0] == {'requestedAt': ago(30), 'publishedAt': ago(25), 'reason': 'увольнение сотрудника', 'search': 'активный', 'offerSentAt': ago(15), 'offerAcceptedAt': ago(14), 'person': 'Иванова', 'startAt': ago(10)}, v['seats'][0]
+    assert v['seats'][0] == {'requestedAt': ago(30), 'publishedAt': ago(25), 'reason': 'увольнение сотрудника', 'search': 'активный', 'source': 'рекомендация сотрудника', 'offerSentAt': ago(15), 'offerAcceptedAt': ago(14), 'person': 'Иванова', 'startAt': ago(10)}, v['seats'][0]
     assert v['seats'][1] == {'requestedAt': dt.date.today().isoformat()}, v
     row = pg.inner_text('#vTable tr[data-id=%s]' % vid.split('/')[1]); assert '1 из 2' in row, row
     vt = pg.inner_text('#vTiles')
