@@ -1211,7 +1211,7 @@ function formPerson(){ return scope() || $('fPerson').value; }
 function loadForm(){
   var p = formPerson(), d = $('fDate').value, m = (byDate[d] || {})[p], hint = '';
   if(!p || !d) return;
-  var own = (entered[d] || {})[p], sync = isSynced(d);
+  var own = (entered[d] || {})[p], sync = isSynced(d, p);
   document.querySelectorAll('#fGroups input').forEach(function(i){ i.value = m && num(m[i.dataset.k]) ? m[i.dataset.k] : ''; i.readOnly = sync && SYNCED.indexOf(i.dataset.k) >= 0; });
   if(sync){
     var reg = registryDay(p, d);
@@ -1240,7 +1240,7 @@ function saveDay(e){
   // метрики, убранные из формы, сохраняем как были; остальное — из полей
   Object.keys(old).forEach(function(k){ if(!$('m_'+k)) vals[k] = old[k]; });
   document.querySelectorAll('#fGroups input').forEach(function(i){ var v = i.value.trim(); if(v !== '') vals[i.dataset.k] = Math.max(0, Math.round(+v)); });
-  if(isSynced(d)) SYNCED.forEach(function(k){ delete vals[k]; });   // эти цифры берутся из реестра, не храним копию
+  if(isSynced(d, p)) SYNCED.forEach(function(k){ delete vals[k]; });   // эти цифры берутся из реестра, не храним копию
   var days = Object.assign({}, doc.days); days[d] = vals;
   $('fSave').disabled = true; st.className = 'status'; st.textContent = 'Сохраняю…';
   db.doc('months/' + id).set({person:p, month:d.slice(0, 7), days:days}).then(function(){
@@ -1696,7 +1696,10 @@ function registryDay(p, d){
   });
   return r;
 }
-function isSynced(d){ return d >= SYNC_FROM && vacanciesLoaded; }
+// С какого дня цифры вакансий и кандидатов человека берутся из «Вакансий» (team.syncFrom — позже общего,
+// если до этой даты у него свои цифры из таблицы)
+function syncFromOf(p){ var t = (p && team[p]) || {}; return t.syncFrom && t.syncFrom > SYNC_FROM ? t.syncFrom : SYNC_FROM; }
+function isSynced(d, p){ return d >= syncFromOf(p) && vacanciesLoaded; }
 // byDate = внесённое + цифры из реестра на рабочие дни с SYNC_FROM по сегодня (и на любые внесённые)
 function rebuild(){
   byDate = {};
@@ -1705,7 +1708,7 @@ function rebuild(){
   for(var d = SYNC_FROM; d <= today(); d = addDays(d, 1)){
     recruiters().forEach(function(p){
       var t = team[p];
-      if((t.archived && (!t.archivedAt || d >= t.archivedAt)) || (t.since && d < t.since)) return;
+      if((t.archived && (!t.archivedAt || d >= t.archivedAt)) || (t.since && d < t.since) || d < syncFromOf(p)) return;
       if(isWeekend(d) && !hasDay(p, d)) return;
       var row = byDate[d] || (byDate[d] = {});
       row[p] = Object.assign(row[p] || {}, registryDay(p, d));
