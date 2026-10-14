@@ -67,7 +67,7 @@ with sync_playwright() as p:
     assert d['vacancies/v1']['status'] == 'выход сотрудника' and d['vacancies/v1']['comment'] == 'новый', d['vacancies/v1']
     assert d['vacancies/a1']['title'] == 'От Юлии' and d['vacancies/b1']['title'] == 'От Анны'
     # у каждого на экране — правки коллеги, без перезагрузки
-    A.click('#tab_vac'); A.select_option('#vStatus', ''); A.wait_for_timeout(200)
+    A.click('#tab_vac'); A.evaluate("setVacStatus([])"); A.wait_for_timeout(200)
     assert 'От Анны' in A.inner_text('#vTable')
     assert B.evaluate("JSON.parse(localStorage.getItem('hr-offline-db')).data['months/anna_2026-10'].days['2026-10-06'].calls") == 9
     # одно и то же поле: остаётся правка, записанная последней; удаление доходит до коллеги

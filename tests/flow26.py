@@ -71,7 +71,7 @@ with sync_playwright() as p:
     assert not pg.evaluate("window.__store['vacancies/b'].probation")
     pg.click('#dProb tr:has-text("Иванов") [data-prob=failed]'); pg.wait_for_timeout(300)
     # пересохранение карточек не теряет отметки ИС
-    pg.click('#tab_vac'); pg.select_option('#vStatus', '')
+    pg.click('#tab_vac'); pg.evaluate("setVacStatus([])")
     for vid in ('b', 'c'):
         pg.click('#vTable tr[data-id=%s] td:nth-child(2)' % vid); pg.click('#vSave'); pg.wait_for_timeout(300); pg.click('#vCancel')
     assert pg.evaluate("window.__store['vacancies/b'].seats[0].probation.result") == 'failed' and pg.evaluate("window.__store['vacancies/b'].seats[0].person") == 'Иванов Иван'

@@ -38,7 +38,7 @@ with sync_playwright() as p:
     assert any(v.get('title') == 'Диспетчер' for k, v in store.items() if k.startswith('vacancies/'))
     # перезагрузка: данные с этого ПК на месте
     pg.reload(); pg.wait_for_selector('#tabs button')
-    pg.click('#tab_vac'); pg.select_option('#vStatus', ''); pg.wait_for_timeout(200)
+    pg.click('#tab_vac'); pg.evaluate("setVacStatus([])"); pg.wait_for_timeout(200)
     assert 'Диспетчер' in pg.inner_text('#vTable') and pg.is_visible('#offlineBar')
     # скачать файл с данными — в нём уже есть изменения
     with pg.expect_download() as dl: pg.click('#offlineBar button')
@@ -50,7 +50,7 @@ with sync_playwright() as p:
     copy = HERE / '.cache' / 'copy.html'; copy.write_bytes(saved.read_bytes())
     pg2.goto(copy.as_uri()); pg2.wait_for_selector('#lLogin', state='visible')
     pg2.fill('#lLogin', 'y'); pg2.fill('#lPass', 'secret1'); pg2.click('#lSubmit'); pg2.wait_for_selector('#tabs button')
-    pg2.click('#tab_vac'); pg2.select_option('#vStatus', ''); pg2.wait_for_timeout(200)
+    pg2.click('#tab_vac'); pg2.evaluate("setVacStatus([])"); pg2.wait_for_timeout(200)
     assert 'Диспетчер' in pg2.inner_text('#vTable')
     d = pg2.evaluate("JSON.parse(localStorage.getItem('hr-offline-db')).data['months/anna_2026-10'].days['2026-10-06'].calls")
     assert d == 9, d

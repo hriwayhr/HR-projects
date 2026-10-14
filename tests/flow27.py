@@ -77,7 +77,7 @@ try:
     pg.click('#logout'); pg.wait_for_selector('#yaBtn', state='visible')
     login('ann@iway.ru')
     assert pg.inner_text('#tab_day') == 'Мой день' and not pg.query_selector('#tab_settings')
-    pg.click('#tab_vac'); pg.select_option('#vStatus', ''); pg.wait_for_timeout(200)
+    pg.click('#tab_vac'); pg.evaluate("setVacStatus([])"); pg.wait_for_timeout(200)
     assert 'Диспетчер' in pg.inner_text('#vTable') and 'Логист' not in pg.inner_text('#vTable')
     seen = pg.evaluate("fetch('/api/sync', {headers:{'X-HR':'1'}}).then(r => r.json()).then(j => j.docs.map(d => d.path).sort())")
     assert seen == ['config/team', 'months/anna_2026-10', 'vacancies/b'], seen

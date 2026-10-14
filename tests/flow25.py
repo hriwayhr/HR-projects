@@ -156,9 +156,15 @@ with sync_playwright() as p:
     # фильтр «активна» показывает и «не актуальные» с висящей публикацией на hh.ru; со снятой или истёкшей — нет
     for vid, closed, stopped in (('n1', '2026-11-01', False), ('n2', '2026-10-01', False), ('n3', '2026-10-07', True)):
         pg.evaluate("claude.use('db').then(db => db.doc('vacancies/%s').set({title: 'Неакт %s', manager: 'Немчинова', status: 'не актуальна', links: [{url: 'https://hh.ru/%s', at: '2026-09-01', closedAt: '%s'%s}]}))" % (vid, vid, vid, closed, ', stopped: true' if stopped else ''))
-    pg.wait_for_timeout(300); pg.select_option('#vStatus', 'активна'); pg.wait_for_timeout(100)
+    pg.wait_for_timeout(300); pg.evaluate("setVacStatus(['активна'])"); pg.wait_for_timeout(100)
     vt = pg.inner_text('#vTable'); assert 'Неакт n1' in vt and 'Неакт n2' not in vt and 'Неакт n3' not in vt and 'x1' in vt, vt
-    pg.select_option('#vStatus', 'не актуальна'); pg.wait_for_timeout(100); assert all(('Неакт ' + v) in pg.inner_text('#vTable') for v in ('n1', 'n2', 'n3'))
+    pg.evaluate("setVacStatus(['не актуальна'])"); pg.wait_for_timeout(100); assert all(('Неакт ' + v) in pg.inner_text('#vTable') for v in ('n1', 'n2', 'n3'))
+    # несколько статусов галочками: «активна» + «не актуальна» — все неактуальные и активные; снять всё — все статусы
+    pg.click('#vStatusSum'); pg.uncheck('#vStatus input[value="не актуальна"]'); pg.check('#vStatus input[value="активна"]'); pg.check('#vStatus input[value="не актуальна"]'); pg.wait_for_timeout(100)
+    vt = pg.inner_text('#vTable'); assert pg.inner_text('#vStatusSum') == 'активна, не актуальна' and all(('Неакт ' + v) in vt for v in ('n1', 'n2', 'n3')) and 'x1' in vt and '\tC\t' not in vt, vt
+    pg.uncheck('#vStatus input[value="активна"]'); pg.uncheck('#vStatus input[value="не актуальна"]'); pg.wait_for_timeout(100)
+    assert pg.inner_text('#vStatusSum') == 'Все статусы'
+    pg.click('#vTitle'); assert not pg.evaluate("$('vStatusBox').open")   # клик мимо закрывает список
     b.close()
 print('ОШИБКИ:', errs or 'нет')
 assert not errs

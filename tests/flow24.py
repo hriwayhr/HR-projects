@@ -131,8 +131,8 @@ with sync_playwright() as p:
     assert 'Катя Шулятицкая\t2\t1' in bm and 'Юля Немчинова' in bm and '\nШулятицкая' not in bm, bm
     assert 'Катя Шулятицкая' in pg.inner_text('#vManager')
     # фильтр по умолчанию — активные: закрытых в таблице нет, пока не выбрать «Все статусы»
-    assert pg.input_value('#vStatus') == 'активна' and 'Логист\t' not in pg.inner_text('#vTable') and 'Аналитик' in pg.inner_text('#vTable')
-    pg.select_option('#vStatus', ''); pg.wait_for_timeout(100); assert 'Бухгалтер' in pg.inner_text('#vTable')
+    assert pg.evaluate('vacStatusSel()') == ['активна'] and pg.inner_text('#vStatusSum') == 'активна' and 'Логист\t' not in pg.inner_text('#vTable') and 'Аналитик' in pg.inner_text('#vTable')
+    pg.evaluate("setVacStatus([])"); pg.wait_for_timeout(100); assert 'Бухгалтер' in pg.inner_text('#vTable')
     # «Скопировать для отчёта»: только активные, по ответственным, фильтр «Все статусы» не влияет
     pg.click('#vCopy'); pg.wait_for_timeout(200)
     html_, text_ = pg.evaluate('window.__clip')
@@ -141,7 +141,7 @@ with sync_playwright() as p:
     assert 'Логист\t' not in text_ and 'Бухгалтер' not in text_ and 'Аналитик\t—\t—\t2\t' in text_, text_
     assert '<table' in html_ and 'Скопировано' in pg.inner_text('#vCopyStat')
     # несколько публикаций и заказчик: старая ссылка подхватывается, сохраняется списком
-    pg.select_option('#vStatus', 'активна'); pg.click('#vTable tr[data-id=v3] td:nth-child(2)'); pg.wait_for_timeout(100)
+    pg.evaluate("setVacStatus(['активна'])"); pg.click('#vTable tr[data-id=v3] td:nth-child(2)'); pg.wait_for_timeout(100)
     assert pg.input_value('#vLinks .v-link') == 'https://hh.ru/vacancy/1'
     pg.click('#vLinkAdd'); pg.fill('#vLinks .link-row:nth-child(2) .v-link', 'https://hh.ru/vacancy/2')
     pg.click('#vLinkAdd'); pg.fill('#vLinks .link-row:nth-child(3) .v-link', 'https://hh.ru/vacancy/3')
@@ -230,7 +230,7 @@ with sync_playwright() as p:
     pg.click('#tab_entry'); assert 'Анна (архив)' in pg.inner_text('#fPerson')
     # Катя в архиве — в отчётах по вакансиям её имя с пометкой «(архив)»
     pg.click('#tab_settings'); pg.click('#sub_team'); pg.click('#tUsers button[data-act=archive]:not([data-p=yulia])'); pg.wait_for_timeout(300)
-    pg.click('#tab_vac'); pg.select_option('#vStatus', ''); pg.wait_for_timeout(100)
+    pg.click('#tab_vac'); pg.evaluate("setVacStatus([])"); pg.wait_for_timeout(100)
     assert 'Катя Шулятицкая (архив)' in pg.inner_text('#vTable') and 'Катя' not in pg.inner_text('#vByMgr'), pg.inner_text('#vByMgr')   # архивных в «По ответственным» нет
     pg.screenshot(path=str(HERE / 'shots' / 'hr-entry-admin.png'), full_page=True)
     pg.click('#tab_settings'); pg.click('#sub_team'); pg.screenshot(path=str(HERE / 'shots' / 'hr-team.png'), full_page=True)

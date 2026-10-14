@@ -192,6 +192,14 @@
   .remind{border-color:var(--warn-ink); margin-bottom:16px;}
   .remind .todo-row{gap:6px 12px;}
   .remind summary{cursor:pointer; list-style-position:inside;}
+  /* выбор нескольких статусов */
+  .msel{position:relative;}
+  .msel summary{list-style:none; cursor:pointer; padding:9px 34px 9px 12px; border:1px solid var(--line); border-radius:10px; background:var(--surface); white-space:nowrap; position:relative;}
+  .msel summary::-webkit-details-marker{display:none;}
+  .msel summary::after{content:'▾'; position:absolute; right:12px; color:var(--ink-3);}
+  .msel-list{position:absolute; z-index:20; top:calc(100% + 4px); left:0; min-width:100%; background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:6px; box-shadow:0 8px 24px #0002;}
+  .msel-list label{display:flex; gap:8px; align-items:center; padding:6px 8px; border-radius:6px; cursor:pointer; white-space:nowrap;}
+  .msel-list label:hover{background:var(--off-bg);}
   .remind summary h3{display:inline; margin:0;}
   .remind[open] summary{margin-bottom:10px;}
   .month-head{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; margin-bottom:12px;}
@@ -355,7 +363,7 @@
       <h2 id="vTitle">Вакансии</h2>
       <div class="datenav">
         <input type="search" id="vSearch" placeholder="Название, отдел, заказчик" aria-label="Поиск">
-        <select id="vStatus" aria-label="Статус"></select>
+        <details class="msel" id="vStatusBox"><summary id="vStatusSum">Статус</summary><div class="msel-list" id="vStatus" role="group" aria-label="Статусы"></div></details>
         <select id="vManager" aria-label="Ответственный"></select>
         <button class="btn ghost" id="vCopy">Скопировать для отчёта</button>
         <button class="btn" id="vAdd">Новая вакансия</button>
@@ -1468,10 +1476,10 @@ function renderVac(){
     tile('Закрыто за 90 дней', st.recent, null, {note:'выход сотрудника или архив'}) +
     tile('Потрачено на hh.ru', null, null, {text:rub(st.spent), note:'на вакансии в работе: ' + rub(st.spentActive)});
 
-  var q = norm($('vSearch').value), fs = $('vStatus').value, fm = $('vManager').value;
+  var q = norm($('vSearch').value), fs = vacStatusSel(), fm = $('vManager').value;
   // «активна» — ещё и «не актуальные», у которых публикация на hh.ru пока висит: её надо снять или продолжить
   function livePub(v){ return linkObjs(v).some(function(l){ return !l.stopped && linkOpen(l, vacStart(v), today(), true); }); }
-  function statusOk(v){ return !fs || (v.status || '') === fs || (fs === 'активна' && v.status === 'не актуальна' && livePub(v)); }
+  function statusOk(v){ return !fs.length || fs.indexOf(v.status || '') >= 0 || (fs.indexOf('активна') >= 0 && v.status === 'не актуальна' && livePub(v)); }
   var list = all.filter(function(v){
     return (!q || norm(v.title + ' ' + v.dept + ' ' + (v.customer || '')).indexOf(q) >= 0) && statusOk(v) && (!fm || managerLabel(v) === fm);
   }).sort(function(a, b){
@@ -2261,8 +2269,18 @@ $('sGroup').value = load('hrSumGroup') || 'week';
 state.mode = load('hrMode') || 'day'; $('dMode').value = state.mode;
 if(state.mode === 'custom'){ state.mode = 'day'; $('dMode').value = 'day'; }   // свой период не запоминаем — его даты не хранятся
 $('fDate').value = today();
-$('vStatus').innerHTML = '<option value="">Все статусы</option>' + VAC_STATUSES.map(function(s){ return '<option>'+s+'</option>'; }).join('');
-$('vStatus').value = 'активна';   // по умолчанию — только вакансии в работе
+$('vStatus').innerHTML = VAC_STATUSES.map(function(s){ return '<label><input type="checkbox" value="'+s+'"> '+s+'</label>'; }).join('');
+// Статусы в списке вакансий: можно несколько; ничего не отмечено — все. По умолчанию — только в работе
+function vacStatusSel(){ return Array.prototype.filter.call(document.querySelectorAll('#vStatus input'), function(c){ return c.checked; }).map(function(c){ return c.value; }); }
+function setVacStatus(list){
+  document.querySelectorAll('#vStatus input').forEach(function(c){ c.checked = list.indexOf(c.value) >= 0; });
+  var sel = vacStatusSel();
+  $('vStatusSum').textContent = !sel.length || sel.length === VAC_STATUSES.length ? 'Все статусы' : sel.join(', ');
+  if(state.view === 'vac') renderVac();
+}
+setVacStatus(['активна']);
+$('vStatus').onchange = function(){ setVacStatus(vacStatusSel()); };
+document.addEventListener('click', function(e){ if(!e.target.closest('#vStatusBox')) $('vStatusBox').open = false; });   // закрыть список по клику мимо
 $('v_status').innerHTML = VAC_STATUSES.map(function(s){ return '<option>'+s+'</option>'; }).join('');
 $('mGroup').innerHTML = groupOptions('work');
 buildForm();
@@ -2311,7 +2329,7 @@ $('fPerson').onchange = loadForm; $('fDate').onchange = loadForm;
 $('dayForm').onsubmit = saveDay;
 $('sYear').onchange = renderSum;
 $('sGroup').onchange = function(){ store('hrSumGroup', this.value); renderSum(); }; $('sPerson').onchange = renderSum; $('sBlocks').onclick = copyReport;
-$('vSearch').oninput = renderVac; $('vStatus').onchange = renderVac; $('vManager').onchange = renderVac;
+$('vSearch').oninput = renderVac; $('vManager').onchange = renderVac;
 $('vAdd').onclick = function(){ openVac(null); };
 $('vCopy').onclick = function(){
   var r = hiringReport();

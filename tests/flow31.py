@@ -55,14 +55,14 @@ try:
             assert pg.input_value('#m_calls') == v, (d, pg.input_value('#m_calls'))
     # вакансия, добавленная Анной, сама появляется у Юлии
     B.click('#tab_vac'); B.click('#vAdd'); B.fill('#v_title', 'Диспетчер от Анны'); B.fill('#v_manager', 'Шулятицкая'); B.click('#vSave')
-    A.click('#tab_vac'); A.select_option('#vStatus', ''); time.sleep(4)
+    A.click('#tab_vac'); A.evaluate("setVacStatus([])"); time.sleep(4)
     assert 'Диспетчер от Анны' in A.inner_text('#vTable')
     # в папке данных — журналы двух ПК; пароли и хеши в браузер рекрутера не попадают
     assert sorted(f for f in os.listdir(data) if f.startswith('changes-')) == ['changes-PC1-u.jsonl', 'changes-PC2-u.jsonl']
     assert 'hash' not in B.evaluate("fetch('/api/sync').then(r => r.text())")
     # перезапуск программы у Юлии — данные на месте, вход заново
     srvA.terminate(); srvA.wait(); srvA = start(8821, 'PC1')
-    A.goto('http://localhost:8821/'); login(A, 'yulia', 'p1'); A.click('#tab_vac'); A.select_option('#vStatus', ''); A.wait_for_timeout(300)
+    A.goto('http://localhost:8821/'); login(A, 'yulia', 'p1'); A.click('#tab_vac'); A.evaluate("setVacStatus([])"); A.wait_for_timeout(300)
     assert 'Диспетчер от Анны' in A.inner_text('#vTable')
     b.close()
 finally:
