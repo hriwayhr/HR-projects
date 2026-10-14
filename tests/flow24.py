@@ -45,7 +45,7 @@ with sync_playwright() as p:
     # 2. дашборд дня по команде
     pg.fill('#dDate', '2026-10-01'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
     tiles = pg.inner_text('#dTiles')
-    for want in ('3 из 4', '+25 п.п.', 'Открытые вакансии\n14', '+11', 'Чаты\n3'): assert want in tiles, (want, tiles)
+    for want in ('3 из 4', '+25 п.п.', 'Вакансии в работе\n14', '+11', 'Чаты\n3'): assert want in tiles, (want, tiles)
 
     # 2a. пропуски: будни с 28.09 без цифр подсвечены, клик ведёт в форму на этот день
     todo = pg.inner_text('#dTodo')
@@ -155,26 +155,32 @@ with sync_playwright() as p:
     pg.click('#vCopy'); pg.wait_for_timeout(200)
     html_, text_ = pg.evaluate('window.__clip')
     assert 'Заказчик' in text_ and 'Дмитрий Васильевич' in text_ and 'https://hh.ru/vacancy/2' in html_, text_
-    # несколько ставок: «Бронирование 2/2» — единица на поиск, «+1» от руководителя, выход по единице
+    # единицы найма: «Бронирование 2/2» — по единице на человека, «+1» от руководителя, выход по единице
     pg.click('#vAdd'); pg.fill('#v_title', 'Менеджер отдела бронирования 2/2'); pg.fill('#v_manager', 'Немчинова')
-    pg.fill('#v_publishedAt', ago(30)); pg.check('#v_multi'); pg.wait_for_timeout(100)
-    assert pg.is_visible('#vSeatsBox') and not pg.is_visible('#vRateWrap')
-    assert pg.input_value('#vSeats .s-req') == ago(30), pg.input_value('#vSeats .s-req')
+    assert len(pg.query_selector_all('#vSeats .seat')) == 1 and pg.input_value('#vSeats .s-requestedAt') == dt.date.today().isoformat()
+    s1 = '#vSeats .seat:nth-child(1) '
+    pg.fill(s1 + '.s-requestedAt', ago(30)); assert pg.is_hidden(s1 + '.s-publishedAt')
+    pg.check(s1 + '.s-pub'); assert pg.input_value(s1 + '.s-publishedAt') == dt.date.today().isoformat()   # без публикаций — сегодня
+    pg.fill(s1 + '.s-publishedAt', ago(25))
+    pg.select_option(s1 + '.s-reason', 'увольнение сотрудника'); pg.select_option(s1 + '.s-search', 'активный')
+    pg.fill(s1 + '.s-offerSentAt', ago(15)); pg.fill(s1 + '.s-offerAcceptedAt', ago(14))
     pg.click('#vSeatAdd'); pg.click('#vSeatAdd')                       # руководитель попросил ещё двоих
-    assert 'Всего 3, в поиске 3' in pg.inner_text('#vSeatSum')
-    pg.fill('#vSeats tbody tr:nth-child(1) .s-start', ago(10)); pg.fill('#vSeats tbody tr:nth-child(1) .s-person', 'Иванова')
-    pg.click('#vSeats tbody tr:nth-child(3) [data-del-seat]')          # одну «+1» отменили
-    pg.dispatch_event('#vSeats tbody tr:nth-child(1) .s-start', 'change')
-    assert 'Всего 2, в поиске 1, закрыто 1' in pg.inner_text('#vSeatSum'), pg.inner_text('#vSeatSum')
+    assert 'Всего 3, в поиске 3' in pg.inner_text('#vSeatSum') and pg.inner_text('#vSeats .seat:nth-child(3) .seat-n') == 'Единица 3'
+    pg.fill(s1 + '.s-startAt', ago(10)); pg.fill(s1 + '.s-person', 'Иванова')
+    pg.click('#vSeats .seat:nth-child(3) [data-del-seat]')          # одну «+1» отменили
+    pg.dispatch_event(s1 + '.s-startAt', 'change')
+    assert 'Всего 2, в поиске 1, закрыто 1' in pg.inner_text('#vSeatSum') and 'закрыта' in pg.inner_text(s1 + '.pill'), pg.inner_text('#vSeatSum')
     pg.click('#vSave'); pg.wait_for_timeout(300)
     vid = [k for k, v in pg.evaluate('window.__store').items() if k.startswith('vacancies/') and v.get('title', '').startswith('Менеджер отдела бронирования')][0]
     v = pg.evaluate("window.__store['%s']" % vid)
-    assert v['multi'] and v['rate'] == 1 and v['status'] == 'активна' and v['seats'][0] == {'requestedAt': ago(30), 'startAt': ago(10), 'person': 'Иванова'} and v['seats'][1] == {'requestedAt': dt.date.today().isoformat()}, v
+    assert v['multi'] and v['rate'] == 1 and v['status'] == 'активна' and v['publishedAt'] == ago(25) and v['requestedAt'] == ago(30), v
+    assert v['seats'][0] == {'requestedAt': ago(30), 'publishedAt': ago(25), 'reason': 'увольнение сотрудника', 'search': 'активный', 'offerSentAt': ago(15), 'offerAcceptedAt': ago(14), 'person': 'Иванова', 'startAt': ago(10)}, v['seats'][0]
+    assert v['seats'][1] == {'requestedAt': dt.date.today().isoformat()}, v
     row = pg.inner_text('#vTable tr[data-id=%s]' % vid.split('/')[1]); assert '1 из 2' in row, row
     vt = pg.inner_text('#vTiles')
     assert 'Скорость закрытия\n33' in vt and 'закрыто 3' in vt, vt                # (30 + 50 + 20) / 3: единица считается отдельно
     # вторая единица закрыта — вакансия сама уходит в «выход сотрудника»; новая «+1» — снова «активна»
-    pg.fill('#vSeats tbody tr:nth-child(2) .s-start', dt.date.today().isoformat()); pg.click('#vSave'); pg.wait_for_timeout(300)
+    pg.fill('#vSeats .seat:nth-child(2) .s-startAt', dt.date.today().isoformat()); pg.click('#vSave'); pg.wait_for_timeout(300)
     v = pg.evaluate("window.__store['%s']" % vid)
     assert v['status'] == 'выход сотрудника' and v['rate'] == 0 and v['closedAt'] == dt.date.today().isoformat(), v
     pg.click('#vSeatAdd'); pg.click('#vSave'); pg.wait_for_timeout(300)
@@ -195,7 +201,7 @@ with sync_playwright() as p:
     pg.fill('#fDate', '2026-10-05'); pg.dispatch_event('#fDate', 'change'); pg.fill('#m_int_planned', '1'); pg.click('#fSave'); pg.wait_for_timeout(300)
     assert pg.evaluate("window.__store['months/anna_2026-10'].days['2026-10-05'].int_planned") == 1
     pg.click('#tab_day'); pg.fill('#dDate', '2026-10-01'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
-    t = pg.inner_text('#dTiles'); assert 'Открытые вакансии\n5' in t, t   # только Анна, без Юли
+    t = pg.inner_text('#dTiles'); assert 'Вакансии в работе\n5' in t, t   # только Анна, без Юли
     assert pg.inner_text('#dChips') == ''
     pg.click('#tab_vac'); pg.wait_for_timeout(100)
     assert 'Вакансий нет' in pg.inner_text('#vTable')
@@ -216,7 +222,7 @@ with sync_playwright() as p:
     assert pg.evaluate("window.__store['config/team'].people.anna.archivedAt")
     pg.click('#tab_day'); pg.fill('#dDate', '2026-10-01'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
     t = pg.inner_text('#dTable'); assert 'Анна (архив)' in t, t
-    assert 'Открытые вакансии\n14' in pg.inner_text('#dTiles')   # её цифры в итогах команды
+    assert 'Вакансии в работе\n14' in pg.inner_text('#dTiles')   # её цифры в итогах команды
     pg.fill('#dDate', pg.evaluate('today()')); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
     assert 'Анна' not in pg.inner_text('#dTable') and 'Анна' not in pg.inner_text('#dChips')   # с дня архивации её нет
     pg.click('#tab_sum'); assert 'Анна (архив)' in pg.inner_text('#sPerson')

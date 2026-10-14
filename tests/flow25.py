@@ -41,7 +41,7 @@ with sync_playwright() as p:
     pg.fill('#m_int_planned', '3'); pg.click('#fSave'); pg.wait_for_timeout(300)
     assert pg.evaluate("window.__store['months/yulia_2026-10'].days['2026-10-06']") == {'int_planned': 3}
     pg.click('#tab_day'); pg.fill('#dDate', '2026-10-06'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
-    t = pg.inner_text('#dTiles'); assert 'Открытые вакансии\n3' in t and 'Кандидаты на вакансию\n3' in t, t
+    t = pg.inner_text('#dTiles'); assert 'Вакансии в работе\n3' in t and 'Вакантные ставки\n3' in t, t
     # инфографика недели: 5–9 октября, среда и дальше — «впереди», понедельник без данных — «не внесено»
     assert pg.inner_text('#dChartTitle') == 'Неделя 41 · 5–9 октября'
     svg = pg.inner_html('#dChart svg')
@@ -69,11 +69,11 @@ with sync_playwright() as p:
     pg.click('#dPrev'); pg.wait_for_timeout(100); assert pg.inner_text('#dayTitle') == '29 сентября – 2 октября 2026'
     # подробности по плитке: открывается по клику, график по неделям месяца и разбивка по людям, закрывается повторным кликом и «×»
     pg.select_option('#dMode', 'month'); pg.wait_for_timeout(100)
-    pg.click('#dTiles [data-detail="Кандидаты на вакансию"]'); pg.wait_for_timeout(100)
+    pg.click('#dTiles [data-detail="Вакантные ставки"]'); pg.wait_for_timeout(100)
     det = pg.inner_text('#dDetail')
-    assert det.startswith('Кандидаты на вакансию · Октябрь 2026') and 'Прошлый период' in det and 'Юлия Немчинова' in det, det
-    assert pg.inner_html('#dDetail svg').count('<rect') >= 2 and pg.get_attribute('#dTiles [data-detail="Кандидаты на вакансию"]', 'aria-expanded') == 'true'
-    pg.click('#dTiles [data-detail="Кандидаты на вакансию"]'); pg.wait_for_timeout(100); assert pg.inner_text('#dDetail') == ''
+    assert det.startswith('Вакантные ставки · Октябрь 2026') and 'Прошлый период' in det and 'Юлия Немчинова' in det, det
+    assert pg.inner_html('#dDetail svg').count('<rect') >= 2 and pg.get_attribute('#dTiles [data-detail="Вакантные ставки"]', 'aria-expanded') == 'true'
+    pg.click('#dTiles [data-detail="Вакантные ставки"]'); pg.wait_for_timeout(100); assert pg.inner_text('#dDetail') == ''
     pg.focus('#dTiles [data-detail="Звонки"]'); pg.keyboard.press('Enter'); pg.wait_for_timeout(100)
     assert pg.inner_text('#dDetail').startswith('Звонки'); pg.click('#dDetailClose'); pg.wait_for_timeout(100); assert pg.inner_text('#dDetail') == ''
     # пиковые дни недели: сумма по дню недели, пик выделен; в режиме дня — 13 недель
@@ -85,10 +85,10 @@ with sync_playwright() as p:
     # новая вакансия сегодня — сразу в ячейках сегодняшнего дня
     pg.click('#tab_vac'); pg.click('#vAdd'); pg.fill('#v_title', 'D'); pg.fill('#v_manager', 'Юлия Немчинова')
     pg.fill('#vLinks .v-link', 'https://hh.ru/5'); assert pg.input_value('#vLinks .v-link-at') == '2026-10-07'
-    pg.select_option('#v_reason', 'замена сотрудника (резерв)'); pg.select_option('#v_search', 'поиск в резерв')
+    pg.select_option('#vSeats .s-reason', 'замена сотрудника (резерв)'); pg.select_option('#vSeats .s-search', 'поиск в резерв')
     pg.click('#vSave'); pg.wait_for_timeout(300)
     d = [v for k, v in pg.evaluate('window.__store').items() if k.startswith('vacancies/') and v.get('title') == 'D'][0]
-    assert d['reason'] == 'замена сотрудника (резерв)' and d['search'] == 'поиск в резерв', d
+    assert d['seats'] == [{'requestedAt': '2026-10-07', 'reason': 'замена сотрудника (резерв)', 'search': 'поиск в резерв'}], d
     assert d['links'] == [{'url': 'https://hh.ru/5', 'at': '2026-10-07', 'closedAt': '2026-11-07'}] and d['archivedAt'] == '2026-11-07', d   # архивация через месяц
     assert pg.evaluate("byDate['2026-10-07'].yulia") == {'vac_start': 3, 'cand_start': 3, 'vac_end': 4, 'cand_end': 4, 'vac_published': 1}, pg.evaluate("byDate['2026-10-07'].yulia")
     # снятая публикация перестаёт считаться со дня снятия
@@ -135,7 +135,6 @@ with sync_playwright() as p:
     # продление в карточке несколько месяцев подряд: 10.10 → 10.11 → 10.12
     pg.click('#vTable tr[data-id=e] td:nth-child(2)'); pg.click('#vLinks [data-extend-link]'); pg.click('#vLinks [data-extend-link]')
     assert pg.input_value('#vLinks .v-link-closed') == '2026-12-10' and 'продлений: 2' in pg.inner_text('#vLinks')
-    assert pg.input_value('#v_archivedAt') == '2026-12-10' and pg.input_value('#v_extensions') == '2'
     pg.fill('#vLinks .v-link-cost', '4500')   # стоимость публикации — вручную, вместе с продлениями
     pg.click('#vSave'); pg.wait_for_timeout(300)
     e = pg.evaluate("window.__store['vacancies/e']")
@@ -147,6 +146,13 @@ with sync_playwright() as p:
     assert e['links'][0]['closedAt'] == '2026-12-10' and e['links'][0]['ext'] == 2 and e['extensions'] == 2 and e['archivedAt'] == '2026-12-10', e
     assert 'E' not in pg.inner_text('#vRemind').split('\n')[0:0] and 'осталось' not in pg.inner_text('#vRemind'), pg.inner_text('#vRemind')
     pg.screenshot(path=str(HERE / 'shots' / 'hr-vac-remind.png'), full_page=True)
+    # одна публикация на две вакансии — одна «вакансия в работе»; вакантные ставки — по единицам обеих
+    before = pg.evaluate("registryDay('yulia', '2026-10-07')")
+    for vid in ('x1', 'x2'):
+        pg.evaluate("claude.use('db').then(db => db.doc('vacancies/%s').set({title: '%s', manager: 'Немчинова', status: 'активна', multi: true, rate: 1, seats: [{requestedAt: '2026-10-01'}], links: [{url: 'https://hh.ru/shared', at: '2026-10-01', closedAt: '2026-11-01'}]}))" % (vid, vid))
+    pg.wait_for_timeout(300)
+    after = pg.evaluate("registryDay('yulia', '2026-10-07')")
+    assert after['vac_end'] == before['vac_end'] + 1 and after['cand_end'] == before['cand_end'] + 2, (before, after)
     b.close()
 print('ОШИБКИ:', errs or 'нет')
 assert not errs

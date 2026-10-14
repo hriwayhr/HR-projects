@@ -74,9 +74,9 @@ with sync_playwright() as p:
     pg.click('#tab_vac'); pg.select_option('#vStatus', '')
     for vid in ('b', 'c'):
         pg.click('#vTable tr[data-id=%s] td:nth-child(2)' % vid); pg.click('#vSave'); pg.wait_for_timeout(300); pg.click('#vCancel')
-    assert pg.evaluate("window.__store['vacancies/b'].probation.result") == 'failed' and pg.evaluate("window.__store['vacancies/b'].person") == 'Иванов Иван'
+    assert pg.evaluate("window.__store['vacancies/b'].seats[0].probation.result") == 'failed' and pg.evaluate("window.__store['vacancies/b'].seats[0].person") == 'Иванов Иван'
     assert pg.evaluate("window.__store['vacancies/c'].seats[0].probation.result") == 'passed'
-    pg.click('#tab_vac'); pg.click('#vTable tr[data-id=a] td:nth-child(2)'); assert pg.is_visible('#v_person'); pg.check('#v_multi'); assert not pg.is_visible('#v_person'); pg.click('#vCancel')
+    pg.click('#tab_vac'); pg.click('#vTable tr[data-id=a] td:nth-child(2)'); assert len(pg.query_selector_all('#vSeats .seat')) == 2; pg.click('#vCancel')   # старая карточка со ставкой 2 — две единицы
     pg.click('#tab_day'); pg.wait_for_timeout(100)
     # нагрузка и прогноз: у Юлии 1 вакансия (C закрылась при пересохранении — все единицы с датой выхода), нужно 2 человека, ждём 1 выход (Сидоров 20.10)
     ld = txt(pg, '#dLoad')

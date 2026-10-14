@@ -170,8 +170,11 @@
   .wk td.sum,.wk th.sum{background:var(--tint); color:var(--good); font-weight:700;}
   .wk tbody td:first-child{white-space:normal; min-width:200px;}
   fieldset.links,fieldset.seats{padding:10px 14px 14px;}
-  #vSeats td{white-space:nowrap;}
-  #vSeats input[type=text]{min-width:160px;}
+  .seat{border:1px solid var(--line); border-radius:10px; padding:10px 12px;}
+  .seat-head{display:flex; gap:10px; align-items:center; margin-bottom:8px;}
+  .seat-head button{margin-left:auto;}
+  .seat .check{align-self:end; padding-bottom:8px;}
+  .seat .hide{display:none;}
   fieldset.links .stack{gap:8px; margin-bottom:10px;}
   .link-row{display:flex; flex-wrap:wrap; gap:8px; align-items:end;}
   .link-row input.v-link{min-width:240px;}
@@ -364,35 +367,24 @@
     <div class="panel" id="vEditor" hidden>
       <h3 id="vEdTitle">Новая вакансия</h3>
       <form id="vForm" class="stack" autocomplete="off">
-        <div class="fields">
-          <label class="f">Название<input type="text" id="v_title" required></label>
-          <label class="f">Отдел<input type="text" id="v_dept" list="deptList"></label>
-          <label class="f">Статус<select id="v_status"></select></label>
-          <label class="f">Причина открытия ставки<select id="v_reason"><option value="">—</option><option>новая ставка</option><option>увольнение сотрудника</option><option>замена сотрудника (резерв)</option></select></label>
-          <label class="f">Статус поиска<select id="v_search"><option value="">—</option><option>активный</option><option>поиск в резерв</option></select></label>
-          <label class="f">Ответственный менеджер<input type="text" id="v_manager" list="mgrList"></label>
-          <label class="f" id="vRateWrap">Ставка (сколько нужно человек)<input type="number" min="0" step="0.5" id="v_rate"></label>
-          <label class="f">Заказчик (кто запросил вакансию)<input type="text" id="v_customer" list="custList" placeholder="Имя сотрудника"></label>
-          <label class="f">Дата запроса<input type="date" id="v_requestedAt"></label>
-          <label class="f">Дата публикации<input type="date" id="v_publishedAt"></label>
-          <label class="f">Дата архивации<input type="date" id="v_archivedAt" title="Если есть публикации — по ним"></label>
-          <label class="f">Дата закрытия<input type="date" id="v_closedAt"></label>
-          <label class="f">Дата выхода сотрудника<input type="date" id="v_startAt"></label>
-          <label class="f" id="vPersonWrap">Сотрудник (кто вышел)<input type="text" id="v_person" placeholder="Для испытательного срока"></label>
-          <label class="f">Количество продлений<input type="number" min="0" step="1" id="v_extensions"></label>
-          <label class="f">Офферов отправлено<input type="number" min="0" step="1" id="v_offersSent"></label>
-          <label class="f">Офферов принято<input type="number" min="0" step="1" id="v_offersAccepted"></label>
-        </div>
-        <label class="check"><input type="checkbox" id="v_multi"> Требуется несколько ставок — вести каждую единицу отдельно</label>
-        <fieldset class="seats" id="vSeatsBox" hidden><legend>Единицы найма</legend>
-          <div class="scroll"><table id="vSeats"></table></div>
+        <fieldset class="links"><legend>Вакансия</legend>
+          <div class="fields">
+            <label class="f">Название<input type="text" id="v_title" required></label>
+            <label class="f">Отдел<input type="text" id="v_dept" list="deptList"></label>
+            <label class="f">Статус<select id="v_status"></select></label>
+            <label class="f">Ответственный менеджер<input type="text" id="v_manager" list="mgrList"></label>
+            <label class="f">Заказчик (кто запросил вакансию)<input type="text" id="v_customer" list="custList" placeholder="Имя сотрудника"></label>
+          </div>
+        </fieldset>
+        <fieldset class="seats"><legend>Единицы найма</legend>
+          <div id="vSeats" class="stack"></div>
           <div class="actions mt"><button type="button" class="btn ghost sm" id="vSeatAdd">+ Ещё человек</button><span class="hint" id="vSeatSum"></span></div>
-          <p class="hint mt">Руководитель просит «+1» — добавьте единицу с датой запроса. Человек вышел — поставьте дату выхода: единица закрыта, «нужно людей» уменьшается. Скорость закрытия считается по каждой единице: от её запроса до выхода.</p>
+          <p class="hint mt">Каждый человек, которого нужно нанять, — отдельная единица. Руководитель просит «+1» — добавьте единицу. Проставили дату выхода — единица закрыта успешно; все закрыты — вакансия переходит в «выход сотрудника». Скорость закрытия — по каждой единице: от запроса до выхода.</p>
         </fieldset>
         <fieldset class="links"><legend>Публикации на hh.ru</legend>
           <div id="vLinks" class="stack"></div>
           <button type="button" class="btn ghost sm" id="vLinkAdd">+ Ещё публикация</button>
-          <p class="hint mt">По публикациям считаются «открытые вакансии» менеджера в метриках дня (с 5 октября 2026): открыта — с этого дня, с даты архивации уже не считается. Новая публикация висит месяц; «Продление» — ещё месяц (можно нажимать несколько раз). За 5 дней до архивации — напоминание на дашборде и здесь. «Кандидаты на вакансию» — сколько человек нужно (ставка или единицы в поиске).</p>
+          <p class="hint mt">«Вакансии в работе» менеджера — его публикации на hh.ru (с 5 октября 2026): открыта — с этого дня, с даты архивации уже не считается; одна публикация на несколько вакансий считается один раз. Новая публикация висит месяц; «Продление» — ещё месяц (можно нажимать несколько раз). За 5 дней до архивации — напоминание на дашборде и здесь. «Вакантные ставки» — единицы найма в поиске.</p>
         </fieldset>
         <label class="f">Комментарий<textarea id="v_comment" rows="2"></textarea></label>
         <div class="actions">
@@ -506,16 +498,16 @@
 <script>
 // Встроенные показатели — строки листов Workload.xlsx; на них завязаны расчёты
 var BUILTIN = [
-  {k:'vac_start',  t:'Открытые вакансии на начало дня', g:'start'},
-  {k:'cand_start', t:'Кандидаты на вакансию на начало дня', g:'start'},
+  {k:'vac_start',  t:'Вакансии в работе (публикации) на начало дня', g:'start'},
+  {k:'cand_start', t:'Вакантные ставки на начало дня', g:'start'},
   {k:'int_planned',t:'Собеседования назначенные', g:'work'},
   {k:'int_done',   t:'Собеседования (факт)', g:'work'},
   {k:'calls',      t:'Звонки (удачные)', g:'work'},
   {k:'chats',      t:'Чаты', g:'work'},
   {k:'chats_first',t:'Первичные чаты', g:'work'},
   {k:'rejections', t:'Отказы', g:'work'},
-  {k:'vac_end',    t:'Открытые вакансии на конец дня', g:'end'},
-  {k:'cand_end',   t:'Кандидаты на вакансию на конец дня', g:'end'},
+  {k:'vac_end',    t:'Вакансии в работе (публикации) на конец дня', g:'end'},
+  {k:'cand_end',   t:'Вакантные ставки на конец дня', g:'end'},
   {k:'vac_published',t:'Новые опубликованные вакансии', g:'end'},
   {k:'hires',      t:'Выходы новых сотрудников', g:'end'},
   {k:'dismissals', t:'Увольнения', g:'end'}
@@ -523,8 +515,10 @@ var BUILTIN = [
 var GROUPS = {start:'Начало дня', work:'Работа за день', end:'Итоги дня'};
 var VAC_STATUSES = ['активна', 'выход сотрудника', 'архив', 'не актуальна'];
 var CLOSED = {'выход сотрудника':1, 'архив':1};
-var VAC_FIELDS = ['title','dept','status','reason','search','manager','customer','rate','requestedAt','publishedAt','archivedAt','closedAt','startAt','person','extensions','offersSent','offersAccepted','comment'];
-var NUM_FIELDS = {rate:1, extensions:1, offersSent:1, offersAccepted:1};
+var VAC_FIELDS = ['title','dept','status','manager','customer','comment'];
+// Единица найма: каждый человек, которого нужно нанять; закрыта успешно, когда есть дата выхода
+var SEAT_FIELDS = ['requestedAt','publishedAt','reason','search','offerSentAt','offerAcceptedAt','person','startAt'];
+var REASONS = ['новая ставка', 'увольнение сотрудника', 'замена сотрудника (резерв)'], SEARCHES = ['активный', 'поиск в резерв'];
 var LOGIN_RE = /^[a-z0-9._-]{2,40}$/;
 var MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 var MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
@@ -841,14 +835,14 @@ function renderDay(){
   $('dTiles').innerHTML =
     tile('Собеседования прошли', dn, pDn, {hero:true, vs:vs, suffix: num(pl) ? ' <small>из '+pl+'</small>' : ''}) +
     tile('Доходимость', num(dn) && pl ? Math.round(dn/pl*100) : null, num(pDn) && pPl ? Math.round(pDn/pPl*100) : null, {vs:vs, suffix:'<small>%</small>', unit:' п.п.'}) +
-    tile('Открытые вакансии', V(vacStock), P(vacStock), {vs:vs, lowerIsBetter:true, note: isDay ? '' : 'на конец периода'}) +
-    tile('Кандидаты на вакансию', V(candStock), P(candStock), {vs:vs, note: isDay ? '' : 'на конец периода'}) +
+    tile('Вакансии в работе', V(vacStock), P(vacStock), {vs:vs, lowerIsBetter:true, note: isDay ? '' : 'на конец периода'}) +
+    tile('Вакантные ставки', V(candStock), P(candStock), {vs:vs, note: isDay ? '' : 'на конец периода'}) +
     tile('Звонки', V('calls'), P('calls'), {vs:vs}) +
     tile('Чаты', V(chats), P(chats), {vs:vs}) +
     tile('Отказы', V('rejections'), null, {noDelta:true, note: isDay ? 'кандидатам за день' : 'кандидатам за период'}) +
     tile('Выходы новых сотрудников', V('hires'), P('hires'), isDay ? {noDelta:true, note:'с начала недели: ' + hiresWeek} : {vs:vs});
 
-  var cols = [['Вакансии', vacStock], ['Кандидаты', candStock], ['Собес. назнач.', 'int_planned'], ['Собес. факт', 'int_done'],
+  var cols = [['Вакансии', vacStock], ['Вакантные ставки', candStock], ['Собес. назнач.', 'int_planned'], ['Собес. факт', 'int_done'],
     ['Звонки', 'calls'], ['Чаты', chats], ['Отказы', 'rejections'], ['Новые вакансии', 'vac_published'], ['Выходы', 'hires']]
     .concat(customMetrics().map(function(m){ return [m.t, m.k]; }));
   function cell(v){ return '<td'+(v === null ? ' class="empty"' : '')+'>'+(v === null ? '—' : v)+'</td>'; }
@@ -1034,7 +1028,7 @@ function stageUnits(){
   var out = [];
   visibleVacancies().forEach(function(v){
     if(isMulti(v)) v.seats.forEach(function(x){
-      if(x.startAt && x.startAt <= today()) out.push({v:v, req:x.requestedAt || null, pub:v.publishedAt && x.requestedAt && v.publishedAt >= x.requestedAt ? v.publishedAt : null, end:x.startAt});
+      if(x.startAt && x.startAt <= today()) out.push({v:v, req:x.requestedAt || null, pub:x.publishedAt || (v.publishedAt && x.requestedAt && v.publishedAt >= x.requestedAt ? v.publishedAt : null), end:x.startAt});
     });
     else if(isClosed(v)) out.push({v:v, req:v.requestedAt || null, pub:v.publishedAt || null, end:vacEnd(v)});
   });
@@ -1063,8 +1057,8 @@ function renderStages(w, wl){
 
 // ---------- подробности по плитке: график по частям периода и разбивка по людям ----------
 var DETAIL = {
-  'Собеседования прошли': {k:'int_done'}, 'Доходимость': {conv:true, unit:'%'}, 'Открытые вакансии': {k:vacStock, stock:true},
-  'Кандидаты на вакансию': {k:candStock, stock:true}, 'Звонки': {k:'calls'}, 'Чаты': {k:chats}, 'Отказы': {k:'rejections'}, 'Выходы новых сотрудников': {k:'hires'}
+  'Собеседования прошли': {k:'int_done'}, 'Доходимость': {conv:true, unit:'%'}, 'Вакансии в работе': {k:vacStock, stock:true},
+  'Вакантные ставки': {k:candStock, stock:true}, 'Звонки': {k:'calls'}, 'Чаты': {k:chats}, 'Отказы': {k:'rejections'}, 'Выходы новых сотрудников': {k:'hires'}
 };
 function detailVal(def, r, ps){
   if(!r) return null;
@@ -1391,12 +1385,34 @@ function renderSum(){
 }
 
 // ---------- вакансии ----------
-function vacStart(v){ return v.publishedAt || v.requestedAt || null; }
+function vacStart(v){ return v.publishedAt || v.requestedAt || (v.multi && v.seats ? v.seats.map(function(x){ return x.requestedAt; }).filter(Boolean).sort()[0] : null) || null; }
 function vacEnd(v){ return v.closedAt || v.startAt || null; }
 function isActive(v){ return v.status === 'активна'; }
 function isClosed(v){ return !!CLOSED[v.status] && !!vacEnd(v) && !!vacStart(v); }
 // Несколько ставок: seats = [{requestedAt, startAt?, person?}], единица закрыта датой выхода
 function isMulti(v){ return !!(v.multi && v.seats); }
+// Единицы найма карточки: у сохранённых в новом виде — v.seats; у старых (одна ставка) — из прежних полей
+function seatsOf(v){
+  // прежние многоставочные: дата публикации была одна на вакансию — переносим её в единицы
+  if(isMulti(v)) return v.seats.map(function(x){ return x.publishedAt || !v.publishedAt ? x : Object.assign({}, x, {publishedAt:v.publishedAt}); });
+  var n = Math.max(1, Math.round(num(v.rate) && v.rate > 0 ? v.rate : 1)), end = v.startAt || (v.status === 'выход сотрудника' ? v.closedAt : null), out = [];
+  for(var i = 0; i < n; i++){
+    var x = {};
+    if(v.requestedAt || v.publishedAt) x.requestedAt = v.requestedAt || v.publishedAt;
+    if(v.publishedAt) x.publishedAt = v.publishedAt;
+    if(v.reason) x.reason = v.reason; if(v.search) x.search = v.search;
+    if(end) x.startAt = end;
+    if(!i){ if(v.person) x.person = v.person; if(v.probation) x.probation = v.probation; }
+    out.push(x);
+  }
+  return out;
+}
+// Офферы: по датам в единицах (старые карточки — по счётчикам)
+function offersOf(v){
+  if(!isMulti(v)) return num(v.offersSent) ? {sent:v.offersSent, acc:v.offersAccepted || 0} : null;
+  var sent = v.seats.filter(function(x){ return x.offerSentAt; }).length;
+  return sent ? {sent:sent, acc:v.seats.filter(function(x){ return x.offerAcceptedAt; }).length} : null;
+}
 function openSeats(v){ return v.seats.filter(function(x){ return !x.startAt; }); }
 function seatStart(v, x){ return x.requestedAt || vacStart(v); }
 function needOf(v){ return isMulti(v) ? openSeats(v).length : (num(v.rate) ? v.rate : 1); }
@@ -1464,7 +1480,7 @@ function renderVac(){
       return '<tr class="click" data-id="'+esc(v.id)+'" tabindex="0"><td class="wrapc">'+(vacLinks(v).length ? '<a href="'+esc(vacLinks(v)[0])+'" target="_blank" rel="noopener">'+esc(v.title)+'</a>' : esc(v.title))+pubsHtml(v)+'</td><td class="l">'+esc(v.dept||'—')+'</td><td class="l">'+esc(v.customer||'—')+'</td>' +
         '<td class="l"><span class="pill '+cls+'">'+esc(v.status||'без статуса')+'</span></td><td class="l">'+esc(managerLabel(v))+'</td><td>'+(isMulti(v) ? needOf(v)+' из '+v.seats.length : num(v.rate) ? v.rate : '—')+'</td>' +
         '<td>'+shortDate(vacStart(v))+'</td><td>'+shortDate(vacEnd(v))+'</td><td>'+(d === null ? '—' : (isActive(v) && d > 60 ? '<span class="pill long">'+d+'</span>' : d))+'</td>' +
-        '<td>'+(num(v.extensions) ? v.extensions : '—')+'</td><td>'+(num(v.offersSent) ? (v.offersAccepted||0)+' из '+v.offersSent : '—')+'</td><td>'+rub(vacCost(v))+'</td></tr>';
+        '<td>'+(num(v.extensions) ? v.extensions : '—')+'</td><td>'+(offersOf(v) ? offersOf(v).acc+' из '+offersOf(v).sent : '—')+'</td><td>'+rub(vacCost(v))+'</td></tr>';
     }).join('') : '<tr><td colspan="12" class="empty">Вакансий нет. Добавьте первую кнопкой «Новая вакансия».</td></tr>') + '</tbody>';
 
   function group(key){
@@ -1506,7 +1522,7 @@ function hiringReport(){
   var cols = ['Вакансия', 'Отдел', 'Заказчик', 'Нужно людей', 'В работе с', 'Дней в работе', 'Публикации', 'Офферы', 'Потрачено', 'Комментарий'];
   var RIGHT = {3:1, 4:1, 5:1, 7:1, 8:1};
   function cells(v){ return [v.title, v.dept || '—', v.customer || '—', fmt(needOf(v)) + (isMulti(v) ? ' из ' + v.seats.length : ''), shortDate(vacStart(v)), daysInWork(v) === null ? '—' : daysInWork(v),
-    linkObjs(v).map(function(l, j){ return linkNote(l); }).join('; ') || 'нет', num(v.offersSent) ? (v.offersAccepted || 0) + ' из ' + v.offersSent : '—', rub(vacCost(v)), v.comment || '']; }
+    linkObjs(v).map(function(l, j){ return linkNote(l); }).join('; ') || 'нет', offersOf(v) ? offersOf(v).acc + ' из ' + offersOf(v).sent : '—', rub(vacCost(v)), v.comment || '']; }
   function sortByAge(list){ return list.slice().sort(function(a, b){ return (daysInWork(b) || 0) - (daysInWork(a) || 0); }); }
   var title = 'Текущий найм на ' + date + (scope() ? ' — ' + fullName(scope()) : '');
   var summary = 'В работе ' + act.length + ' ' + plural(act.length, 'вакансия', 'вакансии', 'вакансий') + ', нужно ' + fmt(need(act)) + ' ' + plural(Math.round(need(act)), 'человек', 'человека', 'человек') + '.';
@@ -1593,44 +1609,48 @@ function readLinkRow(r){
   return l;
 }
 function setLinks(list){ $('vLinks').innerHTML = (list.length ? list : [null]).map(linkRow).join(''); }
+function seatOptions(list, v){ return '<option value="">—</option>' + list.map(function(o){ return '<option'+(o === v ? ' selected' : '')+'>'+o+'</option>'; }).join(''); }
 function seatRow(x){
   x = x || {};
-  // поля, которых нет в строке (итог испытательного срока), переживают пересохранение карточки
-  var keep = Object.assign({}, x); delete keep.requestedAt; delete keep.startAt; delete keep.person;
-  return '<tr data-keep="'+esc(JSON.stringify(keep))+'"><td><input type="date" class="s-req" value="'+esc(x.requestedAt || '')+'" aria-label="Дата запроса"></td>' +
-    '<td><input type="date" class="s-start" value="'+esc(x.startAt || '')+'" aria-label="Дата выхода"></td>' +
-    '<td><input type="text" class="s-person" value="'+esc(x.person || '')+'" placeholder="Кто вышел" aria-label="Кто вышел"></td>' +
-    '<td><span class="pill '+(x.startAt ? 'hire' : 'active')+'">'+(x.startAt ? 'закрыта' : 'в поиске')+'</span></td>' +
-    '<td><button type="button" class="btn danger sm" data-del-seat aria-label="Убрать единицу">×</button></td></tr>';
+  // поля, которых нет в форме (итог испытательного срока), переживают пересохранение карточки
+  var keep = Object.assign({}, x); SEAT_FIELDS.forEach(function(f){ delete keep[f]; });
+  function f(label, html, cls){ return '<label class="f'+(cls ? ' ' + cls : '')+'">'+label+html+'</label>'; }
+  function date(k){ return '<input type="date" class="s-'+k+'" value="'+esc(x[k] || '')+'">'; }
+  return '<div class="seat" data-keep="'+esc(JSON.stringify(keep))+'"><div class="seat-head"><b class="seat-n">Единица</b><span class="pill"></span>' +
+      '<button type="button" class="btn danger sm" data-del-seat aria-label="Убрать единицу">×</button></div><div class="fields">' +
+    f('Дата запроса', date('requestedAt')) +
+    '<label class="check"><input type="checkbox" class="s-pub"'+(x.publishedAt ? ' checked' : '')+'> Вакансия уже опубликована</label>' +
+    f('Дата публикации вакансии', date('publishedAt'), 's-pubWrap' + (x.publishedAt ? '' : ' hide')) +
+    f('Причина открытия', '<select class="s-reason">'+seatOptions(REASONS, x.reason)+'</select>') +
+    f('Статус поиска', '<select class="s-search">'+seatOptions(SEARCHES, x.search)+'</select>') +
+    f('Дата отправки оффера', date('offerSentAt')) + f('Дата принятия оффера', date('offerAcceptedAt')) +
+    f('Кто вышел', '<input type="text" class="s-person" value="'+esc(x.person || '')+'" placeholder="Имя сотрудника">') + f('Дата выхода', date('startAt')) +
+    '</div></div>';
 }
 function readSeats(){
-  return Array.prototype.map.call(document.querySelectorAll('#vSeats tbody tr'), function(tr){
-    var x = JSON.parse(tr.dataset.keep || '{}'), r = tr.querySelector('.s-req').value, st = tr.querySelector('.s-start').value, pn = tr.querySelector('.s-person').value.trim();
-    if(r) x.requestedAt = r; if(st) x.startAt = st; if(pn) x.person = pn; return x;
+  return Array.prototype.map.call(document.querySelectorAll('#vSeats .seat'), function(el){
+    var x = JSON.parse(el.dataset.keep || '{}');
+    SEAT_FIELDS.forEach(function(k){ var v = el.querySelector('.s-' + k).value.trim(); if(v) x[k] = v; });
+    if(!el.querySelector('.s-pub').checked) delete x.publishedAt;
+    return x;
   });
 }
-function setSeats(list){
-  $('vSeats').innerHTML = '<thead><tr><th class="l">Запрос</th><th class="l">Выход</th><th class="l">Сотрудник</th><th class="l">Статус</th><th></th></tr></thead><tbody>' + list.map(seatRow).join('') + '</tbody>';
-  seatSummary();
-}
+function setSeats(list){ $('vSeats').innerHTML = list.map(seatRow).join(''); seatSummary(); }
 function seatSummary(){
   var all = readSeats(), open = all.filter(function(x){ return !x.startAt; }).length;
   $('vSeatSum').textContent = 'Всего ' + all.length + ', в поиске ' + open + ', закрыто ' + (all.length - open);
-  document.querySelectorAll('#vSeats tbody tr').forEach(function(tr){
-    var done = !!tr.querySelector('.s-start').value, pill = tr.querySelector('.pill');
-    pill.className = 'pill ' + (done ? 'hire' : 'active'); pill.textContent = done ? 'закрыта' : 'в поиске';
+  document.querySelectorAll('#vSeats .seat').forEach(function(el, i){
+    var done = !!el.querySelector('.s-startAt').value, pill = el.querySelector('.pill');
+    el.querySelector('.seat-n').textContent = 'Единица ' + (i + 1);
+    pill.className = 'pill ' + (done ? 'hire' : 'active'); pill.textContent = done ? 'закрыта — сотрудник вышел' : 'в поиске';
+    el.querySelector('.s-pubWrap').classList.toggle('hide', !el.querySelector('.s-pub').checked);
   });
 }
-// Галка «несколько ставок»: из ставки получаются единицы (закрытая вакансия — уже закрытыми)
-function toggleMulti(){
-  var on = $('v_multi').checked;
-  $('vSeatsBox').hidden = !on; $('vRateWrap').hidden = on; $('vPersonWrap').hidden = on;
-  if(on && !document.querySelector('#vSeats tbody tr')){
-    var n = Math.max(1, Math.round(+$('v_rate').value || 1)), req = $('v_requestedAt').value || $('v_publishedAt').value || today();
-    var end = CLOSED[$('v_status').value] ? ($('v_closedAt').value || $('v_startAt').value) : '';
-    var list = []; for(var i = 0; i < n; i++) list.push(end ? {requestedAt:req, startAt:end} : {requestedAt:req});
-    setSeats(list);
-  }
+// галка «уже опубликована»: дата — первой публикации на hh.ru, если есть, иначе сегодня
+function seatPubToggle(box){
+  var d = box.closest('.seat').querySelector('.s-publishedAt');
+  if(box.checked && !d.value) d.value = Array.prototype.map.call(document.querySelectorAll('#vLinks .link-row'), readLinkRow).map(function(l){ return l.at; }).filter(Boolean).sort()[0] || today();
+  seatSummary();
 }
 // Интервал [a, b): открыта в момент d — на конец дня (eod) или на начало (до изменений этого дня)
 function openOn(a, b, d, eod){ return !!a && (eod ? a <= d : a < d) && (!b || (eod ? b > d : b >= d)); }
@@ -1638,19 +1658,20 @@ function vacSpan(v){
   var s = vacStart(v);
   return [s, isActive(v) ? null : (v.closedAt || v.startAt || v.archivedAt || (v.updatedAt || '').slice(0, 10) || s)];
 }
-// Цифры дня менеджера из реестра: вакансии = публикации на hh.ru, кандидаты = сколько человек нужно
+// Цифры дня менеджера из реестра: вакансии в работе = его публикации на hh.ru (одна ссылка на несколько
+// вакансий — одна), вакантные ставки = единицы найма в поиске
 function registryDay(p, d){
-  var r = {vac_start:0, vac_end:0, cand_start:0, cand_end:0, vac_published:0};
+  var r = {vac_start:0, vac_end:0, cand_start:0, cand_end:0, vac_published:0}, seen = {_start:{}, _end:{}, pub:{}};
   Object.keys(vacancies).forEach(function(id){
     var v = vacancies[id]; if(vacOwner(v) !== p) return;
     var sp = vacSpan(v), links = linkObjs(v);
     [true, false].forEach(function(eod){
       if(!openOn(sp[0], sp[1], d, eod)) return;
       var sfx = eod ? '_end' : '_start';
-      r['vac' + sfx] += links.filter(function(l){ return linkOpen(l, sp[0], d, eod); }).length;
+      links.forEach(function(l){ if(linkOpen(l, sp[0], d, eod) && !seen[sfx][l.url]){ seen[sfx][l.url] = 1; r['vac' + sfx]++; } });
       r['cand' + sfx] += isMulti(v) ? v.seats.filter(function(x){ return openOn(seatStart(v, x), x.startAt, d, eod); }).length : needOf(v);
     });
-    links.forEach(function(l){ if((l.at || sp[0]) === d) r.vac_published++; });
+    links.forEach(function(l){ if((l.at || sp[0]) === d && !seen.pub[l.url]){ seen.pub[l.url] = 1; r.vac_published++; } });
   });
   return r;
 }
@@ -1670,28 +1691,15 @@ function rebuild(){
     });
   }
 }
-// Пока у вакансии есть публикации, её «дата архивации» и «продления» считаются по ним
-function syncPubFields(){
-  var links = Array.prototype.map.call(document.querySelectorAll('#vLinks .link-row'), readLinkRow).filter(function(l){ return l.url || l.closedAt; });
-  var has = links.length > 0;
-  ['v_archivedAt', 'v_extensions'].forEach(function(id){ $(id).readOnly = has; });
-  if(has){
-    $('v_archivedAt').value = links.map(function(l){ return l.closedAt || ''; }).sort().pop() || '';
-    $('v_extensions').value = links.reduce(function(s, l){ return s + (l.ext || 0); }, 0);
-  }
-}
+function syncPubFields(){}   // дата архивации и продления видны в самих публикациях
 var editingVac = null;
 function openVac(id){
   var me = scope() && team[scope()];
-  var v = id ? vacancies[id] : {status:'активна', publishedAt:today(), manager: me ? fullName(scope()) : ''};
+  var v = id ? vacancies[id] : {status:'активна', manager: me ? fullName(scope()) : ''};
   editingVac = id || null;
   VAC_FIELDS.forEach(function(f){ $('v_'+f).value = v[f] == null ? '' : v[f]; });
   setLinks(linkObjs(v));
-  syncPubFields();
-  $('v_multi').checked = isMulti(v);
-  $('vSeats').innerHTML = '';
-  if(isMulti(v)) setSeats(v.seats);
-  toggleMulti();
+  setSeats(id ? seatsOf(v) : [{requestedAt:today()}]);
   $('vEdTitle').textContent = id ? 'Вакансия' : 'Новая вакансия';
   $('vDelete').hidden = !id || !isAdmin();
   $('vStat').textContent = '';
@@ -1701,28 +1709,31 @@ function openVac(id){
 function saveVac(e){
   e.preventDefault();
   if(!db) return;
-  var v = {};
-  VAC_FIELDS.forEach(function(f){ var x = $('v_'+f).value.trim(); if(x !== '') v[f] = NUM_FIELDS[f] ? +x : x; });
+  // прежние поля карточки (ставка, даты, офферы, кто вышел) теперь живут в единицах найма; остальное — как было
+  var v = Object.assign({}, editingVac ? vacancies[editingVac] : {});
+  ['rate','requestedAt','publishedAt','archivedAt','closedAt','startAt','person','extensions','offersSent','offersAccepted','reason','search','probation','link'].forEach(function(f){ delete v[f]; });
+  VAC_FIELDS.forEach(function(f){ var x = $('v_'+f).value.trim(); if(x !== '') v[f] = x; else delete v[f]; });
+  var seats = readSeats();
+  if(!seats.length){ $('vStat').className = 'status err'; $('vStat').textContent = 'Добавьте хотя бы одну единицу найма.'; return; }
+  seats.forEach(function(x){ if(!x.requestedAt) x.requestedAt = today(); });
+  var firstPub = seats.map(function(x){ return x.publishedAt; }).filter(Boolean).sort()[0];
   var seen = {}, links = Array.prototype.map.call(document.querySelectorAll('#vLinks .link-row'), readLinkRow)
-    .map(function(l){ if(!l.at) l.at = v.publishedAt || today(); return l; })
+    .map(function(l){ if(!l.at) l.at = firstPub || today(); return l; })
     .filter(function(l){ if(!l.url || seen[l.url]) return false; seen[l.url] = 1; return true; });
-  if(links.length){
-    v.links = links;   // старое поле link не сохраняем — его заменяет список
-    // дата архивации и продления вакансии — по публикациям: самая поздняя дата и сумма продлений
-    var last = links.map(function(l){ return l.closedAt || ''; }).sort().pop();
-    if(last) v.archivedAt = last; else delete v.archivedAt;
-    v.extensions = links.reduce(function(s, l){ return s + (l.ext || 0); }, 0);
-  }
-  if($('v_multi').checked){
-    var seats = readSeats().map(function(x){ if(!x.requestedAt) x.requestedAt = v.requestedAt || v.publishedAt || today(); return x; });
-    if(!seats.length){ $('vStat').className = 'status err'; $('vStat').textContent = 'Добавьте хотя бы одну единицу или снимите галку «несколько ставок».'; return; }
-    var open = seats.filter(function(x){ return !x.startAt; }).length;
-    v.multi = true; v.seats = seats; v.rate = open;
-    // статус следует за единицами: все закрыты — «выход сотрудника», появилась новая — снова «активна»
-    if(!open && v.status === 'активна'){ v.status = 'выход сотрудника'; v.closedAt = seats.map(function(x){ return x.startAt; }).sort().pop(); }
-    if(open && v.status === 'выход сотрудника'){ v.status = 'активна'; delete v.closedAt; }
-  }
-  if(editingVac && vacancies[editingVac].probation && !v.multi) v.probation = vacancies[editingVac].probation;   // итог ИС ставится на дашборде
+  if(links.length) v.links = links; else delete v.links;
+  // сводка по карточке — для отчётов и сроков: первый запрос и первая публикация; архивация и продления — по hh.ru
+  v.requestedAt = seats.map(function(x){ return x.requestedAt; }).sort()[0];
+  var pub = seats.map(function(x){ return x.publishedAt; }).concat(links.map(function(l){ return l.at; })).filter(Boolean).sort()[0];
+  if(pub) v.publishedAt = pub;
+  var lastArch = links.map(function(l){ return l.closedAt || ''; }).sort().pop();
+  if(lastArch) v.archivedAt = lastArch;
+  if(links.length) v.extensions = links.reduce(function(s, l){ return s + (l.ext || 0); }, 0);
+  var open = seats.filter(function(x){ return !x.startAt; }).length;
+  v.multi = true; v.seats = seats; v.rate = open;
+  // статус следует за единицами: все вышли — «выход сотрудника», появилась новая — снова «активна»
+  if(!open && v.status === 'активна') v.status = 'выход сотрудника';
+  if(open && v.status === 'выход сотрудника') v.status = 'активна';
+  if(!open && CLOSED[v.status]) v.closedAt = seats.map(function(x){ return x.startAt; }).sort().pop(); else if(open) delete v.closedAt;
   v.updatedAt = new Date().toISOString();
   var ref = editingVac ? db.doc('vacancies/' + editingVac) : db.collection('vacancies').doc();
   $('vSave').disabled = true; $('vStat').className = 'status'; $('vStat').textContent = 'Сохраняю…';
@@ -2306,13 +2317,12 @@ $('vCopy').onclick = function(){
 $('vCancel').onclick = function(){ $('vEditor').hidden = true; editingVac = null; };
 $('vForm').onsubmit = saveVac;
 $('vDelete').onclick = deleteVac;
-$('v_multi').onchange = toggleMulti;
 $('vSeatAdd').onclick = function(){
-  if(!document.querySelector('#vSeats tbody')) setSeats([]);
-  document.querySelector('#vSeats tbody').insertAdjacentHTML('beforeend', seatRow({requestedAt:today()})); seatSummary();
+  $('vSeats').insertAdjacentHTML('beforeend', seatRow({requestedAt:today()})); seatSummary();
+  $('vSeats').lastElementChild.querySelector('input').focus();
 };
-$('vSeats').onclick = function(e){ var b = e.target.closest('[data-del-seat]'); if(b){ b.closest('tr').remove(); seatSummary(); } };
-$('vSeats').onchange = seatSummary;
+$('vSeats').onclick = function(e){ var b = e.target.closest('[data-del-seat]'); if(b){ b.closest('.seat').remove(); seatSummary(); } };
+$('vSeats').onchange = function(e){ if(e.target.classList.contains('s-pub')) seatPubToggle(e.target); else seatSummary(); };
 $('vLinkAdd').onclick = function(){ $('vLinks').insertAdjacentHTML('beforeend', linkRow(null)); $('vLinks').lastElementChild.querySelector('input').focus(); syncPubFields(); };
 $('vLinks').onclick = function(e){
   var b = e.target.closest('[data-del-link]');
