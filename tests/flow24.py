@@ -159,8 +159,9 @@ with sync_playwright() as p:
     pg.click('#vAdd'); pg.fill('#v_title', 'Менеджер отдела бронирования 2/2'); pg.fill('#v_manager', 'Немчинова')
     assert len(pg.query_selector_all('#vSeats .seat')) == 1 and pg.input_value('#vSeats .s-requestedAt') == dt.date.today().isoformat()
     s1 = '#vSeats .seat:nth-child(1) '
-    pg.fill(s1 + '.s-requestedAt', ago(30)); assert pg.is_hidden(s1 + '.s-publishedAt')
-    pg.check(s1 + '.s-pub'); assert pg.input_value(s1 + '.s-publishedAt') == dt.date.today().isoformat()   # без публикаций — сегодня
+    pg.fill(s1 + '.s-requestedAt', ago(30)); assert pg.is_visible(s1 + '.s-publishedAt')
+    pg.check(s1 + '.s-pub'); assert pg.is_hidden(s1 + '.s-publishedAt')      # «уже опубликована» — дату не вводим
+    pg.uncheck(s1 + '.s-pub'); assert pg.is_visible(s1 + '.s-publishedAt')
     pg.fill(s1 + '.s-publishedAt', ago(25))
     pg.select_option(s1 + '.s-reason', 'увольнение сотрудника'); pg.select_option(s1 + '.s-search', 'активный'); pg.select_option(s1 + '.s-source', 'рекомендация сотрудника')
     pg.fill(s1 + '.s-offerSentAt', ago(15)); pg.fill(s1 + '.s-offerAcceptedAt', ago(14))

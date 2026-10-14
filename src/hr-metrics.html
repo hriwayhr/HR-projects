@@ -1624,14 +1624,14 @@ function seatOptions(list, v){ return '<option value="">—</option>' + list.map
 function seatRow(x){
   x = x || {};
   // поля, которых нет в форме (итог испытательного срока), переживают пересохранение карточки
-  var keep = Object.assign({}, x); SEAT_FIELDS.forEach(function(f){ delete keep[f]; });
+  var keep = Object.assign({}, x); SEAT_FIELDS.forEach(function(f){ delete keep[f]; }); delete keep.published;
   function f(label, html, cls){ return '<label class="f'+(cls ? ' ' + cls : '')+'">'+label+html+'</label>'; }
   function date(k){ return '<input type="date" class="s-'+k+'" value="'+esc(x[k] || '')+'">'; }
   return '<div class="seat" data-keep="'+esc(JSON.stringify(keep))+'"><div class="seat-head"><b class="seat-n">Единица</b><span class="pill"></span>' +
       '<button type="button" class="btn danger sm" data-del-seat aria-label="Убрать единицу">×</button></div><div class="fields">' +
     f('Дата запроса', date('requestedAt')) +
-    '<label class="check"><input type="checkbox" class="s-pub"'+(x.publishedAt ? ' checked' : '')+'> Вакансия уже опубликована</label>' +
-    f('Дата публикации вакансии', date('publishedAt'), 's-pubWrap' + (x.publishedAt ? '' : ' hide')) +
+    '<label class="check"><input type="checkbox" class="s-pub"'+(x.published ? ' checked' : '')+'> Вакансия уже опубликована</label>' +
+    f('Дата публикации вакансии', date('publishedAt'), 's-pubWrap' + (x.published ? ' hide' : '')) +
     f('Причина открытия', '<select class="s-reason">'+seatOptions(REASONS, x.reason)+'</select>') +
     f('Статус поиска', '<select class="s-search">'+seatOptions(SEARCHES, x.search)+'</select>') +
     f('Источник поиска', '<select class="s-source">'+seatOptions(SOURCES, x.source)+'</select>') +
@@ -1643,7 +1643,9 @@ function readSeats(){
   return Array.prototype.map.call(document.querySelectorAll('#vSeats .seat'), function(el){
     var x = JSON.parse(el.dataset.keep || '{}');
     SEAT_FIELDS.forEach(function(k){ var v = el.querySelector('.s-' + k).value.trim(); if(v) x[k] = v; });
-    if(!el.querySelector('.s-pub').checked) delete x.publishedAt;
+    // «уже опубликована» — дату не вводим: берём первую публикацию на hh.ru, если она есть
+    delete x.published;
+    if(el.querySelector('.s-pub').checked){ x.published = true; var first = vacFirstLinkAt(); if(first) x.publishedAt = first; else delete x.publishedAt; }
     return x;
   });
 }
@@ -1655,15 +1657,11 @@ function seatSummary(){
     var done = !!el.querySelector('.s-startAt').value, pill = el.querySelector('.pill');
     el.querySelector('.seat-n').textContent = 'Единица ' + (i + 1);
     pill.className = 'pill ' + (done ? 'hire' : 'active'); pill.textContent = done ? 'закрыта — сотрудник вышел' : 'в поиске';
-    el.querySelector('.s-pubWrap').classList.toggle('hide', !el.querySelector('.s-pub').checked);
+    el.querySelector('.s-pubWrap').classList.toggle('hide', el.querySelector('.s-pub').checked);
   });
 }
-// галка «уже опубликована»: дата — первой публикации на hh.ru, если есть, иначе сегодня
-function seatPubToggle(box){
-  var d = box.closest('.seat').querySelector('.s-publishedAt');
-  if(box.checked && !d.value) d.value = Array.prototype.map.call(document.querySelectorAll('#vLinks .link-row'), readLinkRow).map(function(l){ return l.at; }).filter(Boolean).sort()[0] || today();
-  seatSummary();
-}
+function vacFirstLinkAt(){ return Array.prototype.map.call(document.querySelectorAll('#vLinks .link-row'), readLinkRow).filter(function(l){ return l.url; }).map(function(l){ return l.at; }).filter(Boolean).sort()[0] || null; }
+function seatPubToggle(){ seatSummary(); }
 // Интервал [a, b): открыта в момент d — на конец дня (eod) или на начало (до изменений этого дня)
 function openOn(a, b, d, eod){ return !!a && (eod ? a <= d : a < d) && (!b || (eod ? b > d : b >= d)); }
 function vacSpan(v){
