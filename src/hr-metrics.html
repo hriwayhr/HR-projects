@@ -255,10 +255,10 @@
   <section id="viewLogin">
     <form class="login panel" id="loginForm" autocomplete="off">
       <h2>Вход</h2>
-      <label class="f">Логин<input type="text" id="lLogin" autocapitalize="none" required></label>
+      <label class="f">Почта или логин<input type="text" id="lLogin" autocapitalize="none" required></label>
       <label class="f">Пароль<input type="password" id="lPass" required></label>
       <div class="actions"><button class="btn" type="submit" id="lSubmit">Войти</button><span class="status err" id="lErr" role="status"></span></div>
-      <p class="hint">Логин и пароль выдаёт администратор.</p>
+      <p class="hint">Пароль выдаёт администратор.</p>
     </form>
     <form class="login panel" id="bootForm" autocomplete="off" hidden>
       <h2>Первый администратор</h2>
@@ -447,7 +447,7 @@
         <form class="who mt" id="tUserForm" autocomplete="off">
           <label class="f">Имя<input type="text" id="tName" required></label>
           <label class="f">Фамилия (как в вакансиях)<input type="text" id="tSurname"></label>
-          <label class="f">Логин<input type="text" id="tLogin" autocapitalize="none" required></label>
+          <label class="f">Почта или логин<input type="text" id="tLogin" autocapitalize="none" required></label>
           <label class="check"><input type="checkbox" id="tAdmin"> Администратор</label>
           <label class="check"><input type="checkbox" id="tRecr" checked> Вносит метрики</label>
           <button class="btn" type="submit">Добавить пользователя</button>
@@ -527,7 +527,7 @@ var VAC_FIELDS = ['title','dept','status','manager','customer','comment'];
 // Единица найма: каждый человек, которого нужно нанять; закрыта успешно, когда есть дата выхода
 var SEAT_FIELDS = ['requestedAt','publishedAt','reason','search','source','offerSentAt','offerAcceptedAt','person','startAt'];
 var REASONS = ['новая ставка', 'увольнение сотрудника', 'переход сотрудника', 'замена сотрудника (резерв)'], SEARCHES = ['активный', 'поиск в резерв'], SOURCES = ['отклик', 'рекомендация сотрудника', 'холодный поиск', 'резерв'];
-var LOGIN_RE = /^[a-z0-9._-]{2,40}$/;
+var LOGIN_RE = /^[a-z0-9._@+-]{2,80}$/;   // логин или рабочая почта
 var MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
 var MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
 var WD = ['вс','пн','вт','ср','чт','пт','сб'];
@@ -1783,7 +1783,7 @@ function emailError(email){
   return '';
 }
 function loginError(login){
-  if(!LOGIN_RE.test(login)) return 'Логин — латиница, цифры, точка, дефис или подчёркивание; от 2 символов.';
+  if(!LOGIN_RE.test(login)) return 'Логин — почта или латиница, цифры, точка, дефис, подчёркивание; от 2 символов.';
   if(Object.keys(team).some(function(p){ return team[p].login === login; })) return 'Логин «' + login + '» уже занят.';
   return '';
 }
@@ -1922,7 +1922,7 @@ function login(e){
 function bootstrap(e){
   e.preventDefault();
   var name = $('bName').value.trim(), l = norm($('bLogin').value), pw = $('bPass').value, err = $('bErr');
-  if(!LOGIN_RE.test(l)){ err.textContent = 'Логин — латиница, цифры, точка, дефис или подчёркивание; от 2 символов.'; return; }
+  if(!LOGIN_RE.test(l)){ err.textContent = 'Логин — почта или латиница, цифры, точка, дефис, подчёркивание; от 2 символов.'; return; }
   if(pw.length < 6){ err.textContent = 'Пароль — не короче 6 символов.'; return; }
   if(loginError(l)){ err.textContent = loginError(l); return; }
   var id = 'p' + Date.now().toString(36);
@@ -2181,7 +2181,7 @@ function cloudDb(){
   }};
 }
 function cloudStart(){
-  $('offline').textContent = LOCAL ? 'Программа на этом ПК не отвечает — запустите «Запустить HR-метрики» снова.' : 'Сервер недоступен — данные не загрузились. Обновите страницу через минуту.';
+  $('offline').textContent = LOCAL && /^(localhost|127\.)/.test(location.hostname) ? 'Программа на этом ПК не отвечает — запустите «Запустить HR-метрики» снова.' : 'Сервер недоступен — данные не загрузились. Обновите страницу через минуту.';
   if(LOCAL) return fetch('/api/me', {credentials:'same-origin'}).then(function(r){ return r.json().then(function(j){ return r.ok ? j : (localEmpty = !!j.empty, null); }); }).then(function(m){
     session = m ? {id:m.pid} : null;
     return session ? cloudDb() : null;

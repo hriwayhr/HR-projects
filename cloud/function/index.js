@@ -21,6 +21,7 @@ function config(env = process.env) {
     clientId: env.OAUTH_CLIENT_ID, clientSecret: env.OAUTH_CLIENT_SECRET, sessionSecret: env.SESSION_SECRET,
     domains: list(env.ALLOWED_DOMAINS), admins: list(env.ADMIN_EMAILS), bucket: env.BACKUP_BUCKET,
     local: env.LOCAL === '1',   // локальная версия: сервер на этом ПК, вход по логину и паролю из «Команды»
+    webImport: env.LOCAL === '1' && env.WEB_IMPORT !== '0',   // загрузка данных со страницы — только на своём ПК; на открытом сервере — из файла (server.js)
   };
 }
 
@@ -157,26 +158,46 @@ async function backup(cfg, store, context, fetchFn = fetch) {
 
 // ---------- локальная версия: вход по паролю и первичная загрузка данных ----------
 // Пароль — тот же SHA-256(salt + '::' + пароль), что выдаёт «Команда»; проверяет сервер, страница хешей не получает.
+// Перебор: после 10 неудачных попыток подряд логин закрыт на 15 минут, после 100 за 15 минут — вход закрыт для всех
+const FAILS = new Map(), LOCK_MS = 15 * 60e3;
+let allFails = { n: 0, at: 0 };
 async function passwordLogin(cfg, store, b) {
   const people = ((await store.get('config/team')) || {}).people || {}, login = acl.norm(b.login);
+  const now = Date.now(), f = FAILS.get(login);
+  if (now - allFails.at > LOCK_MS) allFails = { n: 0, at: now };
+  if ((f && f.n >= 10 && now - f.at < LOCK_MS) || allFails.n >= 100)
+    return json(429, { error: 'Слишком много неудачных попыток — подождите 15 минут.' });
   const pid = Object.keys(people).find(p => acl.norm(people[p].login) === login), t = pid && people[pid];
   const want = Buffer.from(String((t && t.hash) || '')), got = Buffer.from(crypto.createHash('sha256').update(String((t && t.salt) || '') + '::' + String(b.password || '')).digest('hex'));
   if (!t || !t.hash || want.length !== got.length || !crypto.timingSafeEqual(want, got)) {
+    FAILS.set(login, { n: (f && now - f.at < LOCK_MS ? f.n : 0) + 1, at: now }); allFails.n++;
+    if (FAILS.size > 10000) FAILS.clear();                 // память не растёт от случайных логинов
     await new Promise(r => setTimeout(r, 400));             // перебор паролей — медленно
     return json(401, { error: 'Неверный логин или пароль.' });
   }
+  FAILS.delete(login);
   if (t.archived) return json(403, { error: 'Учётная запись в архиве — обратитесь к администратору.' });
   return respond(200, { ok: true }, {}, { multiValueHeaders: { 'Set-Cookie': [auth.sessionCookie(cfg.sessionSecret, login)] } });
 }
 // Только в пустую базу: данные из версии для ПК или резервной копии; нужен администратор с паролем
-async function importInitial(store, b) {
-  if ((await store.count()) > 0) return json(403, { error: 'В папке уже есть данные.' });
-  const docs = b.docs, people = ((docs || {})['config/team'] || {}).people || {};
+// Возвращает число загруженных документов или текст ошибки
+async function importDocs(store, docs) {
+  if ((await store.count()) > 0) return 'В папке уже есть данные.';
+  const people = ((docs || {})['config/team'] || {}).people || {};
   if (!Object.keys(people).some(p => people[p].admin && people[p].login && people[p].hash && !people[p].archived))
-    return json(400, { error: 'В файле нет администратора с паролем — загрузите версию для ПК «HR-метрики.html».' });
+    return 'В файле нет администратора с паролем — загрузите версию для ПК «HR-метрики.html».';
   const paths = Object.keys(docs).filter(p => acl.PATH_RE.test(p) && docs[p] && typeof docs[p] === 'object' && !Array.isArray(docs[p]));
   for (const p of paths) await store.tx(p, () => JSON.parse(JSON.stringify(docs[p])), 'import');
-  return json(200, { ok: true, docs: paths.length });
+  return paths.length;
+}
+// Данные из файла версии для ПК (HTML, внутри — SEED) или резервной копии (JSON с docs)
+function docsFromFile(text) {
+  const a = text.indexOf('var SEED = '), z = text.indexOf(';\n  var TEMPLATE = ');
+  return a >= 0 && z > a ? JSON.parse(text.slice(a + 11, z)).data : JSON.parse(text).docs;
+}
+async function importInitial(store, b) {
+  const r = await importDocs(store, b.docs);
+  return typeof r === 'number' ? json(200, { ok: true, docs: r }) : json(r === 'В папке уже есть данные.' ? 403 : 400, { error: r });
 }
 
 function makeHandler(store, cfg, fetchFn) {
@@ -193,9 +214,9 @@ function makeHandler(store, cfg, fetchFn) {
       if (method !== 'GET' && auth.headerOf(headers, 'x-hr') !== '1') return json(403, { error: 'Запрос не со страницы приложения.' });
       const body = () => { try { return JSON.parse(event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || ''); } catch (e) { return null; } };
       if (cfg.local && method === 'POST' && url === '/api/plogin') return await passwordLogin(cfg, store, body() || {});
-      if (cfg.local && method === 'POST' && url === '/api/import-initial') return await importInitial(store, body() || {});
+      if (cfg.webImport && method === 'POST' && url === '/api/import-initial') return await importInitial(store, body() || {});
       const user = await currentUser(cfg, store, headers);
-      if (!user) return json(401, { error: 'Нужно войти.', empty: cfg.local ? (await store.count()) === 0 : undefined });
+      if (!user) return json(401, { error: 'Нужно войти.', empty: cfg.webImport ? (await store.count()) === 0 : undefined });
       if (method === 'GET' && url === '/api/me') return json(200, { pid: user.pid, email: user.email, admin: user.admin });
       if (method === 'GET' && url === '/api/sync') return json(200, await sync(user, store, Math.max(0, Number(query.since) || 0)));
       if (method === 'POST' && url === '/api/doc') {
@@ -231,4 +252,6 @@ module.exports.handler = (event, context) => {
 };
 module.exports.create = (store, cfg, f) => withLogout(makeHandler(store, cfg, f));
 module.exports.config = config;
+module.exports.importDocs = importDocs;
+module.exports.docsFromFile = docsFromFile;
 module.exports.forTests = { makeHandler: (store, cfg, f) => withLogout(makeHandler(store, cfg, f)), config, memoryStore };

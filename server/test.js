@@ -29,3 +29,29 @@ test('сервер: страница, защита, вход через Янде
   const code = await new Promise(ok => bad.on('exit', ok));
   assert.equal(code, 1);
 });
+
+test('сервер: вход по паролю, данные из файла, защита от перебора', async () => {
+  const crypto = require('crypto');
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'hr-srv-'));
+  const hash = crypto.createHash('sha256').update('s1::Secret-1').digest('hex');
+  const seed = { data: { 'config/team': { people: { y: { name: 'Юля', login: 'yulia@example.ru', salt: 's1', hash, admin: true } } }, 'months/y_2026-10': { person: 'y', month: '2026-10', days: {} } } };
+  fs.writeFileSync(path.join(data, 'import.html'), '<script>\n  var SEED = ' + JSON.stringify(seed) + ';\n  var TEMPLATE = "";</script>');
+  const env = Object.assign({}, process.env, { DATA_DIR: data, PORT: '8798', AUTH: 'password', SESSION_SECRET: 's'.repeat(48), NODE_NO_WARNINGS: '1' });
+  const p = spawn(process.execPath, [path.join(__dirname, 'server.js')], { env });
+  try {
+    await new Promise((ok, no) => { p.stdout.on('data', d => /слушают/.test(d) && ok()); p.on('exit', c => no(new Error('вышел ' + c))); });
+    const base = 'http://localhost:8798', post = (u, b) => fetch(base + u, { method: 'POST', headers: { 'X-HR': '1', 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+    assert.ok(!fs.existsSync(path.join(data, 'import.html')));   // загружен и удалён
+    assert.match(await (await fetch(base + '/')).text(), /window\.HR_LOCAL = true/);
+    assert.equal((await post('/api/import-initial', { docs: seed.data })).status, 401);   // со страницы на сервере — нельзя
+    const me = await (await fetch(base + '/api/me')).json();
+    assert.equal(me.empty, undefined);
+    const ok = await post('/api/plogin', { login: 'Yulia@Example.ru', password: 'Secret-1' });
+    assert.equal(ok.status, 200);
+    const cookie = ok.headers.get('set-cookie').split(';')[0];
+    const sync = await (await fetch(base + '/api/sync', { headers: { Cookie: cookie } })).json();
+    assert.ok(sync.docs.some(d => d.path === 'months/y_2026-10'));
+    for (let i = 0; i < 10; i++) assert.equal((await post('/api/plogin', { login: 'yulia@example.ru', password: 'bad' })).status, 401);
+    assert.equal((await post('/api/plogin', { login: 'yulia@example.ru', password: 'Secret-1' })).status, 429);   // даже верный пароль — после 10 ошибок ждать
+  } finally { p.kill(); }
+});
