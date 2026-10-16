@@ -14,9 +14,10 @@ apt-get install -yq ca-certificates curl openssl ufw fail2ban unattended-upgrade
 dpkg-reconfigure -f noninteractive unattended-upgrades          # автоматические обновления безопасности
 systemctl enable --now fail2ban docker
 
-echo "== Файрвол: открыты только SSH, 80 и 443"
+echo "== Файрвол: открыты только SSH (все его порты), 80 и 443"
 ufw default deny incoming; ufw default allow outgoing
 ufw allow OpenSSH; ufw allow 80/tcp; ufw allow 443/tcp
+for port in $(sshd -T 2>/dev/null | awk '$1 == "port" {print $2}'); do ufw allow "$port/tcp"; done   # SSH на другом порту — не отрезать себя
 ufw --force enable
 
 echo "== SSH: вход только по ключу"
