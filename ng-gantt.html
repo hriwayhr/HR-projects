@@ -1,0 +1,120 @@
+<title>Гант НГ-мероприятий</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: sticky task-name column + scrollable week grid; event windows shaded as vertical bands */
+:root{--bg:#f6f7f9;--fg:#1b2430;--mut:#6a7686;--line:#dde2e8;--panel:#fff;
+--corp:#3b6fd4;--rep:#e0832e;--kids:#17a2a8;--off:#7a6bc4;--com:#8a94a3;--oth:#c45a86;
+--ev:rgba(59,111,212,.10);--evr:rgba(224,131,46,.12);--evk:rgba(23,162,168,.12);--today:#d33;--done:#2e9e5b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12171e;--fg:#e4e9f0;--mut:#8f9aaa;--line:#2a323d;--panel:#1a212a;
+--corp:#6c97ec;--rep:#f0a05a;--kids:#3cc3c9;--off:#a094e6;--com:#a0aab8;--oth:#e582ae;
+--ev:rgba(108,151,236,.14);--evr:rgba(240,160,90,.15);--evk:rgba(60,195,201,.15);--today:#ff6b6b;--done:#4cc383;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12171e;--fg:#e4e9f0;--mut:#8f9aaa;--line:#2a323d;--panel:#1a212a;
+--corp:#6c97ec;--rep:#f0a05a;--kids:#3cc3c9;--off:#a094e6;--com:#a0aab8;--oth:#e582ae;
+--ev:rgba(108,151,236,.14);--evr:rgba(240,160,90,.15);--evk:rgba(60,195,201,.15);--today:#ff6b6b;--done:#4cc383;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-size:22px;margin:0 0 4px;text-wrap:balance}
+.sub{color:var(--mut);margin:0 0 14px;max-width:70ch}
+.leg{display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:14px;font-size:12px;color:var(--mut)}
+.leg i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:5px}
+.wrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.g{min-width:1100px;position:relative;font-variant-numeric:tabular-nums}
+.row{display:grid;grid-template-columns:270px 1fr;border-bottom:1px solid var(--line);min-height:26px;align-items:center}
+.row>.n{position:sticky;left:0;z-index:3;background:var(--panel);padding:3px 10px;display:flex;justify-content:space-between;gap:8px;border-right:1px solid var(--line);height:100%;align-items:center}
+.n span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.n small{color:var(--mut);font-size:11px;white-space:nowrap}
+.hd .n{font-weight:600}
+.grp>.n{font-weight:700;background:var(--bg);font-size:13px}
+.grp>.t{background:var(--bg);height:100%}
+.t{position:relative;height:100%;min-height:26px}
+.bar{position:absolute;top:5px;height:16px;border-radius:4px;opacity:.9;z-index:2}
+.bar.done{opacity:.45;background-image:repeating-linear-gradient(45deg,transparent 0 4px,rgba(255,255,255,.35) 4px 8px)}
+.bar.prog{box-shadow:0 0 0 2px var(--panel),0 0 0 3px currentColor}
+.band{position:absolute;top:0;bottom:0;z-index:1}
+.vl{position:absolute;top:0;bottom:0;width:0;z-index:2;border-left:2px dashed}
+.wk{position:absolute;top:0;bottom:0;border-left:1px solid var(--line);font-size:11px;color:var(--mut);padding:5px 0 0 4px;white-space:nowrap}
+.hd .t{height:44px}
+.lab{position:absolute;top:24px;font-size:11px;font-weight:600;white-space:nowrap;z-index:3}
+.note{font-size:12px;color:var(--mut);margin:12px 0 0;max-width:80ch}
+</style>
+<h1>Гант подготовки к НГ-мероприятиям</h1>
+<p class="sub">Сроки расставлены от дат: корпоратив 19 декабря, отчётное собрание 15–18 декабря, дети сотрудников 27–30 декабря. Старт 16 октября 2026. Договоры идут в запас по времени, чтобы подписать и оплатить их заранее.</p>
+<div class="leg" id="leg"></div>
+<div class="wrap"><div class="g" id="g"></div></div>
+<p class="note">Штриховка: задача готова. Обводка: в процессе. Даты в плане предложены мной и подходят для обсуждения. Нужны уточнения: где проходит отчётное собрание (площадка ещё не выбрана), нужен ли Москвин, сколько подарков.</p>
+<script>
+var D0=Date.UTC(2026,9,12),D1=Date.UTC(2027,0,4),SPAN=(D1-D0)/864e5;
+function d(m,day){return Date.UTC(m===1?2027:2026,m-1,day)}
+function pct(t){return (t-D0)/864e5/SPAN*100}
+var G=[
+["Корпоратив · 19 дек","corp",[
+["Площадка: согласование договора","Юля, Яна",[10,16],[10,30],"prog"],
+["Площадка: подписание договора","Юля",[11,2],[11,6]],
+["Площадка: оплата","Юля",[11,9],[11,13]],
+["Площадка: составление меню","Яна",[11,16],[12,4]],
+["Ведущий: договор на согласование","Юля, Яна",[10,16],[10,30],"prog"],
+["Ведущий: правки","Юля",[11,2],[11,6]],
+["Ведущий: подписание договора","Юля",[11,9],[11,13]],
+["Ведущий: оплата договора","Юля",[11,16],[11,20]],
+["Ведущий: бриф","Юля, Яна",[11,23],[12,4]],
+["Фотограф: договор на согласование","Юля, Яна",[10,19],[11,6]],
+["Фотограф: подписание договора","Юля",[11,9],[11,13]],
+["Фотограф: оплата","Юля",[11,16],[11,20]],
+["Кэти бар: договор на согласование","Юля",[10,12],[10,16],"done"],
+["Кэти бар: подписать договор и спецификацию","Юля",[10,16],[10,23],"prog"],
+["Кэти бар: оплата","Юля",[10,26],[11,6]],
+["Кэти бар: составить меню коктейлей","Яна",[11,9],[11,27]]]],
+["Отчётное собрание · 15–18 дек","rep",[
+["Определиться с датами","Юля",[10,19],[10,30]],
+["Площадка: выбор и согласование","Юля",[11,2],[11,13]],
+["Площадка: согласование договора","Юля",[11,16],[11,20]],
+["Площадка: подписание договора","Юля",[11,23],[11,27]],
+["Площадка: меню кофе-брейка","Юля",[11,30],[12,4]],
+["Площадка: оплата","Юля",[12,7],[12,11]],
+["Спикеры: организация подготовки","Юля",[11,9],[12,11]],
+["Спикеры: нужен Москвин?","Юля",[11,2],[11,6]],
+["Спикеры: презентация, проверка","Юля",[12,7],[12,14]],
+["Тех. часть: подготовка с Данилой, показ презентаций","Юля",[12,7],[12,14]]]],
+["Дети сотрудников · 27–30 дек","kids",[
+["Дед Мороз: определиться с датами","",[10,19],[10,23]],
+["Дед Мороз: выбрать подрядчика","",[10,26],[11,13]],
+["Дед Мороз: подписать договор","",[11,16],[11,20]],
+["Дед Мороз: оплата договора","",[11,23],[11,27]],
+["Подарки: выбрать подарки","",[10,19],[11,6]],
+["Подарки: выбрать коробки (Лена прислала варианты)","",[10,16],[10,23],"prog"],
+["Подарки: посчитать количество","",[11,9],[11,13]],
+["Подарки: купить (с запасом на доставку)","",[11,16],[12,4]]]],
+["Украшение офиса","off",[
+["Привезти коробки со склада","",[11,30],[12,1]],
+["Определить, нужен ли дозакуп","",[12,1],[12,4]],
+["Ёлка","",[12,7],[12,8]],
+["Украсить офис","",[12,8],[12,11]]]],
+["Коммуникации","com",[
+["Про НГ корпоратив: подготовка (где, когда, дресс-код)","",[11,16],[11,20]],
+["Про отчётное собрание","",[12,1],[12,4]],
+["Про НГ корпоратив: уточнение деталей","",[12,14],[12,17]]]],
+["Другое · Тайный Санта","oth",[
+["Опубликовать коробку","",[12,1],[12,1]],
+["Напоминание","",[12,14],[12,15]],
+["Организация раздачи подарков (вместе с Дедом Морозом и детьми)","",[12,27],[12,30]]]]];
+var names={corp:"Корпоратив",rep:"Отчётное собрание",kids:"Дети сотрудников",off:"Украшение офиса",com:"Коммуникации",oth:"Тайный Санта"};
+document.getElementById('leg').innerHTML=Object.keys(names).map(function(k){return '<span><i style="background:var(--'+k+')"></i>'+names[k]+'</span>'}).join('');
+var bands='<div class="band" style="background:var(--evr);left:'+pct(d(12,15))+'%;width:'+(pct(d(12,19))-pct(d(12,15)))+'%"></div>'+
+'<div class="band" style="background:var(--ev);left:'+pct(d(12,19))+'%;width:'+(pct(d(12,20))-pct(d(12,19)))+'%"></div>'+
+'<div class="band" style="background:var(--evk);left:'+pct(d(12,27))+'%;width:'+(pct(d(12,31))-pct(d(12,27)))+'%"></div>'+
+'<div class="vl" style="border-color:var(--today);left:'+pct(d(10,16))+'%"></div>';
+var wk='';for(var i=0;i<SPAN;i+=7){var dt=new Date(D0+i*864e5);wk+='<div class="wk" style="left:'+i/SPAN*100+'%">'+dt.getUTCDate()+'.'+String(dt.getUTCMonth()+1).padStart(2,'0')+'</div>'}
+var labs='<div class="lab" style="color:var(--rep);right:'+(100-pct(d(12,19)))+'%;padding-right:4px">Собрание 15–18</div>'+
+'<div class="lab" style="color:var(--corp);left:'+pct(d(12,19))+'%;padding-left:3px;top:10px">Корпоратив 19.12</div>'+
+'<div class="lab" style="color:var(--kids);left:'+pct(d(12,27))+'%;top:24px;transform:translateX(-30%)">Дети 27–30</div>'+
+'<div class="lab" style="color:var(--today);left:'+pct(d(10,16))+'%;padding-left:3px;top:24px">Сегодня 16.10</div>';
+var h='<div class="row hd"><div class="n"><span>Задача</span><small>Кто</small></div><div class="t">'+wk+bands+labs+'</div></div>';
+G.forEach(function(g){
+h+='<div class="row grp"><div class="n" style="color:var(--'+g[1]+')"><span>'+g[0]+'</span></div><div class="t"></div></div>';
+g[2].forEach(function(t){
+var s=d(t[2][0],t[2][1]),e=d(t[3][0],t[3][1])+864e5;
+h+='<div class="row"><div class="n" title="'+t[0]+'"><span>'+t[0]+'</span><small>'+t[1]+'</small></div><div class="t">'+bands+
+'<div class="bar '+(t[4]||'')+'" style="background:var(--'+g[1]+');color:var(--'+g[1]+');left:'+pct(s)+'%;width:'+Math.max(pct(e)-pct(s),.6)+'%"></div></div></div>'});
+});
+document.getElementById('g').innerHTML=h;
+</script>
