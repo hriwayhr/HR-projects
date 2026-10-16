@@ -55,3 +55,18 @@ test('сервер: вход по паролю, данные из файла, з
     assert.equal((await post('/api/plogin', { login: 'yulia@example.ru', password: 'Secret-1' })).status, 429);   // даже верный пароль — после 10 ошибок ждать
   } finally { p.kill(); }
 });
+
+test('вход по паролю: администратор меняет свой логин на почту', async () => {
+  const { forTests } = require('../cloud/function/index');
+  const store = forTests.memoryStore();
+  await store.tx('config/team', () => ({ people: { y: { name: 'Юля', login: 'yulia_n', salt: 's', hash: 'h', admin: true } } }));
+  const h = forTests.makeHandler(store, forTests.config({ LOCAL: '1', SESSION_SECRET: 's'.repeat(48) }));
+  const auth = require('../cloud/function/auth');
+  const cookie = auth.sessionCookie('s'.repeat(48), 'yulia_n').split(';')[0];
+  const r = await h({ httpMethod: 'POST', url: '/api/doc', headers: { 'x-hr': '1', cookie }, body: JSON.stringify({ path: 'config/team', op: 'set',
+    data: { people: { y: { name: 'Юля', login: 'yulia@iway.ru', salt: 's', hash: 'h', admin: true } } } }) });
+  assert.equal(r.statusCode, 200, r.body);
+  const r2 = await h({ httpMethod: 'POST', url: '/api/doc', headers: { 'x-hr': '1', cookie }, body: JSON.stringify({ path: 'config/team', op: 'set',
+    data: { people: { y: { name: 'Юля', login: 'yulia@iway.ru', salt: 's', hash: 'h', admin: false } } } }) });
+  assert.equal(r2.statusCode, 401);   // старый логин больше не действует — нужно войти заново
+});

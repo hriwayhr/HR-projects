@@ -22,7 +22,7 @@ ufw --force enable
 echo "== SSH: вход только по ключу"
 if [ -s /root/.ssh/authorized_keys ]; then
   printf 'PasswordAuthentication no\nKbdInteractiveAuthentication no\nPermitRootLogin prohibit-password\n' > /etc/ssh/sshd_config.d/90-hr.conf
-  systemctl reload ssh
+  systemctl reload ssh 2>/dev/null || systemctl restart ssh || true
 else
   echo "  ВНИМАНИЕ: SSH-ключ не добавлен — вход по паролю оставлен. Добавьте ключ и запустите скрипт снова."
 fi

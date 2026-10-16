@@ -100,7 +100,8 @@ function teamError(user, next) {
     if (l) { if (seen['login:' + l]) return 'Логин «' + l + '» уже у другого человека.'; seen['login:' + l] = 1; }
   }
   // по почте, а не по id: при переносе данных администратор становится человеком из загруженной команды
-  const me = Object.keys(ps).find(p => norm(ps[p][user.field || 'email']) === user.email);
+  // вход по паролю: человек может сменить свой логин (например, на почту) — тогда узнаём его по id
+  const me = Object.keys(ps).find(p => norm(ps[p][user.field || 'email']) === user.email) || (user.field === 'login' && ps[user.pid] ? user.pid : undefined);
   if (!me || ps[me].archived || !ps[me].admin) return 'Нельзя снять права администратора или вход с самого себя.';
   return '';
 }
