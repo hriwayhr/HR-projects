@@ -33,13 +33,22 @@ with sync_playwright() as p:
     # до SYNC_FROM — как вносили; с него — из реестра, даже если день ещё не внесён
     assert pg.evaluate("byDate['2026-10-02'].yulia.vac_start") == 40
     assert pg.evaluate("byDate['2026-10-05'].yulia.vac_end") == 3 and pg.evaluate("dayStatus('yulia', '2026-10-05')") == 'missing'
-    # форма: синхронные поля только для чтения, в базу не пишутся
+    # форма: синхронные поля подтягиваются из реестра и в базу не пишутся, пока их не исправили вручную
     pg.click('#tab_entry'); pg.select_option('#fPerson', 'yulia'); pg.fill('#fDate', '2026-10-06'); pg.dispatch_event('#fDate', 'change')
     assert pg.input_value('#m_vac_end') == '3' and pg.input_value('#m_cand_start') == '4' and pg.input_value('#m_vac_published') == '1'
-    assert pg.evaluate("$('m_vac_end').readOnly") and not pg.evaluate("$('m_int_planned').readOnly")
+    assert not pg.evaluate("$('m_vac_end').readOnly") and pg.get_attribute('#m_vac_end', 'placeholder') == '3'
     assert 'из «Вакансий»' in pg.inner_text('#fStatus')
     pg.fill('#m_int_planned', '3'); pg.click('#fSave'); pg.wait_for_timeout(300)
     assert pg.evaluate("window.__store['months/yulia_2026-10'].days['2026-10-06']") == {'int_planned': 3}
+    # ручная правка: «вакансий в работе» на конец дня 5 вместо 3 — хранится и важнее расчёта; очистили — снова расчёт
+    pg.fill('#m_vac_end', '5'); pg.click('#fSave'); pg.wait_for_timeout(300)
+    assert pg.evaluate("window.__store['months/yulia_2026-10'].days['2026-10-06']") == {'int_planned': 3, 'vac_end': 5}
+    assert pg.evaluate("byDate['2026-10-06'].yulia.vac_end") == 5 and pg.evaluate("byDate['2026-10-06'].yulia.vac_start") == 3
+    pg.dispatch_event('#fDate', 'change'); pg.wait_for_timeout(100)
+    assert pg.input_value('#m_vac_end') == '5' and 'manual' in pg.get_attribute('#m_vac_end', 'class') and 'Исправлено вручную' in pg.inner_text('#fStatus')
+    pg.fill('#m_vac_end', ''); pg.click('#fSave'); pg.wait_for_timeout(300)
+    assert pg.evaluate("window.__store['months/yulia_2026-10'].days['2026-10-06']") == {'int_planned': 3}
+    assert pg.evaluate("byDate['2026-10-06'].yulia.vac_end") == 3
     pg.click('#tab_day'); pg.fill('#dDate', '2026-10-06'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
     t = pg.inner_text('#dTiles'); assert 'Вакансии в работе\n3' in t and 'Вакантные ставки\n3' in t, t
     # инфографика недели: 5–9 октября, среда и дальше — «впереди», понедельник без данных — «не внесено»

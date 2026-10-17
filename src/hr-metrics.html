@@ -180,6 +180,7 @@
   .link-row input.v-link{min-width:240px;}
   .link-row label.f{font-size:11px;}
   input[readonly]{background:var(--paper); color:var(--ink-2);}
+  #fGroups input.manual{background:var(--warn-bg); border-color:var(--warn-ink); color:var(--warn-ink);}
   .link-row input{flex:1;}
   .pubs{display:block; font-size:12px; margin-top:2px;}
   .pubs a{margin-right:8px;}
@@ -1212,12 +1213,19 @@ function loadForm(){
   var p = formPerson(), d = $('fDate').value, m = (byDate[d] || {})[p], hint = '';
   if(!p || !d) return;
   var own = (entered[d] || {})[p], sync = isSynced(d, p);
-  document.querySelectorAll('#fGroups input').forEach(function(i){ i.value = m && num(m[i.dataset.k]) ? m[i.dataset.k] : ''; i.readOnly = sync && SYNCED.indexOf(i.dataset.k) >= 0; });
+  document.querySelectorAll('#fGroups input').forEach(function(i){ i.value = m && num(m[i.dataset.k]) ? m[i.dataset.k] : ''; i.placeholder = ''; i.classList.remove('manual'); });
   if(sync){
-    var reg = registryDay(p, d);
-    SYNCED.forEach(function(k){ if($('m_'+k)) $('m_'+k).value = reg[k]; });
+    // цифры из «Вакансий»; поправленные вручную за этот день — свои, пустое поле — снова считается само
+    var reg = registryDay(p, d), manual = [];
+    SYNCED.forEach(function(k){
+      var i = $('m_'+k); if(!i) return;
+      var mine = own && num(own[k]);
+      i.value = mine ? own[k] : reg[k]; i.placeholder = reg[k]; i.classList.toggle('manual', !!mine);
+      if(mine) manual.push(i.closest('label').firstChild.textContent.trim() + ' (расчёт: ' + reg[k] + ')');
+    });
     $('fStatus').className = 'status';
-    $('fStatus').textContent = (own ? 'День уже внесён — сохранение заменит значения. ' : '') + 'Вакансии, кандидаты и новые вакансии считаются из «Вакансий» — правьте их там.';
+    $('fStatus').textContent = (own ? 'День уже внесён — сохранение заменит значения. ' : '') + 'Вакансии и кандидаты подтягиваются из «Вакансий». Если цифра неверна — исправьте её здесь: это заменит расчёт только за этот день; очистите поле — снова будет считаться само.' +
+      (manual.length ? ' Исправлено вручную: ' + manual.join(', ') + '.' : '');
     return;
   }
   if(!m){
@@ -1240,7 +1248,10 @@ function saveDay(e){
   // метрики, убранные из формы, сохраняем как были; остальное — из полей
   Object.keys(old).forEach(function(k){ if(!$('m_'+k)) vals[k] = old[k]; });
   document.querySelectorAll('#fGroups input').forEach(function(i){ var v = i.value.trim(); if(v !== '') vals[i.dataset.k] = Math.max(0, Math.round(+v)); });
-  if(isSynced(d, p)) SYNCED.forEach(function(k){ delete vals[k]; });   // эти цифры берутся из реестра, не храним копию
+  if(isSynced(d, p)){   // из реестра храним только исправленное вручную — совпадающее с расчётом дальше считается само
+    var reg = registryDay(p, d);
+    SYNCED.forEach(function(k){ if(vals[k] === reg[k]) delete vals[k]; });
+  }
   var days = Object.assign({}, doc.days); days[d] = vals;
   $('fSave').disabled = true; st.className = 'status'; st.textContent = 'Сохраняю…';
   db.doc('months/' + id).set({person:p, month:d.slice(0, 7), days:days}).then(function(){
@@ -1711,7 +1722,7 @@ function rebuild(){
       if((t.archived && (!t.archivedAt || d >= t.archivedAt)) || (t.since && d < t.since) || d < syncFromOf(p)) return;
       if(isWeekend(d) && !hasDay(p, d)) return;
       var row = byDate[d] || (byDate[d] = {});
-      row[p] = Object.assign(row[p] || {}, registryDay(p, d));
+      row[p] = Object.assign(registryDay(p, d), row[p] || {});   // исправленное вручную за день важнее расчёта
     });
   }
 }
