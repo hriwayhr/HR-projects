@@ -135,6 +135,21 @@ with sync_playwright() as p:
     pg.click('#vTable tr[data-id=g] td:nth-child(2)'); pg.click('#vSave'); pg.wait_for_timeout(300)
     assert pg.evaluate("window.__store['vacancies/g'].links[0].stopped") is True   # пересохранение карточки отметку не теряет
     pg.click('#vCancel')
+    # «Не продлевать» до срока: H уходит в архив 10.10 — напоминание пропадает, до 10.10 публикация считается, галочка в карточке
+    pg.evaluate("""window.__store['vacancies/h'] = {title: 'H', status: 'активна', manager: 'Немчинова', publishedAt: '2026-09-10', rate: 1,
+        links: [{url: 'https://hh.ru/9', at: '2026-09-10', closedAt: '2026-10-10'}]}; window.__notify();"""); pg.wait_for_timeout(200)
+    live = pg.evaluate("registryDay('yulia', '2026-10-07').vac_end")
+    pg.click('#vRemind button[data-stop=h]'); pg.wait_for_timeout(300)
+    assert pg.evaluate("window.__store['vacancies/h'].links[0]") == {'url': 'https://hh.ru/9', 'at': '2026-09-10', 'closedAt': '2026-10-10', 'stopped': True}
+    assert 'hh.ru/9' not in pg.inner_html('#vRemind') and 'не продлеваем, до 10.10.26' in pg.inner_text('#vTable tr[data-id=h]')
+    assert pg.evaluate("registryDay('yulia', '2026-10-07').vac_end") == live
+    assert pg.evaluate("pubLive(vacancies.h.links[0], vacancies.h, '2026-10-09', true)") and not pg.evaluate("pubLive(vacancies.h.links[0], vacancies.h, '2026-10-10', true)")
+    pg.click('#vTable tr[data-id=h] td:nth-child(2)'); assert pg.is_checked('#vLinks .v-link-stop')
+    pg.uncheck('#vLinks .v-link-stop'); pg.click('#vSave'); pg.wait_for_timeout(300)   # сняли галочку — снова напоминает
+    assert 'stopped' not in pg.evaluate("window.__store['vacancies/h'].links[0]") and 'hh.ru/9' in pg.inner_html('#vRemind')
+    pg.click('#vTable tr[data-id=h] td:nth-child(2)'); pg.check('#vLinks .v-link-stop'); pg.click('#vSave'); pg.wait_for_timeout(300)
+    assert pg.evaluate("window.__store['vacancies/h'].links[0].stopped") is True
+    pg.evaluate("delete window.__store['vacancies/h']; window.__notify();"); pg.wait_for_timeout(200)
     # продление просроченной из напоминания: с сегодня на месяц, перерыв 5–7.10 не считается
     pg.click('#vRemind button[data-extend=f]'); pg.wait_for_timeout(300)
     f = pg.evaluate("window.__store['vacancies/f']")

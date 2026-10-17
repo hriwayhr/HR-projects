@@ -666,7 +666,7 @@ function remindersHtml(){
     list.map(function(r){
       return '<div class="todo-row"><span class="pill pub-'+r.st+'">'+esc(linkNote(r.l))+'</span><a href="'+esc(r.l.url)+'" target="_blank" rel="noopener"><b>'+esc(r.v.title)+'</b></a>' + (scope() ? '' : '<span class="hint">'+esc(managerLabel(r.v))+'</span>') +
         (r.st === 'nodate' ? '<button class="btn ghost sm" data-open-vac="'+r.id+'">Указать дату</button>' : '<button class="btn sm" data-extend="'+r.id+'" data-i="'+r.i+'">Продлить на месяц</button>') +
-        (r.st === 'expired' ? '<button class="btn ghost sm" data-stop="'+r.id+'" data-i="'+r.i+'" title="Публикация остаётся в истории как снятая и больше не напоминает">Не продлеваем</button>' : '') + '</div>';
+        (r.st !== 'nodate' ? '<button class="btn ghost sm" data-stop="'+r.id+'" data-i="'+r.i+'" title="Больше не напоминать: публикация доживает до даты архивации и остаётся в истории как снятая">Не продлевать</button>' : '') + '</div>';
     }).join('') + '<p class="hint">Публикация в архиве не считается открытой вакансией в метриках дня. Продление — от даты архивации, если срок уже вышел — с сегодня.</p></details>';
 }
 function extendFromReminder(e){
@@ -1596,15 +1596,16 @@ function pubLive(l, v, d, eod){
 // Уникальные публикации в работе сегодня среди вакансий list (одна ссылка на несколько вакансий — одна)
 function livePubs(list){ var u = {}; list.forEach(function(v){ linkObjs(v).forEach(function(l){ if(l.url && l.closedAt && pubLive(l, v, today(), true)) u[l.url] = 1; }); }); return Object.keys(u); }
 function linkOpen(l, start, d, eod){ return openOn(l.at || start, l.closedAt, d, eod) && !(l.gaps || []).some(function(g){ return openOn(g[0], g[1], d, eod); }); }
-// expired — срок вышел (в день архивации публикация уже не висит), soon — до архивации ≤ 5 дней, nodate — дата не указана
+// expired — срок вышел (в день архивации публикация уже не висит), soon — до архивации ≤ 5 дней, nodate — дата не указана;
+// stopped — «не продлевать»: висит до даты архивации без напоминаний, потом снята
 function linkState(l){
   if(!l.closedAt) return 'nodate';
   var left = daysBetween(today(), l.closedAt);
-  return left <= 0 ? (l.stopped ? 'archived' : 'expired') : left <= REMIND_DAYS ? 'soon' : 'ok';
+  return left <= 0 ? (l.stopped ? 'archived' : 'expired') : l.stopped ? 'ok' : left <= REMIND_DAYS ? 'soon' : 'ok';
 }
 function linkNote(l){
   var st = linkState(l), left = l.closedAt ? daysBetween(today(), l.closedAt) : null;
-  return st === 'archived' ? 'снята с ' + shortDate(l.closedAt) : st === 'expired' ? 'в архиве с ' + shortDate(l.closedAt) : st === 'soon' ? 'до ' + shortDate(l.closedAt) + ' — осталось ' + left + ' ' + plural(left, 'день', 'дня', 'дней')
+  return st === 'archived' ? 'снята с ' + shortDate(l.closedAt) : l.stopped && l.closedAt ? 'не продлеваем, до ' + shortDate(l.closedAt) : st === 'expired' ? 'в архиве с ' + shortDate(l.closedAt) : st === 'soon' ? 'до ' + shortDate(l.closedAt) + ' — осталось ' + left + ' ' + plural(left, 'день', 'дня', 'дней')
        : st === 'nodate' ? 'нет даты архивации' : 'до ' + shortDate(l.closedAt);
 }
 // Продление на месяц: от даты архивации, а если срок уже вышел — с сегодня (перерыв запоминается)
@@ -1625,11 +1626,12 @@ function pubsHtml(v){
 function linkRow(l){
   l = l || {at:today(), closedAt:addMonths(today(), PUB_MONTHS)};
   var st = linkState(l);
-  return '<div class="link-row" data-stopped="'+(l.stopped ? 1 : 0)+'" data-ext="'+(l.ext || 0)+'" data-gaps="'+esc(JSON.stringify(l.gaps || []))+'"><input type="url" class="v-link" value="'+esc(l.url || '')+'" placeholder="https://hh.ru/vacancy/…" aria-label="Ссылка на публикацию">' +
+  return '<div class="link-row" data-ext="'+(l.ext || 0)+'" data-gaps="'+esc(JSON.stringify(l.gaps || []))+'"><input type="url" class="v-link" value="'+esc(l.url || '')+'" placeholder="https://hh.ru/vacancy/…" aria-label="Ссылка на публикацию">' +
     '<label class="f">открыта<input type="date" class="v-link-at" value="'+esc(l.at || '')+'"></label>' +
     '<label class="f">дата архивации<input type="date" class="v-link-closed" value="'+esc(l.closedAt || '')+'"></label>' +
     '<label class="f">стоимость, ₽<input type="number" min="0" step="1" class="v-link-cost" value="'+(num(l.cost) ? l.cost : '')+'" title="Сколько потрачено на эту публикацию вместе с продлениями" style="width:110px"></label>' +
     '<button type="button" class="btn ghost sm" data-extend-link title="Продлить публикацию на hh.ru ещё на месяц">Продление</button>' +
+    '<label class="check" title="Публикация доживает до даты архивации без напоминаний о продлении"><input type="checkbox" class="v-link-stop"'+(l.stopped ? ' checked' : '')+'> не продлевать</label>' +
     '<span class="pill pub-'+st+'">'+esc(linkNote(l))+(l.ext ? ' · продлений: '+l.ext : '')+'</span>' +
     '<button type="button" class="btn danger sm" data-del-link aria-label="Убрать ссылку">×</button></div>';
 }
@@ -1638,7 +1640,7 @@ function readLinkRow(r){
   if(c) l.closedAt = c;
   var cost = +r.querySelector('.v-link-cost').value; if(cost > 0) l.cost = Math.round(cost);
   var ext = +r.dataset.ext || 0, gaps = JSON.parse(r.dataset.gaps || '[]');
-  if(ext) l.ext = ext; if(gaps.length) l.gaps = gaps; if(r.dataset.stopped === '1' && c && c <= today()) l.stopped = true;
+  if(ext) l.ext = ext; if(gaps.length) l.gaps = gaps; if(r.querySelector('.v-link-stop').checked) l.stopped = true;
   return l;
 }
 function setLinks(list){ $('vLinks').innerHTML = (list.length ? list : [null]).map(linkRow).join(''); }
