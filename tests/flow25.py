@@ -85,12 +85,12 @@ with sync_playwright() as p:
     pg.click('#dTiles [data-detail="Вакантные ставки"]'); pg.wait_for_timeout(100); assert pg.inner_text('#dDetail') == ''
     pg.focus('#dTiles [data-detail="Звонки"]'); pg.keyboard.press('Enter'); pg.wait_for_timeout(100)
     assert pg.inner_text('#dDetail').startswith('Звонки'); pg.click('#dDetailClose'); pg.wait_for_timeout(100); assert pg.inner_text('#dDetail') == ''
-    # пиковые дни недели: сумма по дню недели, пик выделен; в режиме дня — 13 недель
+    # пиковые дни недели: сумма по дню недели, пик выделен; в режиме дня — 13 недель, подписаны датами
     pk = pg.inner_text('#dPeak')
     assert pk.startswith('Пиковые дни недели · Октябрь 2026') and 'Собеседования — четверг' in pk and pk.index('Чаты') < pk.index('Собеседования') < pk.index('Выходы') and 'Доходимость\t—' in pk and 'Чаты — четверг' in pk and 'Выходы — четверг' in pk, pk
     assert pg.query_selector_all('#dPeak td.peak').__len__() == 3
     pg.select_option('#dMode', 'day'); pg.wait_for_timeout(100)
-    assert pg.inner_text('#dPeak').startswith('Пиковые дни недели · 13 недель по '), pg.inner_text('#dPeak')
+    assert pg.inner_text('#dPeak').startswith('Пиковые дни недели · 06.07.26 – 04.10.26'), pg.inner_text('#dPeak')
     # новая вакансия сегодня — сразу в ячейках сегодняшнего дня
     pg.click('#tab_vac'); pg.click('#vAdd'); pg.fill('#v_title', 'D'); pg.fill('#v_manager', 'Юлия Немчинова')
     pg.fill('#vLinks .v-link', 'https://hh.ru/5'); assert pg.input_value('#vLinks .v-link-at') == '2026-10-07'

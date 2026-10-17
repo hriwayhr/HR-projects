@@ -894,7 +894,8 @@ function renderPeak(mode, r, ps){
 }
 // ---------- аналитика под таблицей: для дня и недели — 13 недель по выбранную (за неделю закономерностей не видно) ----------
 function aRange(mode, r){ return mode === 'day' || mode === 'week' ? {from:addDays(weekKey(r.from), -7 * 12), to:addDays(weekKey(r.from), 6)} : r; }
-function aLabel(mode, r, w){ return mode === 'day' || mode === 'week' ? '13 недель по ' + shortDate(w.to) : rangeLabel(mode, r); }
+function aLabel(mode, r, w){ return mode === 'day' || mode === 'week' ? spanLabel(w) : rangeLabel(mode, r); }
+function spanLabel(w){ return shortDate(w.from) + ' – ' + shortDate(w.to); }   // конкретные даты: «13 недель назад» в уме не прикинешь
 function aPrev(mode, w, prev){ return mode === 'day' || mode === 'week' ? {from:addDays(w.from, -91), to:addDays(w.to, -91)} : prev; }
 function pcnt(a, b){ return num(a) && b ? Math.round(a / b * 100) : null; }
 function delta(d, unit){ return d === null ? '' : ' <span class="'+(d > 0 ? 'up' : d < 0 ? 'down' : '')+'">'+(d > 0 ? '+' : d < 0 ? '−' : '')+Math.abs(d)+unit+'</span>'; }
@@ -916,7 +917,7 @@ function renderFunnel(w, wp, wl, ps){
   function per(a, h){ return num(a) && h ? dec(a / h) : '—'; }
   var h = v[3], ph = pv[3];
   html += '<div class="detail-sum mt"><span>На 1 выход: <b>'+per(v[0], h)+'</b> чатов · <b>'+per(v[1], h)+'</b> назначенных · <b>'+per(v[2], h)+'</b> прошедших собеседований</span>' +
-    (ph ? '<span>Прошлый период: '+per(pv[0], ph)+' · '+per(pv[1], ph)+' · '+per(pv[2], ph)+'</span>' : '') + '</div>';
+    (ph ? '<span>Прошлый период ('+spanLabel(wp)+'): '+per(pv[0], ph)+' · '+per(pv[1], ph)+' · '+per(pv[2], ph)+'</span>' : '') + '</div>';
   $('dFunnel').innerHTML = head + html + '<p class="hint">Шаги — суммы внесённых цифр за период, а не путь одних и тех же кандидатов. Рядом с конверсией — изменение к прошлому периоду.</p>';
 }
 
