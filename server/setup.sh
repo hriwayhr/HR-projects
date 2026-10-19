@@ -53,9 +53,15 @@ fi
 
 echo "== Запуск"
 mkdir -p data && chown 1000:1000 data && chmod 700 data
-src=$(ls /opt/*.html 2>/dev/null | head -1 || true)
-if [ -n "$src" ] && [ ! -f data/hr.sqlite ]; then   # первичные данные: приложение загрузит их при старте и удалит файл
-  install -o 1000 -g 1000 -m 600 "$src" data/import.html && rm -f "$src"
+# первичные данные (только в пустую базу): приложение загрузит их при старте и удалит.
+# /opt/data — папка data локальной версии (с паролями); иначе версия для ПК (*.html) или копия с сервера (*.json)
+if [ ! -f data/hr.sqlite ]; then
+  if ls /opt/data/changes-*.jsonl >/dev/null 2>&1; then
+    mkdir -p data/import-data && cp /opt/data/changes-*.jsonl data/import-data/ && chown -R 1000:1000 data/import-data && chmod -R go-rwx data/import-data && rm -rf /opt/data
+  else
+    src=$(ls /opt/*.html /opt/*.json 2>/dev/null | head -1 || true)
+    [ -n "$src" ] && install -o 1000 -g 1000 -m 600 "$src" "data/import.${src##*.}" && rm -f "$src"
+  fi
 fi
 docker compose up -d --build
 docker image prune -f >/dev/null   # старые версии программы после обновлений не копятся на диске

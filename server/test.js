@@ -70,3 +70,23 @@ test('вход по паролю: администратор меняет сво
     data: { people: { y: { name: 'Юля', login: 'yulia@iway.ru', salt: 's', hash: 'h', admin: false } } } }) });
   assert.equal(r2.statusCode, 401);   // старый логин больше не действует — нужно войти заново
 });
+
+test('сервер: данные из папки data локальной версии — с паролями', async () => {
+  const crypto = require('crypto');
+  const { logStore } = require('../cloud/function/store');
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'hr-srv-'));
+  const hash = crypto.createHash('sha256').update('s2::Anna-pass').digest('hex');
+  const local = logStore(path.join(data, 'import-data'), 'PC1');   // как пишет локальная версия в «Обменнике»
+  await local.tx('config/team', () => ({ people: { y: { name: 'Юля', login: 'yulia', salt: 's1', hash: 'x', admin: true }, a: { name: 'Анна', login: 'anna', salt: 's2', hash } } }));
+  await local.tx('months/a_2026-10', () => ({ person: 'a', month: '2026-10', days: { '2026-10-15': { calls: 3 } } }));
+  const env = Object.assign({}, process.env, { DATA_DIR: data, PORT: '8796', AUTH: 'password', SESSION_SECRET: 's'.repeat(48), NODE_NO_WARNINGS: '1' });
+  const p = spawn(process.execPath, [path.join(__dirname, 'server.js')], { env });
+  try {
+    await new Promise((ok, no) => { p.stdout.on('data', d => /слушают/.test(d) && ok()); p.on('exit', c => no(new Error('вышел ' + c))); });
+    assert.ok(!fs.existsSync(path.join(data, 'import-data')));   // загружено и удалено
+    const r = await fetch('http://localhost:8796/api/plogin', { method: 'POST', headers: { 'X-HR': '1', 'Content-Type': 'application/json' }, body: JSON.stringify({ login: 'anna', password: 'Anna-pass' }) });
+    assert.equal(r.status, 200);
+    const sync = await (await fetch('http://localhost:8796/api/sync', { headers: { Cookie: r.headers.get('set-cookie').split(';')[0] } })).json();
+    assert.deepEqual(sync.docs.find(d => d.path === 'months/a_2026-10').data.days['2026-10-15'], { calls: 3 });
+  } finally { p.kill(); }
+});

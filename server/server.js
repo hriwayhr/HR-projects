@@ -11,7 +11,7 @@ if (APP !== './app' && !process.env.PAGE_SRC) process.env.PAGE_SRC = path.join(_
 const PASSWORD = process.env.AUTH === 'password';
 if (PASSWORD) Object.assign(process.env, { LOCAL: '1', WEB_IMPORT: '0' });
 const { create, config, importDocs, docsFromFile } = require(APP + '/index');
-const { sqliteStore, dailyBackup } = require(APP + '/store');
+const { sqliteStore, logStore, dailyBackup } = require(APP + '/store');
 
 const DATA = process.env.DATA_DIR || '/data', PORT = +process.env.PORT || 8080, KEEP = +process.env.BACKUP_KEEP_DAYS || 30;
 const MAX_BODY = 4 * 1024 * 1024;
@@ -25,6 +25,15 @@ const handler = create(store, cfg);
 // Первичные данные — файл DATA_DIR/import.html (версия для ПК) или import.json (резервная копия): только в пустую базу,
 // после загрузки файл удаляется (в нём персональные данные). Со страницы на открытом сервере загрузить нельзя.
 async function importFromDisk() {
+  // папка data локальной версии (журналы changes-*.jsonl) — всё как есть, вместе с паролями
+  const logDir = path.join(DATA, 'import-data');
+  if (fs.existsSync(logDir)) {
+    const docs = {};
+    (await logStore(logDir, 'import-read').changes(0)).forEach(d => { if (d.data !== null) docs[d.path] = d.data; });
+    const r = await importDocs(store, docs);
+    if (typeof r === 'number') { fs.rmSync(logDir, { recursive: true, force: true }); console.log('Загружены данные локальной версии: ' + r + ' документов.'); }
+    else console.error('Данные локальной версии не загружены: ' + r);
+  }
   for (const name of ['import.html', 'import.json']) {
     const f = path.join(DATA, name);
     if (!fs.existsSync(f)) continue;
