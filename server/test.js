@@ -21,7 +21,7 @@ test('сервер: страница, защита, вход через Янде
     assert.equal((await fetch(base + '/api/sync', { headers: { Cookie: 'hr_s=forged.sig' } })).status, 401);
     const login = await fetch(base + '/api/login', { redirect: 'manual' });
     assert.match(login.headers.get('location'), /^https:\/\/oauth\.yandex\.ru\/authorize\?.*redirect_uri=https%3A%2F%2Fhr\.example\.ru%2Fapi%2Fcallback/);
-    assert.equal((await fetch(base + '/api/doc', { method: 'POST', body: 'x'.repeat(5 * 1024 * 1024) }).catch(() => ({ status: 413 }))).status, 413);
+    assert.equal((await fetch(base + '/api/doc', { method: 'POST', body: 'x'.repeat(17 * 1024 * 1024) }).catch(() => ({ status: 413 }))).status, 413);
     assert.deepEqual(fs.readdirSync(path.join(data, 'backups')), []);   // пустую базу не копируем
   } finally { p.kill(); }
   // без настроек сервер не стартует
@@ -88,5 +88,39 @@ test('сервер: данные из папки data локальной вер�
     assert.equal(r.status, 200);
     const sync = await (await fetch('http://localhost:8796/api/sync', { headers: { Cookie: r.headers.get('set-cookie').split(';')[0] } })).json();
     assert.deepEqual(sync.docs.find(d => d.path === 'months/a_2026-10').data.days['2026-10-15'], { calls: 3 });
+  } finally { p.kill(); }
+});
+
+test('сервер: администратор заменяет данные журналами локальной версии со страницы', async () => {
+  const crypto = require('crypto');
+  const { logStore } = require('../cloud/function/store');
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'hr-srv-'));
+  const sha = (s, p) => crypto.createHash('sha256').update(s + '::' + p).digest('hex');
+  // сегодня: данные из версии для ПК — Юля и старая вакансия
+  const seed = { data: { 'config/team': { people: { y: { name: 'Юля', login: 'yulia', salt: 's1', hash: sha('s1', 'Y-1'), admin: true }, a: { name: 'Анна', login: 'anna' } } },
+    'vacancies/old': { title: 'Старая', manager: 'Юля' } } };
+  fs.writeFileSync(path.join(data, 'import.html'), '<script>\n  var SEED = ' + JSON.stringify(seed) + ';\n  var TEMPLATE = "";</script>');
+  // завтра: журналы двух ПК из «Обменника» — у Анны появился пароль
+  const jdir = fs.mkdtempSync(path.join(os.tmpdir(), 'hr-obm-'));
+  const pc1 = logStore(jdir, 'PC1'), pc2 = logStore(jdir, 'PC2');
+  await pc1.tx('config/team', () => ({ people: { y: { name: 'Юля', login: 'yulia', salt: 's1', hash: sha('s1', 'Y-1'), admin: true }, a: { name: 'Анна', login: 'anna', salt: 's2', hash: sha('s2', 'A-2') } } }));
+  await pc2.tx('months/a_2026-10', () => ({ person: 'a', month: '2026-10', days: { '2026-10-20': { calls: 7 } } }));
+  const files = fs.readdirSync(jdir).map(f => fs.readFileSync(path.join(jdir, f), 'utf8'));
+  const env = Object.assign({}, process.env, { DATA_DIR: data, PORT: '8795', AUTH: 'password', SESSION_SECRET: 's'.repeat(48), NODE_NO_WARNINGS: '1' });
+  const p = spawn(process.execPath, [path.join(__dirname, 'server.js')], { env });
+  const base = 'http://localhost:8795', post = (u, b, c) => fetch(base + u, { method: 'POST', headers: Object.assign({ 'X-HR': '1', 'Content-Type': 'application/json' }, c ? { Cookie: c } : {}), body: JSON.stringify(b) });
+  const login = async (l, pw) => { const r = await post('/api/plogin', { login: l, password: pw }); return r.status === 200 ? r.headers.get('set-cookie').split(';')[0] : null; };
+  try {
+    await new Promise((ok, no) => { p.stdout.on('data', d => /слушают/.test(d) && ok()); p.on('exit', c => no(new Error('вышел ' + c))); });
+    assert.equal(await login('anna', 'A-2'), null);   // пароля у Анны пока нет
+    const y = await login('yulia', 'Y-1');
+    assert.equal((await post('/api/replace-data', { files: ['{"bad":1}\n'] }, y)).status, 400);   // не журналы — ничего не трогаем
+    const r = await post('/api/replace-data', { files }, y);
+    assert.equal(r.status, 200, await r.clone().text());
+    const a = await login('anna', 'A-2');
+    assert.ok(a);
+    assert.equal((await post('/api/replace-data', { files }, a)).status, 404);   // не администратор — нельзя
+    const docs = (await (await fetch(base + '/api/sync', { headers: { Cookie: y } })).json()).docs.map(d => d.path).sort();
+    assert.deepEqual(docs, ['config/team', 'months/a_2026-10']);   // старая вакансия ушла, журналы — целиком
   } finally { p.kill(); }
 });

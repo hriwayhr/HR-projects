@@ -14,7 +14,7 @@ const { create, config, importDocs, docsFromFile } = require(APP + '/index');
 const { sqliteStore, logStore, dailyBackup } = require(APP + '/store');
 
 const DATA = process.env.DATA_DIR || '/data', PORT = +process.env.PORT || 8080, KEEP = +process.env.BACKUP_KEEP_DAYS || 30;
-const MAX_BODY = 4 * 1024 * 1024;
+const MAX_BODY = 16 * 1024 * 1024;   // журналы локальной версии при переносе данных
 const cfg = config();
 const missing = (PASSWORD ? ['SESSION_SECRET'] : ['SESSION_SECRET', 'OAUTH_CLIENT_ID', 'OAUTH_CLIENT_SECRET', 'BASE_URL', 'ALLOWED_DOMAINS', 'ADMIN_EMAILS']).filter(k => !process.env[k]);
 if (missing.length || cfg.sessionSecret.length < 32) { console.error('Заполните в .env: ' + (missing.join(', ') || 'SESSION_SECRET (от 32 символов)')); process.exit(1); }

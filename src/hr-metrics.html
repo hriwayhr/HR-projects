@@ -489,6 +489,12 @@
       <div class="actions"><label class="btn ghost" for="bFile">Выбрать файл</label><input type="file" id="bFile" accept=".json,application/json" hidden></div>
       <div id="bPreview"></div>
     </div>
+    <div class="panel mt" id="bLocalPanel" hidden>
+      <h3>Перенести данные локальной версии</h3>
+      <p class="hint">Откройте папку «HR-метрики» → data в «Обменнике» и выберите все файлы changes-….jsonl (Ctrl+A). Все данные здесь заменятся данными из этих файлов — вместе с командой, логинами и паролями. Перед этим закройте локальную версию на всех ПК.</p>
+      <div class="actions"><label class="btn ghost" for="bLocalFiles">Выбрать файлы</label><input type="file" id="bLocalFiles" accept=".jsonl" multiple hidden></div>
+      <div id="bLocalPreview"></div>
+    </div>
   </section>
 
   <!-- Причины отказов из Talantix (администратор) -->
@@ -2228,7 +2234,7 @@ function backupDocs(){
   return docs;
 }
 function bStatus(t, err){ $('bStat').className = 'status' + (err ? ' err' : ''); $('bStat').textContent = t; }
-function renderBackup(){ $('bImportPanel').hidden = !YA; }
+function renderBackup(){ $('bImportPanel').hidden = !YA; $('bLocalPanel').hidden = !LOCAL; }
 $('bExport').onclick = function(){
   var docs = backupDocs(), name = 'hr-metrics-' + today() + '.json', data = JSON.stringify({format:'hr-metrics', at:new Date().toISOString(), docs:docs});
   var done = 'Скачано документов: ' + Object.keys(docs).length + '.';
@@ -2260,6 +2266,27 @@ $('bFile').onchange = function(){
       (full ? '<label class="check mt"><input type="checkbox" id="bSure"> В базе уже есть данные — заменить документами из копии</label>' : '') +
       '<div class="actions mt"><button class="btn" id="bGo">Загрузить</button></div>';
   }).catch(function(){ bStatus('Это не резервная копия HR-метрик.', true); });
+};
+// перенос журналов локальной версии: сервер сводит их и заменяет все данные (пароли — тоже оттуда)
+var bJournals = null;
+$('bLocalFiles').onchange = function(){
+  var fs = Array.prototype.filter.call(this.files, function(f){ return /\.jsonl$/i.test(f.name); }); this.value = '';
+  if(!fs.length){ bStatus('Выберите файлы changes-….jsonl из папки data.', true); return; }
+  Promise.all(fs.map(function(f){ return f.text(); })).then(function(texts){
+    bJournals = texts;
+    $('bLocalPreview').innerHTML = '<p class="mt">Выбрано файлов: ' + fs.length + ' (' + esc(fs.map(function(f){ return f.name; }).join(', ')) + ').</p>' +
+      '<label class="check"><input type="checkbox" id="bLocalSure"> Заменить все данные здесь данными из этих файлов</label>' +
+      '<div class="actions mt"><button class="btn" id="bLocalGo">Перенести</button></div>';
+  });
+};
+$('bLocalPreview').onclick = function(e){
+  if(e.target.id !== 'bLocalGo' || !bJournals) return;
+  if(!$('bLocalSure').checked){ bStatus('Отметьте, что данные можно заменить.', true); return; }
+  e.target.disabled = true; bStatus('Переношу…');
+  fetch('/api/replace-data', {method:'POST', credentials:'same-origin', headers:{'X-HR':'1', 'Content-Type':'application/json'}, body:JSON.stringify({files:bJournals})})
+    .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error || 'Не перенеслось.'); return j; }); })
+    .then(function(j){ bStatus('Готово: перенесено документов — ' + j.docs + '. Страница перезагрузится; если попросит, войдите снова.'); setTimeout(function(){ location.reload(); }, 2500); },
+          function(err){ bStatus(err.message || 'Не перенеслось, попробуйте ещё раз.', true); e.target.disabled = false; });
 };
 $('bPreview').onclick = function(e){
   if(e.target.id !== 'bGo' || !bLoaded || !db) return;

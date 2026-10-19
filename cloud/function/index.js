@@ -12,7 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const acl = require('./acl');
 const auth = require('./auth');
-const { memoryStore, ydbStore } = require('./store');
+const { memoryStore, ydbStore, logStore } = require('./store');
 
 function config(env = process.env) {
   const list = s => String(s || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean);
@@ -195,6 +195,26 @@ function docsFromFile(text) {
   const a = text.indexOf('var SEED = '), z = text.indexOf(';\n  var TEMPLATE = ');
   return a >= 0 && z > a ? JSON.parse(text.slice(a + 11, z)).data : JSON.parse(text).docs;
 }
+// Замена всех данных журналами папки data локальной версии (changes-*.jsonl): администратор переносит их через страницу.
+// Журналы сводятся так же, как их читает сама локальная версия; в новой команде должен быть администратор с паролем.
+async function replaceFromJournals(store, user, b) {
+  const files = Array.isArray(b.files) ? b.files.filter(t => typeof t === 'string' && t) : [];
+  if (!files.length) return json(400, { error: 'Выберите файлы changes-….jsonl из папки data.' });
+  const dir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'hr-journals-'));
+  let docs = {};
+  try {
+    files.forEach((t, i) => fs.writeFileSync(path.join(dir, 'changes-f' + i + '.jsonl'), t.endsWith('\n') ? t : t + '\n'));
+    (await logStore(dir, 'replace-read').changes(0)).forEach(d => { if (d.data !== null) docs[d.path] = d.data; });
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  const people = (docs['config/team'] || {}).people || {};
+  if (!Object.keys(people).some(p => people[p].admin && people[p].login && people[p].hash && !people[p].archived))
+    return json(400, { error: 'В файлах нет команды с администратором и паролем — выберите все файлы changes-….jsonl из папки data.' });
+  const keep = Object.keys(docs).filter(p => acl.PATH_RE.test(p) && isObj(docs[p]));
+  const old = (await store.changes(0)).filter(d => d.data !== null && !keep.includes(d.path)).map(d => d.path);
+  for (const p of old) await store.tx(p, () => null, user.email);
+  for (const p of keep) await store.tx(p, () => JSON.parse(JSON.stringify(docs[p])), user.email);
+  return json(200, { ok: true, docs: keep.length, removed: old.length });
+}
 async function importInitial(store, b) {
   const r = await importDocs(store, b.docs);
   return typeof r === 'number' ? json(200, { ok: true, docs: r }) : json(r === 'В папке уже есть данные.' ? 403 : 400, { error: r });
@@ -217,6 +237,7 @@ function makeHandler(store, cfg, fetchFn) {
       if (cfg.webImport && method === 'POST' && url === '/api/import-initial') return await importInitial(store, body() || {});
       const user = await currentUser(cfg, store, headers);
       if (!user) return json(401, { error: 'Нужно войти.', empty: cfg.webImport ? (await store.count()) === 0 : undefined });
+      if (cfg.local && user.admin && method === 'POST' && url === '/api/replace-data') return await replaceFromJournals(store, user, body() || {});
       if (method === 'GET' && url === '/api/me') return json(200, { pid: user.pid, email: user.email, admin: user.admin });
       if (method === 'GET' && url === '/api/sync') return json(200, await sync(user, store, Math.max(0, Number(query.since) || 0)));
       if (method === 'POST' && url === '/api/doc') {
