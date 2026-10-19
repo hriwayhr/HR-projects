@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Первичная настройка чистого сервера Ubuntu 24.04 и запуск HR-метрик.
-# Запуск от root из папки проекта:  bash server/setup.sh
+# Запуск от root из папки проекта:  bash server/setup.sh   (свой домен: HR_DOMAIN=hr.example.ru bash server/setup.sh)
 # Данные: положите версию для ПК «HR-метрики.html» в /opt — при первом запуске она загрузится и удалится.
 # Повторный запуск безопасен: обновит систему, пересоберёт и перезапустит приложение.
 set -euo pipefail
@@ -41,6 +41,9 @@ if [ ! -f .env ]; then
   sed -i "s|^SESSION_SECRET=.*|SESSION_SECRET=$(openssl rand -base64 48 | tr -d '\n')|" .env
 fi
 chmod 600 .env
+if [ -n "${HR_DOMAIN:-}" ]; then   # свой домен из команды: HR_DOMAIN=hr.example.ru bash server/setup.sh
+  sed -i "s|^DOMAIN=.*|DOMAIN=$HR_DOMAIN|; s|^BASE_URL=.*|BASE_URL=https://$HR_DOMAIN|" .env
+fi
 if grep -qE '^DOMAIN=$' .env; then   # своего домена нет — бесплатный адрес по IP сервера, сертификат HTTPS выдаётся на него
   ip=$(curl -fsS4 https://ifconfig.me || curl -fsS4 https://api.ipify.org)
   host="${ip//./-}.sslip.io"
