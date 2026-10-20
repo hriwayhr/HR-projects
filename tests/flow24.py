@@ -164,32 +164,34 @@ with sync_playwright() as p:
     pg.uncheck(s1 + '.s-pub'); assert pg.is_visible(s1 + '.s-publishedAt')
     pg.fill(s1 + '.s-publishedAt', ago(25))
     pg.select_option(s1 + '.s-reason', 'увольнение сотрудника'); pg.select_option(s1 + '.s-search', 'активный'); pg.select_option(s1 + '.s-source', 'рекомендация сотрудника')
-    # офферы: первый кандидат отказался (зарплата), второй принял — имя само попало в «Кто вышел»
+    # офферы: первый кандидат отказался (зарплата), второй принял; выход — в строке оффера, закрывает только галочка «кандидат вышел»
     pg.click(s1 + '[data-add-offer]'); o1 = s1 + '.offers > .offer:nth-child(2) '
     pg.fill(o1 + '.o-cand', 'Петров'); pg.fill(o1 + '.o-sent', ago(20)); assert pg.is_hidden(o1 + '.o-why')
     pg.select_option(o1 + '.o-res', 'declined'); assert pg.is_visible(o1 + '.o-why'); pg.fill(o1 + '.o-ans', ago(18)); pg.select_option(o1 + '.o-why', 'зарплата')
     pg.click(s1 + '[data-add-offer]'); o2 = s1 + '.offers > .offer:nth-child(3) '
     pg.fill(o2 + '.o-cand', 'Иванова'); pg.fill(o2 + '.o-sent', ago(15)); pg.select_option(o2 + '.o-res', 'accepted'); pg.fill(o2 + '.o-ans', ago(14))
-    assert pg.input_value(s1 + '.s-person') == 'Иванова' and pg.is_hidden(o2 + '.o-why')
-    pg.fill(s1 + '.s-person', '')
+    assert pg.is_hidden(o2 + '.o-why') and pg.is_visible(o2 + '.o-start') and pg.is_hidden(o1 + '.o-start') and not pg.query_selector(s1 + '.s-person')
     pg.click('#vSeatAdd'); pg.click('#vSeatAdd')                       # руководитель попросил ещё двоих
     assert 'Всего 3, в поиске 3' in pg.inner_text('#vSeatSum') and pg.inner_text('#vSeats .seat:nth-child(3) .seat-n') == 'Единица 3'
-    pg.fill(s1 + '.s-startAt', ago(10)); pg.fill(s1 + '.s-person', 'Иванова')
+    pg.fill(o2 + '.o-start', ago(10)); pg.dispatch_event(o2 + '.o-start', 'change')
+    assert 'ждём выхода' in pg.inner_text(s1 + '.pill') and 'в поиске 3' in pg.inner_text('#vSeatSum')   # дата выхода ещё не выход
     pg.click('#vSeats .seat:nth-child(3) [data-del-seat]')          # одну «+1» отменили
-    pg.dispatch_event(s1 + '.s-startAt', 'change')
+    pg.check(o2 + '.o-started')
     assert 'Всего 2, в поиске 1, закрыто 1' in pg.inner_text('#vSeatSum') and 'закрыта' in pg.inner_text(s1 + '.pill'), pg.inner_text('#vSeatSum')
     pg.click('#vSave'); pg.wait_for_timeout(300)
     vid = [k for k, v in pg.evaluate('window.__store').items() if k.startswith('vacancies/') and v.get('title', '').startswith('Менеджер отдела бронирования')][0]
     v = pg.evaluate("window.__store['%s']" % vid)
     assert v['multi'] and v['rate'] == 1 and v['status'] == 'активна' and v['publishedAt'] == ago(25) and v['requestedAt'] == ago(30), v
     assert v['seats'][0] == {'requestedAt': ago(30), 'publishedAt': ago(25), 'reason': 'увольнение сотрудника', 'search': 'активный', 'source': 'рекомендация сотрудника', 'person': 'Иванова', 'startAt': ago(10),
-        'offers': [{'candidate': 'Петров', 'sentAt': ago(20), 'result': 'declined', 'answerAt': ago(18), 'reason': 'зарплата'}, {'candidate': 'Иванова', 'sentAt': ago(15), 'result': 'accepted', 'answerAt': ago(14)}]}, v['seats'][0]
+        'offers': [{'candidate': 'Петров', 'sentAt': ago(20), 'result': 'declined', 'answerAt': ago(18), 'reason': 'зарплата'},
+                   {'candidate': 'Иванова', 'sentAt': ago(15), 'result': 'accepted', 'answerAt': ago(14), 'startAt': ago(10), 'started': True}]}, v['seats'][0]
     assert v['seats'][1] == {'requestedAt': dt.date.today().isoformat()}, v
     row = pg.inner_text('#vTable tr[data-id=%s]' % vid.split('/')[1]); assert '1 из 2' in row, row
     vt = pg.inner_text('#vTiles')
     assert 'Скорость закрытия\n33' in vt and 'закрыто 3' in vt, vt                # (30 + 50 + 20) / 3: единица считается отдельно
     # вторая единица закрыта — вакансия сама уходит в «выход сотрудника»; новая «+1» — снова «активна»
-    pg.fill('#vSeats .seat:nth-child(2) .s-startAt', dt.date.today().isoformat()); pg.click('#vSave'); pg.wait_for_timeout(300)
+    s2 = '#vSeats .seat:nth-child(2) '; pg.click(s2 + '[data-add-offer]'); pg.select_option(s2 + '.o-res', 'accepted'); pg.check(s2 + '.o-started')   # без даты — сегодня
+    pg.click('#vSave'); pg.wait_for_timeout(300)
     v = pg.evaluate("window.__store['%s']" % vid)
     assert v['status'] == 'выход сотрудника' and v['rate'] == 0 and v['closedAt'] == dt.date.today().isoformat(), v
     pg.click('#vSeatAdd'); pg.click('#vSave'); pg.wait_for_timeout(300)

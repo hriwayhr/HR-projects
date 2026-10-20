@@ -60,7 +60,10 @@ with sync_playwright() as p:
     assert pg.input_value('#vSeats .seat:nth-child(1) .o-sent') == '2026-07-28' and pg.input_value('#vSeats .seat:nth-child(1) .o-res') == 'accepted'
     pg.click('#vSave'); pg.wait_for_timeout(300)
     s0 = pg.evaluate("window.__store['vacancies/c'].seats[0]")
-    assert s0['offers'] == [{'sentAt': '2026-07-28', 'result': 'accepted', 'answerAt': '2026-07-29'}] and 'offerSentAt' not in s0 and 'offerAcceptedAt' not in s0, s0
+    # закрытая раньше единица: выход переехал в принятый оффер с отметкой «вышел»
+    assert s0['offers'] == [{'result': 'accepted', 'candidate': 'Петрова', 'sentAt': '2026-07-28', 'answerAt': '2026-07-29', 'startAt': '2026-08-03', 'started': True}] and s0['startAt'] == '2026-08-03' and 'offerSentAt' not in s0, s0
+    # у второй единицы дата выхода 20.10 ещё впереди — после пересохранения она не закрыта, а ждёт выхода
+    s1 = pg.evaluate("window.__store['vacancies/c'].seats[1]"); assert 'startAt' not in s1 and s1['offers'][1]['startAt'] == '2026-10-20' and not s1['offers'][1].get('started'), s1
     assert '2 из 3' in pg.inner_text('#vTable tr[data-id=c]')   # колонка «Офферы»: принято 2 из 3
     pg.click('#tab_day'); pg.wait_for_timeout(200)
     # тренд: собеседования за 12 месяцев (ноя 25 – окт 26) = 9, год назад = 7 → +29%
@@ -94,7 +97,8 @@ with sync_playwright() as p:
     pg.click('#tab_day'); pg.wait_for_timeout(100)
     # нагрузка и прогноз: у Юлии 1 вакансия (C закрылась при пересохранении — все единицы с датой выхода), нужно 2 человека, ждём 1 выход (Сидоров 20.10)
     ld = txt(pg, '#dLoad')
-    assert 'Юлия Немчинова\t1\t2\t36\t36\t1' in ld and ld.split('Юлия Немчинова')[1].split('\n')[0].endswith('\t1'), ld
+    # C в работе: вторая единица ждёт выхода 20.10 (дата есть, «кандидат вышел» не отмечен) → 2 вакансии, нужно 3
+    assert 'Юлия Немчинова\t2\t3\t36\t36\t1' in ld and ld.split('Юлия Немчинова')[1].split('\n')[0].endswith('\t1'), ld
     assert 'Октябрь по вакансиям: 1 выход (вышли 0, ожидаются 1)' in ld and 'В метриках дня: 1' in ld and '20.10.26\tСидоров\tМенеджер' in ld, ld
     # сроки по этапам — за год: Диспетчер (4 + 15 = 19 дн.), Петрова (7 + 2 = 9 дн.)
     pg.select_option('#dMode', 'year'); pg.wait_for_timeout(100)
