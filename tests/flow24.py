@@ -164,7 +164,14 @@ with sync_playwright() as p:
     pg.uncheck(s1 + '.s-pub'); assert pg.is_visible(s1 + '.s-publishedAt')
     pg.fill(s1 + '.s-publishedAt', ago(25))
     pg.select_option(s1 + '.s-reason', 'увольнение сотрудника'); pg.select_option(s1 + '.s-search', 'активный'); pg.select_option(s1 + '.s-source', 'рекомендация сотрудника')
-    pg.fill(s1 + '.s-offerSentAt', ago(15)); pg.fill(s1 + '.s-offerAcceptedAt', ago(14))
+    # офферы: первый кандидат отказался (зарплата), второй принял — имя само попало в «Кто вышел»
+    pg.click(s1 + '[data-add-offer]'); o1 = s1 + '.offers > .offer:nth-child(2) '
+    pg.fill(o1 + '.o-cand', 'Петров'); pg.fill(o1 + '.o-sent', ago(20)); assert pg.is_hidden(o1 + '.o-why')
+    pg.select_option(o1 + '.o-res', 'declined'); assert pg.is_visible(o1 + '.o-why'); pg.fill(o1 + '.o-ans', ago(18)); pg.select_option(o1 + '.o-why', 'зарплата')
+    pg.click(s1 + '[data-add-offer]'); o2 = s1 + '.offers > .offer:nth-child(3) '
+    pg.fill(o2 + '.o-cand', 'Иванова'); pg.fill(o2 + '.o-sent', ago(15)); pg.select_option(o2 + '.o-res', 'accepted'); pg.fill(o2 + '.o-ans', ago(14))
+    assert pg.input_value(s1 + '.s-person') == 'Иванова' and pg.is_hidden(o2 + '.o-why')
+    pg.fill(s1 + '.s-person', '')
     pg.click('#vSeatAdd'); pg.click('#vSeatAdd')                       # руководитель попросил ещё двоих
     assert 'Всего 3, в поиске 3' in pg.inner_text('#vSeatSum') and pg.inner_text('#vSeats .seat:nth-child(3) .seat-n') == 'Единица 3'
     pg.fill(s1 + '.s-startAt', ago(10)); pg.fill(s1 + '.s-person', 'Иванова')
@@ -175,7 +182,8 @@ with sync_playwright() as p:
     vid = [k for k, v in pg.evaluate('window.__store').items() if k.startswith('vacancies/') and v.get('title', '').startswith('Менеджер отдела бронирования')][0]
     v = pg.evaluate("window.__store['%s']" % vid)
     assert v['multi'] and v['rate'] == 1 and v['status'] == 'активна' and v['publishedAt'] == ago(25) and v['requestedAt'] == ago(30), v
-    assert v['seats'][0] == {'requestedAt': ago(30), 'publishedAt': ago(25), 'reason': 'увольнение сотрудника', 'search': 'активный', 'source': 'рекомендация сотрудника', 'offerSentAt': ago(15), 'offerAcceptedAt': ago(14), 'person': 'Иванова', 'startAt': ago(10)}, v['seats'][0]
+    assert v['seats'][0] == {'requestedAt': ago(30), 'publishedAt': ago(25), 'reason': 'увольнение сотрудника', 'search': 'активный', 'source': 'рекомендация сотрудника', 'person': 'Иванова', 'startAt': ago(10),
+        'offers': [{'candidate': 'Петров', 'sentAt': ago(20), 'result': 'declined', 'answerAt': ago(18), 'reason': 'зарплата'}, {'candidate': 'Иванова', 'sentAt': ago(15), 'result': 'accepted', 'answerAt': ago(14)}]}, v['seats'][0]
     assert v['seats'][1] == {'requestedAt': dt.date.today().isoformat()}, v
     row = pg.inner_text('#vTable tr[data-id=%s]' % vid.split('/')[1]); assert '1 из 2' in row, row
     vt = pg.inner_text('#vTiles')

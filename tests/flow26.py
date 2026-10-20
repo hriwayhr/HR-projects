@@ -29,7 +29,9 @@ seed = {
   'vacancies/b': {'title': 'Диспетчер', 'status': 'выход сотрудника', 'manager': 'Шулятицкая', 'dept': 'Логистика', 'customer': 'Петров',
                   'requestedAt': '2026-08-01', 'publishedAt': '2026-08-05', 'closedAt': '2026-08-20', 'startAt': '2026-08-20', 'person': 'Иванов Иван', 'rate': 1},
   'vacancies/c': {'title': 'Менеджер', 'status': 'активна', 'manager': 'Немчинова', 'dept': 'Продажи', 'publishedAt': '2026-08-01', 'multi': True, 'rate': 0,
-                  'seats': [{'requestedAt': '2026-07-25', 'startAt': '2026-08-03', 'person': 'Петрова'}, {'requestedAt': '2026-09-01', 'startAt': '2026-10-20', 'person': 'Сидоров'}]},
+                  'seats': [{'requestedAt': '2026-07-25', 'startAt': '2026-08-03', 'person': 'Петрова'}, {'requestedAt': '2026-09-01', 'startAt': '2026-10-20', 'person': 'Сидоров',
+                  'offers': [{'candidate': 'Орлов', 'sentAt': '2026-10-01', 'result': 'declined', 'answerAt': '2026-10-02', 'reason': 'зарплата'},
+                             {'candidate': 'Сидоров', 'sentAt': '2026-10-03', 'result': 'accepted', 'answerAt': '2026-10-05'}]}]},
 }
 errs = []
 def start(b, who):
@@ -46,9 +48,21 @@ with sync_playwright() as p:
     b = p.chromium.launch(executable_path='/opt/pw-browsers/chromium')
     pg = start(b, 'yulia')
     assert pg.inner_text('#dayTitle').startswith('Октябрь 2026'), (pg.inner_text('#dayTitle'), errs)
-    # воронка: 30 чатов → 10 назначено (33%) → 6 прошло (60%) → 1 выход (17%); на 1 выход — 30 · 10 · 6
+    # воронка: 30 чатов → 10 назначено (33%) → 6 прошло (60%) → 2 оффера (33%) → 1 принят (50%) → 1 выход (100%) → ИС
     f = txt(pg, '#dFunnel')
-    assert 'Чаты\n30' in f and '↓ 33%' in f and '↓ 60%' in f and '↓ 17%' in f and 'На 1 выход: 30 чатов · 10 назначенных · 6 прошедших' in f, f
+    assert 'Чаты\n30' in f and '↓ 33%' in f and '↓ 60%' in f and 'Офферы отправлены\n2' in f and '↓ 50%' in f and 'Офферы приняты\n1' in f and '↓ 100%' in f, f
+    assert 'Прошли испытательный срок' in f and 'На 1 выход: 30 чатов · 10 назначенных · 6 прошедших собеседований · 2 офферов' in f, f
+    assert 'Принимают оффер: 50% — 1 из 2 ответивших' in f and 'Отказались: зарплата — 1' in f, f
+    # старые офферы (две даты в единице) — первым оффером; при пересохранении карточки переходят в список и не теряются
+    assert pg.evaluate("seatOffers({offerSentAt: '2026-07-30', offerAcceptedAt: '2026-08-01'})") == [{'sentAt': '2026-07-30', 'result': 'accepted', 'answerAt': '2026-08-01'}]
+    pg.evaluate("window.__store['vacancies/c'].seats[0].offerSentAt = '2026-07-28'; window.__store['vacancies/c'].seats[0].offerAcceptedAt = '2026-07-29'; window.__notify();"); pg.wait_for_timeout(200)
+    pg.click('#tab_vac'); pg.evaluate("setVacStatus([])"); pg.click('#vTable tr[data-id=c] td:nth-child(2)'); pg.wait_for_timeout(200)
+    assert pg.input_value('#vSeats .seat:nth-child(1) .o-sent') == '2026-07-28' and pg.input_value('#vSeats .seat:nth-child(1) .o-res') == 'accepted'
+    pg.click('#vSave'); pg.wait_for_timeout(300)
+    s0 = pg.evaluate("window.__store['vacancies/c'].seats[0]")
+    assert s0['offers'] == [{'sentAt': '2026-07-28', 'result': 'accepted', 'answerAt': '2026-07-29'}] and 'offerSentAt' not in s0 and 'offerAcceptedAt' not in s0, s0
+    assert '2 из 3' in pg.inner_text('#vTable tr[data-id=c]')   # колонка «Офферы»: принято 2 из 3
+    pg.click('#tab_day'); pg.wait_for_timeout(200)
     # тренд: собеседования за 12 месяцев (ноя 25 – окт 26) = 9, год назад = 7 → +29%
     t = txt(pg, '#dTrend')
     assert 'Ноябрь 2025 – Октябрь 2026' in t and 'Всего за 12 месяцев: 9' in t and 'Год назад: 7 +29%' in t, t

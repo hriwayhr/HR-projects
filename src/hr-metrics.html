@@ -175,6 +175,10 @@
   .seat-head button{margin-left:auto;}
   .seat .check{align-self:end; padding-bottom:8px;}
   .seat .hide{display:none;}
+  .offers{grid-column:1 / -1; border-top:1px dashed var(--line); border-bottom:1px dashed var(--line); padding:8px 0; display:flex; flex-direction:column; gap:6px; align-items:flex-start;}
+  .offers-head{display:flex; gap:10px; align-items:baseline;}
+  .offer{display:flex; flex-wrap:wrap; gap:8px; align-items:end;}
+  .offer .o-cand{width:180px;}
   fieldset.links .stack{gap:8px; margin-bottom:10px;}
   .link-row{display:flex; flex-wrap:wrap; gap:8px; align-items:end;}
   .link-row input.v-link{min-width:240px;}
@@ -532,7 +536,10 @@ var VAC_STATUSES = ['активна', 'выход сотрудника', 'арх
 var CLOSED = {'выход сотрудника':1, 'архив':1};
 var VAC_FIELDS = ['title','dept','status','manager','customer','comment'];
 // Единица найма: каждый человек, которого нужно нанять; закрыта успешно, когда есть дата выхода
-var SEAT_FIELDS = ['requestedAt','publishedAt','reason','search','source','offerSentAt','offerAcceptedAt','person','startAt'];
+var SEAT_FIELDS = ['requestedAt','publishedAt','reason','search','source','person','startAt'];
+// Офферы единицы: несколько кандидатов подряд, если предыдущий отказался
+var OFFER_RESULTS = [['wait', 'ждём ответа'], ['accepted', 'принят'], ['declined', 'отклонён']];
+var DECLINE_REASONS = ['другое предложение', 'зарплата', 'остался на текущей работе', 'условия / график', 'пропал, не вышел на связь', 'другое'];
 var REASONS = ['новая ставка', 'увольнение сотрудника', 'переход сотрудника', 'замена сотрудника (резерв)'], SEARCHES = ['активный', 'поиск в резерв'], SOURCES = ['отклик', 'рекомендация сотрудника', 'холодный поиск', 'резерв'];
 var LOGIN_RE = /^[a-z0-9._@+-]{2,80}$/;   // логин или рабочая почта
 var MONTHS_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
@@ -911,9 +918,23 @@ function bar(name, v, top, right, title){
 function dec(v){ return String(Math.round(v * 10) / 10).replace('.', ','); }
 
 // 1–2. Воронка и «цена» одного выхода
+// Офферы рекрутеров ps за период r — из единиц найма в карточках вакансий (по дате отправки и дате ответа)
+function offerList(ps){
+  var out = [];
+  visibleVacancies().forEach(function(v){ if(isMulti(v) && ps.indexOf(vacOwner(v)) >= 0) v.seats.forEach(function(x){ out = out.concat(seatOffers(x)); }); });
+  return out;
+}
+function inR(d, r){ return !!d && d >= r.from && d <= r.to; }
+function offersSent(r, ps){ var n = offerList(ps).filter(function(o){ return inR(o.sentAt, r); }).length; return n || null; }
+function offersAnswered(r, ps, res){ var n = offerList(ps).filter(function(o){ return o.result === res && inR(o.answerAt, r); }).length; return n || null; }
+function probPassed(r, ps){ var n = hireUnits().filter(function(u){ return ps.indexOf(vacOwner(u.v)) >= 0 && u.prob && u.prob.result === 'passed' && inR(u.prob.at, r); }).length; return n || null; }
 function renderFunnel(w, wp, wl, ps){
-  var steps = [['Чаты', chats], ['Назначено собеседований', 'int_planned'], ['Прошли собеседование', 'int_done'], ['Вышли на работу', 'hires']];
-  var v = steps.map(function(x){ return rSum(w, ps, x[1]); }), pv = steps.map(function(x){ return wp ? rSum(wp, ps, x[1]) : null; });
+  // первые шаги — из метрик дня, офферы и испытательный срок — из карточек вакансий
+  var steps = [['Чаты', chats], ['Назначено собеседований', 'int_planned'], ['Прошли собеседование', 'int_done'],
+    ['Офферы отправлены', null, offersSent], ['Офферы приняты', null, function(r, ps){ return offersAnswered(r, ps, 'accepted'); }],
+    ['Вышли на работу', 'hires'], ['Прошли испытательный срок', null, probPassed]];
+  function val(x, r){ return !r ? null : x[2] ? x[2](r, ps) : rSum(r, ps, x[1]); }
+  var v = steps.map(function(x){ return val(x, w); }), pv = steps.map(function(x){ return val(x, wp); });
   var top = Math.max.apply(null, v.map(function(x){ return x || 0; })), head = '<h3>Воронка · '+esc(wl)+'</h3>';
   if(!top){ $('dFunnel').innerHTML = head + '<p class="sub">За период нет внесённых данных.</p>'; return; }
   var html = steps.map(function(x, i){
@@ -921,10 +942,18 @@ function renderFunnel(w, wp, wl, ps){
     return (i ? '<div class="f-conv">↓ '+(c === null ? '—' : c + '%')+delta(num(c) && num(pc) ? c - pc : null, ' п.п.')+'</div>' : '') + bar(x[0], v[i], top, v[i] === null ? '—' : v[i]);
   }).join('');
   function per(a, h){ return num(a) && h ? dec(a / h) : '—'; }
-  var h = v[3], ph = pv[3];
-  html += '<div class="detail-sum mt"><span>На 1 выход: <b>'+per(v[0], h)+'</b> чатов · <b>'+per(v[1], h)+'</b> назначенных · <b>'+per(v[2], h)+'</b> прошедших собеседований</span>' +
-    (ph ? '<span>Прошлый период ('+spanLabel(wp)+'): '+per(pv[0], ph)+' · '+per(pv[1], ph)+' · '+per(pv[2], ph)+'</span>' : '') + '</div>';
-  $('dFunnel').innerHTML = head + html + '<p class="hint">Шаги — суммы внесённых цифр за период, а не путь одних и тех же кандидатов. Рядом с конверсией — изменение к прошлому периоду.</p>';
+  var h = v[5], ph = pv[5];
+  html += '<div class="detail-sum mt"><span>На 1 выход: <b>'+per(v[0], h)+'</b> чатов · <b>'+per(v[1], h)+'</b> назначенных · <b>'+per(v[2], h)+'</b> прошедших собеседований · <b>'+per(v[3], h)+'</b> офферов</span>' +
+    (ph ? '<span>Прошлый период ('+spanLabel(wp)+'): '+per(pv[0], ph)+' · '+per(pv[1], ph)+' · '+per(pv[2], ph)+' · '+per(pv[3], ph)+'</span>' : '') + '</div>';
+  // принимают оффер: принятые из получивших ответ; причины отказов от оффера
+  var acc = v[4] || 0, dec_ = offersAnswered(w, ps, 'declined') || 0;
+  if(acc + dec_){
+    var why = {}; offerList(ps).forEach(function(o){ if(o.result === 'declined' && inR(o.answerAt, w)){ var k = o.reason || 'не указана'; why[k] = (why[k] || 0) + 1; } });
+    var pacc = wp ? (offersAnswered(wp, ps, 'accepted') || 0) : 0, pdec = wp ? (offersAnswered(wp, ps, 'declined') || 0) : 0, pa = pcnt(acc, acc + dec_), pp = pacc + pdec ? pcnt(pacc, pacc + pdec) : null;
+    html += '<div class="detail-sum"><span>Принимают оффер: <b>'+pa+'%</b> — '+acc+' из '+(acc + dec_)+' ответивших'+delta(num(pp) ? pa - pp : null, ' п.п.')+'</span>' +
+      (dec_ ? '<span>Отказались: ' + Object.keys(why).sort(function(a, b){ return why[b] - why[a]; }).map(function(k){ return esc(k) + ' — ' + why[k]; }).join(', ') + '</span>' : '') + '</div>';
+  }
+  $('dFunnel').innerHTML = head + html + '<p class="hint">Шаги — суммы за период, а не путь одних и тех же кандидатов: чаты и собеседования — из метрик дня, офферы и испытательный срок — из карточек вакансий. Рядом с конверсией — изменение к прошлому периоду.</p>';
 }
 
 // Причины отказов — из выгрузок Talantix (rejections/<ГГГГ-ММ>)
@@ -1433,11 +1462,16 @@ function seatsOf(v){
   }
   return out;
 }
-// Офферы: по датам в единицах (старые карточки — по счётчикам)
+// Офферы единицы найма; у старых карточек — две даты (отправлен / принят), они становятся первым оффером
+function seatOffers(x){
+  if(Array.isArray(x.offers)) return x.offers;
+  return x.offerSentAt || x.offerAcceptedAt ? [{sentAt:x.offerSentAt || x.offerAcceptedAt, result:x.offerAcceptedAt ? 'accepted' : 'wait', answerAt:x.offerAcceptedAt}] : [];
+}
+// Офферы вакансии: принято из отправленных (старые карточки без единиц — по счётчикам)
 function offersOf(v){
   if(!isMulti(v)) return num(v.offersSent) ? {sent:v.offersSent, acc:v.offersAccepted || 0} : null;
-  var sent = v.seats.filter(function(x){ return x.offerSentAt; }).length;
-  return sent ? {sent:sent, acc:v.seats.filter(function(x){ return x.offerAcceptedAt; }).length} : null;
+  var all = [].concat.apply([], v.seats.map(seatOffers));
+  return all.length ? {sent:all.length, acc:all.filter(function(o){ return o.result === 'accepted'; }).length} : null;
 }
 function openSeats(v){ return v.seats.filter(function(x){ return !x.startAt; }); }
 function seatStart(v, x){ return x.requestedAt || vacStart(v); }
@@ -1655,7 +1689,7 @@ function seatOptions(list, v){ return '<option value="">—</option>' + list.map
 function seatRow(x){
   x = x || {};
   // поля, которых нет в форме (итог испытательного срока), переживают пересохранение карточки
-  var keep = Object.assign({}, x); SEAT_FIELDS.forEach(function(f){ delete keep[f]; }); delete keep.published;
+  var keep = Object.assign({}, x); SEAT_FIELDS.concat(['published', 'offers', 'offerSentAt', 'offerAcceptedAt']).forEach(function(f){ delete keep[f]; });
   function f(label, html, cls){ return '<label class="f'+(cls ? ' ' + cls : '')+'">'+label+html+'</label>'; }
   function date(k){ return '<input type="date" class="s-'+k+'" value="'+esc(x[k] || '')+'">'; }
   return '<div class="seat" data-keep="'+esc(JSON.stringify(keep))+'"><div class="seat-head"><b class="seat-n">Единица</b><span class="pill"></span>' +
@@ -1666,14 +1700,34 @@ function seatRow(x){
     f('Причина открытия', '<select class="s-reason">'+seatOptions(REASONS, x.reason)+'</select>') +
     f('Статус поиска', '<select class="s-search">'+seatOptions(SEARCHES, x.search)+'</select>') +
     f('Источник поиска', '<select class="s-source">'+seatOptions(SOURCES, x.source)+'</select>') +
-    f('Дата отправки оффера', date('offerSentAt')) + f('Дата принятия оффера', date('offerAcceptedAt')) +
+    '<div class="offers"><div class="offers-head"><b>Офферы</b><span class="hint">если кандидат отказался — добавьте оффер следующему</span></div>' +
+      seatOffers(x).map(offerRow).join('') + '<button type="button" class="btn ghost sm" data-add-offer>+ Оффер</button></div>' +
     f('Кто вышел', '<input type="text" class="s-person" value="'+esc(x.person || '')+'" placeholder="Имя сотрудника">') + f('Дата выхода', date('startAt')) +
     '</div></div>';
+}
+function offerRow(o){
+  o = o || {sentAt:today(), result:'wait'};
+  function f(label, html, cls){ return '<label class="f'+(cls ? ' ' + cls : '')+'">'+label+html+'</label>'; }
+  return '<div class="offer">' + f('Кандидат', '<input type="text" class="o-cand" value="'+esc(o.candidate || '')+'" placeholder="Имя">') +
+    f('Отправлен', '<input type="date" class="o-sent" value="'+esc(o.sentAt || '')+'">') +
+    f('Итог', '<select class="o-res">' + OFFER_RESULTS.map(function(r){ return '<option value="'+r[0]+'"'+(r[0] === (o.result || 'wait') ? ' selected' : '')+'>'+r[1]+'</option>'; }).join('') + '</select>') +
+    f('Дата ответа', '<input type="date" class="o-ans" value="'+esc(o.answerAt || '')+'">', 'o-ansWrap' + (o.result === 'accepted' || o.result === 'declined' ? '' : ' hide')) +
+    f('Причина отказа', '<select class="o-why">'+seatOptions(DECLINE_REASONS, o.reason)+'</select>', 'o-whyWrap' + (o.result === 'declined' ? '' : ' hide')) +
+    '<button type="button" class="btn danger sm" data-del-offer aria-label="Убрать оффер">×</button></div>';
+}
+function readOffers(el){
+  return Array.prototype.map.call(el.querySelectorAll('.offer'), function(r){
+    var o = {result:r.querySelector('.o-res').value}, c = r.querySelector('.o-cand').value.trim(), s = r.querySelector('.o-sent').value, a = r.querySelector('.o-ans').value, w = r.querySelector('.o-why').value;
+    if(c) o.candidate = c; if(s) o.sentAt = s;
+    if(o.result !== 'wait'){ o.answerAt = a || s || today(); if(o.result === 'declined' && w) o.reason = w; }
+    return o;
+  }).filter(function(o){ return o.sentAt || o.candidate; });
 }
 function readSeats(){
   return Array.prototype.map.call(document.querySelectorAll('#vSeats .seat'), function(el){
     var x = JSON.parse(el.dataset.keep || '{}');
     SEAT_FIELDS.forEach(function(k){ var v = el.querySelector('.s-' + k).value.trim(); if(v) x[k] = v; });
+    var offers = readOffers(el); if(offers.length) x.offers = offers;
     // «уже опубликована» — дату не вводим: берём первую публикацию на hh.ru, если она есть
     delete x.published;
     if(el.querySelector('.s-pub').checked){ x.published = true; var first = vacFirstLinkAt(); if(first) x.publishedAt = first; else delete x.publishedAt; }
@@ -2396,9 +2450,22 @@ $('vSeatAdd').onclick = function(){
   $('vSeats').insertAdjacentHTML('beforeend', seatRow({requestedAt:today()})); seatSummary();
   $('vSeats').lastElementChild.querySelector('input').focus();
 };
-$('vSeats').onclick = function(e){ var b = e.target.closest('[data-del-seat]'); if(b){ b.closest('.seat').remove(); seatSummary(); } };
+$('vSeats').onclick = function(e){
+  var b = e.target.closest('[data-del-seat]'); if(b){ b.closest('.seat').remove(); seatSummary(); return; }
+  var a = e.target.closest('[data-add-offer]'); if(a){ a.insertAdjacentHTML('beforebegin', offerRow(null)); a.previousElementSibling.querySelector('input').focus(); return; }
+  var d = e.target.closest('[data-del-offer]'); if(d) d.closest('.offer').remove();
+};
 $('v_status').onchange = seatSummary;   // «не актуальна» — единицы «не ищем»
-$('vSeats').onchange = function(e){ if(e.target.classList.contains('s-pub')) seatPubToggle(e.target); else seatSummary(); };
+$('vSeats').onchange = function(e){
+  if(e.target.classList.contains('o-res')){   // итог оффера: дата ответа и причина; принят — имя в «Кто вышел»
+    var r = e.target.closest('.offer'), res = e.target.value, seat = e.target.closest('.seat');
+    r.querySelector('.o-ansWrap').classList.toggle('hide', res === 'wait'); r.querySelector('.o-whyWrap').classList.toggle('hide', res !== 'declined');
+    if(res !== 'wait' && !r.querySelector('.o-ans').value) r.querySelector('.o-ans').value = today();
+    if(res === 'accepted' && !seat.querySelector('.s-person').value.trim()) seat.querySelector('.s-person').value = r.querySelector('.o-cand').value.trim();
+    return;
+  }
+  if(e.target.classList.contains('s-pub')) seatPubToggle(e.target); else seatSummary();
+};
 $('vLinkAdd').onclick = function(){ $('vLinks').insertAdjacentHTML('beforeend', linkRow(null)); $('vLinks').lastElementChild.querySelector('input').focus(); syncPubFields(); };
 $('vLinks').onclick = function(e){
   var b = e.target.closest('[data-del-link]');
