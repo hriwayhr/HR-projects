@@ -124,3 +124,33 @@ test('сервер: администратор заменяет данные ж�
     assert.deepEqual(docs, ['config/team', 'months/a_2026-10']);   // старая вакансия ушла, журналы — целиком
   } finally { p.kill(); }
 });
+
+test('отпуск с передачей: коллега видит и ведёт вакансии только в дни отпуска', async () => {
+  const { forTests } = require('../cloud/function/index');
+  const auth = require('../cloud/function/auth'), acl = require('../cloud/function/acl');
+  const S = 's'.repeat(48), store = forTests.memoryStore();
+  const h = forTests.makeHandler(store, forTests.config({ LOCAL: '1', SESSION_SECRET: S }));
+  const day = acl.todayMsk(), add = n => new Date(Date.parse(day) + n * 864e5).toISOString().slice(0, 10);
+  await store.tx('config/team', () => ({ people: { y: { name: 'Юлия', surname: 'Немчинова', login: 'yulia', admin: true }, a: { name: 'Анна', surname: 'Шулятицкая', login: 'anna' } } }));
+  await store.tx('vacancies/v1', () => ({ title: 'Логист', manager: 'Немчинова', status: 'активна' }));
+  await store.tx('vacancies/v2', () => ({ title: 'Бухгалтер', manager: 'Немчинова', status: 'активна' }));
+  const anna = { 'x-hr': '1', cookie: auth.sessionCookie(S, 'anna').split(';')[0] };
+  const sync = async since => JSON.parse((await h({ httpMethod: 'GET', url: '/api/sync', headers: anna, queryStringParameters: { since: String(since || 0) } })).body);
+  const put = async (data) => (await h({ httpMethod: 'POST', url: '/api/doc', headers: anna, body: JSON.stringify({ path: 'vacancies/v1', op: 'set', data }) })).statusCode;
+  // отпуск Юлии впереди — у Анны её вакансий нет
+  await store.tx('vacations/y', () => ({ list: [{ from: add(1), to: add(5), sub: 'a', pause: ['v2'] }] }));
+  let s = await sync(); assert.deepEqual(s.docs.map(d => d.path).filter(p => p.startsWith('vacancies/')), []);
+  assert.equal(await put({ title: 'Логист', manager: 'Немчинова', status: 'активна', comment: 'x' }), 403);
+  // отпуск идёт — Анна видит обе (и на паузе — ради напоминаний), правит; ответственным остаётся Юлия
+  const ver = s.ver;
+  await store.tx('vacations/y', () => ({ list: [{ from: add(-1), to: add(3), sub: 'a', pause: ['v2'] }] }));
+  s = await sync(); assert.deepEqual(s.docs.map(d => d.path).filter(p => p.startsWith('vacancies/')).sort(), ['vacancies/v1', 'vacancies/v2']);
+  assert.ok(s.docs.some(d => d.path === 'vacations/y'));
+  assert.deepEqual((await sync(ver)).docs.map(d => d.path).filter(p => p.startsWith('vacancies/')).sort(), ['vacancies/v1', 'vacancies/v2']);   // и в частичной синхронизации
+  assert.equal(await put({ title: 'Логист', manager: 'Немчинова', status: 'активна', comment: 'продлила' }), 200);
+  assert.equal(await put({ title: 'Логист', manager: 'Кто-то ещё', status: 'активна' }), 403);   // передать дальше нельзя
+  // отпуск кончился — вакансии вернулись к Юлии
+  await store.tx('vacations/y', () => ({ list: [{ from: add(-6), to: add(-1), sub: 'a' }] }));
+  s = await sync(); assert.deepEqual(s.docs.map(d => d.path).filter(p => p.startsWith('vacancies/')), []);
+  assert.equal(await put({ title: 'Логист', manager: 'Немчинова', status: 'активна' }), 403);
+});

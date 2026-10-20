@@ -180,6 +180,9 @@
   .offer{display:flex; flex-wrap:wrap; gap:8px; align-items:end;}
   .offer .o-cand{width:180px;}
   .offer .check{padding-bottom:8px;}
+  details.cover{max-width:440px; white-space:normal;}
+  details.cover summary{cursor:pointer;}
+  details.cover[open]{display:flex; flex-direction:column; gap:6px; padding:6px 0;}
   fieldset.links .stack{gap:8px; margin-bottom:10px;}
   .link-row{display:flex; flex-wrap:wrap; gap:8px; align-items:end;}
   .link-row input.v-link{min-width:240px;}
@@ -644,6 +647,29 @@ function weekKey(s){ var d = parse(s), wd = (d.getDay() + 6) % 7; d.setDate(d.ge
 function addDays(s, n){ var d = parse(s); d.setDate(d.getDate() + n); return iso(d); }
 function isWeekend(s){ var w = parse(s).getDay(); return w === 0 || w === 6; }
 function vacationOf(p, d){ return (vacations[p] || []).filter(function(v){ return v.from <= d && d <= v.to; })[0] || null; }
+// Вакансии на время отпуска менеджера: в записи отпуска — кому передать (sub) и какие вакансии на паузе (pause: [id]).
+// Действует только в дни отпуска: на следующий день вакансии сами возвращаются к менеджеру, пауза снимается.
+function vidOf(v){ return v.id || Object.keys(vacancies).filter(function(k){ return vacancies[k] === v; })[0]; }
+function coverOn(v, d){
+  var o = vacOwner(v), x = o && vacationOf(o, d);
+  if(!x || !x.sub || x.sub === o) return null;
+  return {owner:o, by:x.sub, pause:(x.pause || []).indexOf(vidOf(v)) >= 0, to:x.to};
+}
+function ownerOn(v, d){ var c = coverOn(v, d); return c ? c.by : vacOwner(v); }
+function pausedOn(v, d){ var c = coverOn(v, d); return !!(c && c.pause); }
+function coverNote(v){
+  var c = isActive(v) && coverOn(v, today()); if(!c) return '';
+  return c.pause ? 'пауза до ' + shortDate(c.to) + ' — менеджер в отпуске' : 'ведёт ' + label(c.by) + ' до ' + shortDate(c.to) + ' — менеджер в отпуске';
+}
+// дни паузы вакансии (менеджер в отпуске) — входят в «дни в работе», показываются сноской
+function pauseDays(v){
+  var o = vacOwner(v), id = vidOf(v), s = vacStart(v); if(!o || !s) return 0;
+  var end = isActive(v) ? today() : (vacEnd(v) || today());
+  return (vacations[o] || []).filter(function(x){ return x.sub && (x.pause || []).indexOf(id) >= 0; }).reduce(function(n, x){
+    var a = x.from > s ? x.from : s, b = x.to < end ? x.to : end;
+    return n + (a <= b ? daysBetween(a, b) + 1 : 0);
+  }, 0);
+}
 function hasDay(p, d){ var m = (entered[d] || {})[p]; return !!(m && Object.keys(m).length); }
 // Состояние дня рекрутера: ok — внесено, missing — надо внести, today — сегодня ещё не внесено,
 // vac — отпуск, off — выходной / до начала работы / в архиве / будущее
@@ -666,7 +692,7 @@ function openEntry(p, d){ showView('entry'); if(!scope()) $('fPerson').value = p
 function pubReminders(){
   var p = scope(), out = [];
   Object.keys(vacancies).forEach(function(id){
-    var v = vacancies[id]; if(!isActive(v) || (p && vacOwner(v) !== p)) return;
+    var v = vacancies[id]; if(!isActive(v) || (p && ownerOn(v, today()) !== p)) return;
     linkObjs(v).forEach(function(l, i){ var st = linkState(l); if(st !== 'ok' && st !== 'archived') out.push({id:id, i:i, v:v, l:l, st:st}); });
   });
   var order = {expired:0, soon:1, nodate:2};
@@ -678,7 +704,7 @@ function remindersHtml(){
   // свёрнуто, если ничего не горит; раскрыто, когда публикация уходит в архив в ближайшие дни
   return '<details class="panel todo remind"'+(soon ? ' open' : '')+'><summary><h3>Публикации на hh.ru: ' + [ex ? 'в архиве ' + ex : '', soon ? 'продлить в ближайшие ' + REMIND_DAYS + ' дней ' + soon : '', nd ? 'без даты архивации ' + nd : ''].filter(Boolean).join(', ') + '</h3></summary>' +
     list.map(function(r){
-      return '<div class="todo-row"><span class="pill pub-'+r.st+'">'+esc(linkNote(r.l))+'</span><a href="'+esc(r.l.url)+'" target="_blank" rel="noopener"><b>'+esc(r.v.title)+'</b></a>' + (scope() ? '' : '<span class="hint">'+esc(managerLabel(r.v))+'</span>') +
+      return '<div class="todo-row"><span class="pill pub-'+r.st+'">'+esc(linkNote(r.l))+'</span><a href="'+esc(r.l.url)+'" target="_blank" rel="noopener"><b>'+esc(r.v.title)+'</b></a>' + (scope() ? '' : '<span class="hint">'+esc(managerLabel(r.v))+'</span>') + (coverNote(r.v) ? '<span class="hint">'+esc(coverNote(r.v))+'</span>' : '') +
         (r.st === 'nodate' ? '<button class="btn ghost sm" data-open-vac="'+r.id+'">Указать дату</button>' : '<button class="btn sm" data-extend="'+r.id+'" data-i="'+r.i+'">Продлить на месяц</button>') +
         (r.st !== 'nodate' ? '<button class="btn ghost sm" data-stop="'+r.id+'" data-i="'+r.i+'" title="Больше не напоминать: публикация доживает до даты архивации и остаётся в истории как снятая">Не продлевать</button>' : '') + '</div>';
     }).join('') + '<p class="hint">Публикация в архиве не считается открытой вакансией в метриках дня. Продление — от даты архивации, если срок уже вышел — с сегодня.</p></details>';
@@ -747,13 +773,35 @@ function renderVacation(){
   (p ? [p] : recruiters()).forEach(function(x){ (vacations[x] || []).forEach(function(v, i){ rows.push({p:x, i:i, v:v}); }); });
   rows.sort(function(a, b){ return b.v.from.localeCompare(a.v.from); });
   var t = today();
-  $('oTable').innerHTML = '<thead><tr>'+(p ? '' : '<th>Сотрудник</th>')+'<th class="l">С</th><th class="l">По</th><th>Рабочих дней</th><th class="l">Статус</th><th></th></tr></thead><tbody>' +
+  $('oTable').innerHTML = '<thead><tr>'+(p ? '' : '<th>Сотрудник</th>')+'<th class="l">С</th><th class="l">По</th><th>Рабочих дней</th><th class="l">Статус</th><th class="l">Вакансии на время отпуска</th><th></th></tr></thead><tbody>' +
     (rows.length ? rows.slice(0, 40).map(function(r){
       var st = r.v.to < t ? 'прошёл' : r.v.from > t ? 'впереди' : 'идёт';
       return '<tr'+(st === 'прошёл' ? ' class="off"' : '')+'>'+(p ? '' : '<td>'+esc(label(r.p))+'</td>')+'<td class="l">'+shortDate(r.v.from)+'</td><td class="l">'+shortDate(r.v.to)+'</td><td>'+workdays(r.v.from, r.v.to)+'</td>' +
         '<td class="l"><span class="pill '+(st === 'идёт' ? 'vac' : st === 'впереди' ? 'active' : '')+'">'+st+'</span></td>' +
+        '<td class="l">'+(st === 'прошёл' ? (r.v.sub ? 'передавались: ' + esc(label(r.v.sub)) : '—') : coverCell(r))+'</td>' +
         '<td><div class="row-actions">'+(r.v.to >= CHECK_FROM ? '<button class="btn danger sm" data-p="'+r.p+'" data-i="'+r.i+'">Убрать</button>' : '')+'</div></td></tr>';
-    }).join('') : '<tr><td colspan="6" class="empty">Отпусков нет.</td></tr>') + '</tbody>';
+    }).join('') : '<tr><td colspan="7" class="empty">Отпусков нет.</td></tr>') + '</tbody>';
+}
+// Передача вакансий на время отпуска: кому и какие на паузе — меняется сразу, действует только в дни отпуска
+var coverOpen = null;
+function coverCell(r){
+  var own = Object.keys(vacancies).filter(function(id){ return isActive(vacancies[id]) && vacOwner(vacancies[id]) === r.p; });
+  if(!own.length) return '<span class="sub">вакансий в работе нет</span>';
+  var subs = activePeople().filter(function(x){ return x !== r.p; }), pause = r.v.pause || [], key = r.p + '|' + r.v.from, attr = ' data-p="'+r.p+'" data-k="'+r.i+'"';
+  var head = r.v.sub ? 'Передаются: ' + label(r.v.sub) + (pause.length ? ', на паузе ' + pause.filter(function(id){ return own.indexOf(id) >= 0; }).length : '') : 'Не передаются';
+  return '<details class="cover"'+(coverOpen === key ? ' open' : '')+' data-key="'+esc(key)+'"><summary>'+esc(head)+' · '+own.length+' '+plural(own.length, 'вакансия', 'вакансии', 'вакансий')+'</summary>' +
+    '<label class="f">Кому передать<select data-cover-sub'+attr+'><option value="">не передавать</option>' + subs.map(function(x){ return '<option value="'+x+'"'+(x === r.v.sub ? ' selected' : '')+'>'+esc(label(x))+'</option>'; }).join('') + '</select></label>' +
+    (r.v.sub ? own.map(function(id){ return '<label class="check"><input type="checkbox" data-cover-pause value="'+esc(id)+'"'+attr+(pause.indexOf(id) >= 0 ? ' checked' : '')+'> пауза — '+esc(vacancies[id].title || '')+'</label>'; }).join('') +
+      '<p class="hint">Без «паузы» вакансию с первого дня отпуска ведёт '+esc(label(r.v.sub))+'. На паузе — не считается в плане найма и нагрузке; напоминания о продлении публикаций получает тоже '+esc(label(r.v.sub))+'. После отпуска всё возвращается само.</p>' : '') +
+    '</details>';
+}
+function coverEdit(e){
+  var t = e.target; if(!t.dataset || !(('coverSub' in t.dataset) || ('coverPause' in t.dataset)) || !db) return;
+  var p = t.dataset.p, list = (vacations[p] || []).map(function(x){ return Object.assign({}, x); }), v = list[+t.dataset.k];
+  coverOpen = p + '|' + v.from;
+  if('coverSub' in t.dataset){ if(t.value) v.sub = t.value; else { delete v.sub; delete v.pause; } }
+  else { var ps = (v.pause || []).filter(function(id){ return id !== t.value; }); if(t.checked) ps.push(t.value); if(ps.length) v.pause = ps; else delete v.pause; }
+  saveVacations(p, list, v.sub ? 'Вакансии ' + fullName(p) + ' на ' + shortDate(v.from) + '–' + shortDate(v.to) + ' передаются: ' + fullName(v.sub) + (v.pause ? ', на паузе ' + v.pause.length : '') + '.' : 'Вакансии на время отпуска не передаются.');
 }
 function saveVacations(p, list, msg){
   $('oStat').className = 'status';
@@ -766,7 +814,11 @@ function addVacation(e){
   var p = scope() || $('oPerson').value, from = $('oFrom').value, to = $('oTo').value;
   if(!db || !p) return;
   if(to < from){ $('oStat').className = 'status err'; $('oStat').textContent = '«По» раньше, чем «С».'; return; }
-  saveVacations(p, (vacations[p] || []).concat([{from:from, to:to}]), fullName(p) + ': в отпуске с ' + shortDate(from) + ' по ' + shortDate(to) + '.');
+  // вакансии — коллеге (пока вас двое — единственному); выбор и паузы — в строке отпуска
+  var subs = activePeople().filter(function(x){ return x !== p; }), rec = {from:from, to:to};
+  if(subs.length) rec.sub = subs[0];
+  coverOpen = p + '|' + from;
+  saveVacations(p, (vacations[p] || []).concat([rec]), fullName(p) + ': в отпуске с ' + shortDate(from) + ' по ' + shortDate(to) + '.' + (rec.sub ? ' На это время вакансии ведёт ' + fullName(rec.sub) + ' — паузу и кому передать можно выбрать ниже.' : ''));
 }
 function removeVacation(e){
   var b = e.target.closest('button[data-i]'); if(!b || !db) return;
@@ -1055,10 +1107,10 @@ function renderLoad(){
   }); });
   var ppl = scope() ? [scope()] : activePeople();
   var rows = ppl.map(function(p){
-    var mv = act.filter(function(v){ return mine(v, p); }), ds = mv.map(daysInWork).filter(num);
-    return [label(p), mv.length, mv.reduce(function(s, v){ return s + needOf(v); }, 0), median(ds), ds.length ? Math.max.apply(null, ds) : null, fut.filter(function(f){ return mine(f.v, p); }).length];
+    var mv = act.filter(function(v){ return ownerOn(v, today()) === p; }), ds = mv.map(daysInWork).filter(num);
+    return [label(p), mv.length, mv.reduce(function(s, v){ return s + needOf(v); }, 0), median(ds), ds.length ? Math.max.apply(null, ds) : null, fut.filter(function(f){ return ownerOn(f.v, today()) === p; }).length];
   });
-  var orphan = act.filter(function(v){ return ppl.indexOf(vacOwner(v)) < 0; });
+  var orphan = act.filter(function(v){ return ppl.indexOf(ownerOn(v, today())) < 0; });
   if(!scope() && orphan.length) rows.push(['Без ответственного', orphan.length, orphan.reduce(function(s, v){ return s + needOf(v); }, 0), median(orphan.map(daysInWork).filter(num)), null, null]);
   function c(v){ return '<td>'+(v === null || v === undefined ? '—' : v)+'</td>'; }
   var hires = rSum({from:m0, to:t}, visiblePeople(), 'hires');
@@ -1491,7 +1543,7 @@ function openSeats(v){ return v.seats.filter(function(x){ return !x.startAt; });
 function seatStart(v, x){ return x.requestedAt || vacStart(v); }
 // «не актуальна» и «архив» — никого не ищем: незакрытые единицы не считаются ставками, которые нужно закрыть
 var NOT_HIRING = {'не актуальна':1, 'архив':1};
-function needOf(v){ return NOT_HIRING[v.status] ? 0 : isMulti(v) ? openSeats(v).length : (num(v.rate) ? v.rate : 1); }
+function needOf(v){ return NOT_HIRING[v.status] || pausedOn(v, today()) ? 0 : isMulti(v) ? openSeats(v).length : (num(v.rate) ? v.rate : 1); }
 // Закрытые единицы для скорости закрытия: у обычной вакансии — она сама, у многоставочной — каждая вышедшая
 function closedUnits(v){
   if(isMulti(v)) return v.seats.filter(function(x){ return x.startAt && seatStart(v, x); })
@@ -1517,7 +1569,7 @@ function vacOwner(v){
   function has(f){ return allPeople().filter(function(p){ var x = norm(team[p][f]); return x && m.indexOf(x) >= 0; })[0]; }
   return has('surname') || has('name') || null;
 }
-function mine(v, p){ return vacOwner(v) === p; }
+function mine(v, p){ return vacOwner(v) === p || ownerOn(v, today()) === p; }   // и вакансии коллеги в отпуске, переданные на это время
 function managerLabel(v){ var p = vacOwner(v); return p ? label(p) : (v.manager || '—'); }
 function visibleVacancies(){ var p = scope(); return Object.keys(vacancies).map(function(id){ return Object.assign({id:id}, vacancies[id]); }).filter(function(v){ return !p || mine(v, p); }); }
 function vacCost(v){ return linkObjs(v).reduce(function(s, l){ return s + (num(l.cost) ? l.cost : 0); }, 0); }
@@ -1557,8 +1609,8 @@ function renderVac(){
     (list.length ? list.map(function(v){
       var d = daysInWork(v), cls = isActive(v) ? 'active' : CLOSED[v.status] ? 'hire' : '';
       return '<tr class="click" data-id="'+esc(v.id)+'" tabindex="0"><td class="wrapc">'+(vacLinks(v).length ? '<a href="'+esc(vacLinks(v)[0])+'" target="_blank" rel="noopener">'+esc(v.title)+'</a>' : esc(v.title))+pubsHtml(v)+'</td><td class="l">'+esc(v.dept||'—')+'</td><td class="l">'+esc(v.customer||'—')+'</td>' +
-        '<td class="l"><span class="pill '+cls+'">'+esc(v.status||'без статуса')+'</span></td><td class="l">'+esc(managerLabel(v))+'</td><td>'+(isMulti(v) ? needOf(v)+' из '+v.seats.length : num(v.rate) ? v.rate : '—')+'</td>' +
-        '<td>'+shortDate(vacStart(v))+'</td><td>'+shortDate(vacEnd(v))+'</td><td>'+(d === null ? '—' : (isActive(v) && d > 60 ? '<span class="pill long">'+d+'</span>' : d))+'</td>' +
+        '<td class="l"><span class="pill '+cls+'">'+esc(v.status||'без статуса')+'</span>'+(coverNote(v) ? '<div class="hint">'+esc(coverNote(v))+'</div>' : '')+'</td><td class="l">'+esc(managerLabel(v))+'</td><td>'+(isMulti(v) ? needOf(v)+' из '+v.seats.length : num(v.rate) ? v.rate : '—')+'</td>' +
+        '<td>'+shortDate(vacStart(v))+'</td><td>'+shortDate(vacEnd(v))+'</td><td>'+(d === null ? '—' : (isActive(v) && d > 60 ? '<span class="pill long">'+d+'</span>' : d))+(pauseDays(v) ? '<div class="hint">в т. ч. пауза '+pauseDays(v)+' дн. — менеджер в отпуске</div>' : '')+'</td>' +
         '<td>'+(num(v.extensions) ? v.extensions : '—')+'</td><td>'+(offersOf(v) ? offersOf(v).acc+' из '+offersOf(v).sent : '—')+'</td><td>'+rub(vacCost(v))+'</td></tr>';
     }).join('') : '<tr><td colspan="12" class="empty">Вакансий нет. Добавьте первую кнопкой «Новая вакансия».</td></tr>') + '</tbody>';
 
@@ -1781,13 +1833,13 @@ function vacSpan(v){
 function registryDay(p, d){
   var r = {vac_start:0, vac_end:0, cand_start:0, cand_end:0, vac_published:0}, seen = {_start:{}, _end:{}, pub:{}};
   Object.keys(vacancies).forEach(function(id){
-    var v = vacancies[id]; if(vacOwner(v) !== p) return;
-    var sp = vacSpan(v), links = linkObjs(v);
+    var v = vacancies[id]; if(ownerOn(v, d) !== p) return;
+    var sp = vacSpan(v), links = linkObjs(v), paused = pausedOn(v, d);
     [true, false].forEach(function(eod){
       var sfx = eod ? '_end' : '_start';
       links.forEach(function(l){ if(pubLive(l, v, d, eod) && !seen[sfx][l.url]){ seen[sfx][l.url] = 1; r['vac' + sfx]++; } });
       if(!openOn(sp[0], sp[1], d, eod)) return;
-      if(!NOT_HIRING[v.status]) r['cand' + sfx] += isMulti(v) ? v.seats.filter(function(x){ return openOn(seatStart(v, x), x.startAt, d, eod); }).length : needOf(v);
+      if(!NOT_HIRING[v.status] && !paused) r['cand' + sfx] += isMulti(v) ? v.seats.filter(function(x){ return openOn(seatStart(v, x), x.startAt, d, eod); }).length : needOf(v);
     });
     links.forEach(function(l){ if((l.at || sp[0]) === d && !seen.pub[l.url]){ seen.pub[l.url] = 1; r.vac_published++; } });
   });
@@ -2515,7 +2567,7 @@ $('dTodo').onclick = todoClick;
 $('dTiles').onclick = $('dTiles').onkeydown = toggleDetail;
 $('dDetail').onclick = function(e){ if(e.target.id === 'dDetailClose'){ state.detail = null; renderDay(); } };
 $('dRemind').onclick = extendFromReminder; $('vRemind').onclick = extendFromReminder;
-$('oForm').onsubmit = addVacation; $('oTable').onclick = removeVacation;
+$('oForm').onsubmit = addVacation; $('oTable').onclick = removeVacation; $('oTable').onchange = coverEdit;
 
 function offline(){ $('offline').hidden = false; teamLoaded = true; route(); }
 var api = CLOUD ? null : window.claude;

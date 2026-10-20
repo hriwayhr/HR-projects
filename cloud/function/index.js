@@ -70,7 +70,11 @@ async function currentUser(cfg, store, headers) {
   if (!email) return null;
   const team = await store.get('config/team');
   const user = acl.userByEmail((team || {}).people, email, cfg.local ? 'login' : 'email');
-  return user ? Object.assign(user, { people: (team || {}).people || {} }) : null;
+  if (!user) return null;
+  const people = (team || {}).people || {}, vacations = {};
+  // отпуска команды — для прав на вакансии коллеги, которые пользователь ведёт на время его отпуска
+  await Promise.all(Object.keys(people).map(async p => { const d = await store.get('vacations/' + p); if (d && Array.isArray(d.list)) vacations[p] = d.list; }));
+  return Object.assign(user, { people, vacations });
 }
 
 function domainOk(cfg, email) { return cfg.domains.includes(email.split('@')[1] || ''); }
@@ -105,7 +109,14 @@ async function callback(cfg, store, query, headers, fetchFn) {
 }
 
 async function sync(user, store, since) {
-  const docs = (await store.changes(since)).map(d => ({ path: d.path, ver: d.ver, data: d.data === null ? null : acl.readable(user, d.path, d.data, user.people) }));
+  let changed = await store.changes(since);
+  // передача начинается и кончается по дате, а не правкой документа: вакансии коллеги в отпуске отдаём каждый раз целиком
+  if (since && !user.admin && acl.ownersFor(user).length > 1) {
+    const seen = new Set(changed.map(d => d.path));
+    changed = changed.concat((await store.changes(0)).filter(d => d.path.startsWith('vacancies/') && !seen.has(d.path) && d.data !== null &&
+      acl.readable(user, d.path, d.data, user.people) !== null));
+  }
+  const docs = changed.map(d => ({ path: d.path, ver: d.ver, data: d.data === null ? null : acl.readable(user, d.path, d.data, user.people) }));
   // невидимое после изменения (вакансию передали другому) приходит как удалённое — страница его уберёт
   // при полной загрузке невидимое не отдаём совсем — даже адресом
   return { ver: docs.reduce((m, d) => Math.max(m, d.ver), since), docs: docs.filter(d => since || d.data !== null).map(d => ({ path: d.path, data: d.data })) };

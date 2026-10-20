@@ -27,6 +27,20 @@ function userByEmail(people, email, field = 'email') {
   return { pid, email: e, admin: !!people[pid].admin, field };
 }
 
+// Отпуск с передачей вакансий: в дни отпуска владельца его вакансии ведёт sub из записи отпуска (vacations/<pid>.list[].sub).
+// Дата — московская: смена дня в полночь по Москве, а не по UTC.
+function todayMsk() { return new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10); }
+function coverOf(owner, vacations, day) {
+  const x = ((vacations || {})[owner] || []).find(v => v && v.from <= day && day <= v.to);
+  return x && x.sub && x.sub !== owner ? x.sub : null;
+}
+// чьи вакансии пользователь ведёт сейчас: свои и тех, кого он подменяет в отпуске
+function ownersFor(user) {
+  const day = todayMsk(), out = [user.pid];
+  Object.keys(user.vacations || {}).forEach(p => { if (coverOf(p, user.vacations, day) === user.pid) out.push(p); });
+  return out;
+}
+
 const PUBLIC_PERSON = ['name', 'surname', 'order', 'admin', 'recruiter', 'archived', 'archivedAt', 'since', 'syncFrom'];
 
 // Что пользователь увидит из документа; null — ничего
@@ -41,8 +55,9 @@ function readable(user, path, data, people) {
   if (coll === 'config' && id === 'metrics') return data;
   if (user.admin) return data;
   if (coll === 'months') return data.person === user.pid ? data : null;
-  if (coll === 'vacations') return id === user.pid ? data : null;
-  if (coll === 'vacancies') return ownerOf(data.manager, people) === user.pid ? data : null;
+  // отпуск коллеги, на время которого вакансии переданы пользователю, — чтобы страница знала, что и до какого дня он ведёт
+  if (coll === 'vacations') return id === user.pid || (data.list || []).some(v => v && v.sub === user.pid) ? data : null;
+  if (coll === 'vacancies') return ownersFor(user).includes(ownerOf(data.manager, people)) ? data : null;
   if (coll === 'rejections') {
     const items = (data.items || []).filter(x => ownerOf(x.w, people) === user.pid);
     return items.length ? Object.assign({}, data, { items }) : null;
@@ -76,8 +91,9 @@ function writeError(user, path, prev, next, people) {
   if (coll === 'vacations') return id === user.pid ? '' : 'Можно менять только свой отпуск.';
   if (coll === 'vacancies') {
     if (next === null) return 'Удаляет вакансию администратор.';
-    if (prev && ownerOf(prev.manager, people) !== user.pid) return 'Это вакансия другого рекрутера.';
-    if (ownerOf(next.manager, people) !== user.pid) return 'Ответственным должны быть вы.';
+    const mineNow = ownersFor(user);
+    if (prev && !mineNow.includes(ownerOf(prev.manager, people))) return 'Это вакансия другого рекрутера.';
+    if (!mineNow.includes(ownerOf(next.manager, people))) return 'Ответственным должны быть вы.';
     return '';
   }
   return 'Нет прав.';
@@ -106,4 +122,4 @@ function teamError(user, next) {
   return '';
 }
 
-module.exports = { ownerOf, userByEmail, readable, writeError, norm, PATH_RE };
+module.exports = { ownerOf, userByEmail, readable, writeError, norm, PATH_RE, ownersFor, coverOf, todayMsk };

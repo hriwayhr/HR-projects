@@ -219,7 +219,7 @@ with sync_playwright() as p:
     # «Мой отпуск»: отпуск убирает дни из пропусков и ставит статус
     pg.click('#tab_vacation'); assert not pg.is_visible('#oPerson')
     pg.fill('#oFrom', '2026-09-28'); pg.fill('#oTo', '2030-01-01'); pg.click('#oForm button[type=submit]'); pg.wait_for_timeout(300)
-    assert pg.evaluate("window.__store['vacations/anna'].list") == [{'from': '2026-09-28', 'to': '2030-01-01'}]
+    vl = pg.evaluate("window.__store['vacations/anna'].list"); assert len(vl) == 1 and vl[0]['from'] == '2026-09-28' and vl[0]['to'] == '2030-01-01' and vl[0].get('sub') != 'anna', vl   # вакансии — коллеге
     assert 'в отпуске' in pg.inner_text('#meRole') and 'идёт' in pg.inner_text('#oTable')
     pg.click('#tab_day'); pg.wait_for_timeout(100)
     assert 'Все рабочие дни внесены' in pg.inner_text('#dTodo'), pg.inner_text('#dTodo')
