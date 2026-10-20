@@ -38,6 +38,16 @@ with sync_playwright() as p:
     assert 'ведёт Юлия Немчинова до 31.10.26 — менеджер в отпуске' in t and 'пауза до 31.10.26 — менеджер в отпуске' in t, t
     assert 'в т. ч. пауза 2 дн. — менеджер в отпуске' in pg.inner_text('#vTable tr[data-id=v2]')
     assert 'Бухгалтер' in pg.inner_text('#vRemind') and 'пауза до 31.10.26' in pg.inner_text('#vRemind')   # продление напоминает Юлии
+    # отчёт «Текущий найм»: отпуск в заголовке Анны, у вакансий — кто ведёт / пауза, итоги — по факту
+    pg.evaluate("""Object.defineProperty(navigator, 'clipboard', {configurable: true, value: {write: function(items){
+      return Promise.all(['text/html', 'text/plain'].map(function(t){ return items[0].getType(t).then(function(b){ return b.text(); }); }))
+        .then(function(v){ window.__clip = v; }); }}});""")
+    pg.click('#vCopy'); pg.wait_for_timeout(200)
+    html, text = pg.evaluate('window.__clip')
+    assert 'В работе 2 вакансии, на паузе 1 (менеджер в отпуске), нужно 2 человека.' in text, text
+    assert 'Анна Шулятицкая — в отпуске с 20.10.26 по 31.10.26, вакансии ведёт Юлия Немчинова — 1 вакансия в работе, 1 на паузе, нужно 1' in text, text
+    assert 'Бухгалтер (пауза до 31.10.26)' in text and 'Логист (ведёт Юлия Немчинова до 31.10.26)' in text and '(в т. ч. пауза 2)' in text, text
+    assert 'Юлия Немчинова — 1 вакансия в работе, нужно 1' in text and 'пауза до 31.10.26</span>' in html, text
     pg.click('#tab_day'); pg.wait_for_timeout(200)
     ld = pg.inner_text('#dLoad'); assert 'Юлия Немчинова\t3\t2' in ld and 'Анна Шулятицкая\t0\t0' in ld, ld   # нагрузка — у того, кто ведёт сейчас
     # отпуска: передача и пауза меняются в строке отпуска

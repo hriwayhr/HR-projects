@@ -1652,29 +1652,39 @@ function hiringReport(){
   var d = parse(today()), date = d.getDate() + ' ' + MONTHS_GEN[d.getMonth()] + ' ' + d.getFullYear();
   var cols = ['Вакансия', 'Отдел', 'Заказчик', 'Нужно людей', 'В работе с', 'Дней в работе', 'Публикации', 'Офферы', 'Потрачено', 'Комментарий'];
   var RIGHT = {3:1, 4:1, 5:1, 7:1, 8:1};
-  function cells(v){ return [v.title, v.dept || '—', v.customer || '—', fmt(needOf(v)) + (isMulti(v) ? ' из ' + v.seats.length : ''), shortDate(vacStart(v)), daysInWork(v) === null ? '—' : daysInWork(v),
+  // отпуск менеджера: у вакансии — кто ведёт или пауза, у дней в работе — дни паузы
+  function coverShort(v){ var c = coverOn(v, today()); return !c ? '' : c.pause ? 'пауза до ' + shortDate(c.to) : 'ведёт ' + label(c.by) + ' до ' + shortDate(c.to); }
+  function paused(v){ return pausedOn(v, today()); }
+  function counts(list){ var pz = list.filter(paused).length, w = list.length - pz;
+    return w + ' ' + plural(w, 'вакансия', 'вакансии', 'вакансий') + ' в работе' + (pz ? ', ' + pz + ' на паузе' : '') + ', нужно ' + fmt(need(list)); }
+  function groupHead(n, list){
+    var o = vacOwner(list[0]), x = o && vacationOf(o, today());
+    return n + (x ? ' — в отпуске с ' + shortDate(x.from) + ' по ' + shortDate(x.to) + (x.sub && x.sub !== o ? ', вакансии ведёт ' + label(x.sub) : '') : '') + ' — ' + counts(list);
+  }
+  function cells(v){ return [v.title + (coverShort(v) ? ' (' + coverShort(v) + ')' : ''), v.dept || '—', v.customer || '—', fmt(needOf(v)) + (isMulti(v) ? ' из ' + v.seats.length : ''), shortDate(vacStart(v)), daysInWork(v) === null ? '—' : daysInWork(v) + (pauseDays(v) ? ' (в т. ч. пауза ' + pauseDays(v) + ')' : ''),
     linkObjs(v).map(function(l, j){ return linkNote(l); }).join('; ') || 'нет', offersOf(v) ? offersOf(v).acc + ' из ' + offersOf(v).sent : '—', rub(vacCost(v)), v.comment || '']; }
   function sortByAge(list){ return list.slice().sort(function(a, b){ return (daysInWork(b) || 0) - (daysInWork(a) || 0); }); }
   var title = 'Текущий найм на ' + date + (scope() ? ' — ' + fullName(scope()) : '');
-  var summary = 'В работе ' + act.length + ' ' + plural(act.length, 'вакансия', 'вакансии', 'вакансий') + ', нужно ' + fmt(need(act)) + ' ' + plural(Math.round(need(act)), 'человек', 'человека', 'человек') + '.';
+  var pz = act.filter(paused).length, w = act.length - pz;
+  var summary = 'В работе ' + w + ' ' + plural(w, 'вакансия', 'вакансии', 'вакансий') + (pz ? ', на паузе ' + pz + ' (менеджер в отпуске)' : '') + ', нужно ' + fmt(need(act)) + ' ' + plural(Math.round(need(act)), 'человек', 'человека', 'человек') + '.';
   var td = 'border:1px solid #C9D3C3;padding:4px 10px;font:14px Arial,sans-serif;vertical-align:top;';
   var html = '<p style="font:bold 16px Arial,sans-serif;margin:0 0 4px">' + esc(title) + '</p><p style="font:14px Arial,sans-serif;margin:0 0 12px">' + esc(summary) + '</p>' +
     names.map(function(n){
       var list = sortByAge(groups[n]);
-      return '<p style="font:bold 14px Arial,sans-serif;margin:12px 0 6px">' + esc(n) + ' — ' + list.length + ' ' + plural(list.length, 'вакансия', 'вакансии', 'вакансий') + ', нужно ' + fmt(need(list)) + '</p>' +
+      return '<p style="font:bold 14px Arial,sans-serif;margin:12px 0 6px">' + esc(groupHead(n, list)) + '</p>' +
         '<table cellspacing="0" cellpadding="0" style="border-collapse:collapse"><tr>' + cols.map(function(c, i){ return '<th style="'+td+'background:#E4F1E8;white-space:nowrap;text-align:'+(RIGHT[i] ? 'right' : 'left')+'">'+c+'</th>'; }).join('') + '</tr>' +
         list.map(function(v){
           return '<tr>' + cells(v).map(function(c, i){
-            var lo = linkObjs(v), inner = i === 0 && lo.length ? '<a href="'+esc(lo[0].url)+'" style="color:#007026">'+esc(c)+'</a>'
+            var lo = linkObjs(v), cs = coverShort(v), inner = i === 0 ? (lo.length ? '<a href="'+esc(lo[0].url)+'" style="color:#007026">'+esc(v.title)+'</a>' : esc(v.title)) + (cs ? '<br><span style="color:#7A5310">'+esc(cs)+'</span>' : '')
               : i === 6 && lo.length ? lo.map(function(l, j){ var st = linkState(l);
                   return '<a href="'+esc(l.url)+'" style="color:'+(st === 'expired' ? '#B4321F;font-weight:bold' : st === 'soon' || st === 'nodate' ? '#7A5310' : '#007026')+'">'+esc(linkNote(l))+'</a>'; }).join('<br>') : esc(c);
-            return '<td style="'+td+(RIGHT[i] ? 'text-align:right;white-space:nowrap;' : '')+(i === 6 ? 'white-space:nowrap;' : '')+(i === 5 && daysInWork(v) > 60 ? 'background:#FBF0DA;font-weight:bold;' : '')+'">'+inner+'</td>';
+            return '<td style="'+td+(RIGHT[i] ? 'text-align:right;white-space:nowrap;' : '')+(i === 6 ? 'white-space:nowrap;' : '')+(i === 0 ? 'min-width:220px;' : '')+(i === 5 && daysInWork(v) > 60 ? 'background:#FBF0DA;font-weight:bold;' : '')+'">'+inner+'</td>';
           }).join('') + '</tr>';
         }).join('') + '</table>';
     }).join('');
   var text = title + '\n' + summary + '\n' + names.map(function(n){
     var list = sortByAge(groups[n]);
-    return '\n' + n + ' — ' + list.length + ', нужно ' + fmt(need(list)) + '\n' + cols.join('\t') + '\n' + list.map(function(v){ return cells(v).join('\t'); }).join('\n');
+    return '\n' + groupHead(n, list) + '\n' + cols.join('\t') + '\n' + list.map(function(v){ return cells(v).join('\t'); }).join('\n');
   }).join('\n');
   return {html:html, text:text, count:act.length};
 }

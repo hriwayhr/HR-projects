@@ -137,7 +137,7 @@ with sync_playwright() as p:
     pg.click('#vCopy'); pg.wait_for_timeout(200)
     html_, text_ = pg.evaluate('window.__clip')
     assert text_.startswith('Текущий найм на ') and 'В работе 3 вакансии, нужно 4 человека.' in text_, text_
-    assert 'Катя Шулятицкая — 2, нужно 2' in text_ and 'Юля Немчинова — 1, нужно 2' in text_, text_
+    assert 'Катя Шулятицкая — 2 вакансии в работе, нужно 2' in text_ and 'Юля Немчинова — 1 вакансия в работе, нужно 2' in text_, text_
     assert 'Логист\t' not in text_ and 'Бухгалтер' not in text_ and 'Аналитик\t—\t—\t2\t' in text_, text_
     assert '<table' in html_ and 'Скопировано' in pg.inner_text('#vCopyStat')
     # несколько публикаций и заказчик: старая ссылка подхватывается, сохраняется списком
