@@ -481,6 +481,9 @@
         <button class="btn" type="submit">Добавить</button>
         <span class="status" id="mStat" role="status"></span>
       </form>
+      <h3 class="mt">С какой даты считаем</h3>
+      <p class="hint">До этой даты данных по показателю нет: в аналитике он показывается как «—», а не ноль, и не сравнивается с периодами, учтёнными не полностью. Внесли данные задним числом — сдвиньте дату раньше. Пустая дата — с первой внесённой записи.</p>
+      <div class="scroll"><table id="mSince"></table></div>
       <p class="hint mt">Встроенные метрики участвуют в расчётах дашборда и сводки — их можно переименовать или убрать из формы, но расчёт по уже внесённым цифрам сохранится. Свои метрики появляются в форме, в таблице дня и в сводке как сумма за период.</p>
     </div>
   </section>
@@ -556,7 +559,32 @@ var CLOUD = !!window.HR_CLOUD || !!window.HR_LOCAL, cloudEmail = null;
 // Локальная версия (Windows, сетевая папка): тот же сервер, но на этом ПК и вход по логину и паролю
 var LOCAL = !!window.HR_LOCAL, YA = CLOUD && !LOCAL, localEmpty = false;
 var team = {}, teamLoaded = false; // id → {name, surname, login, salt, hash, order, admin, recruiter, archived}
-var metrics = null;                // [{k, t, g, off, custom}] из config/metrics; null — встроенный набор
+var metrics = null;                // [{k, t, g, off, custom, since}] из config/metrics; null — встроенный набор
+// С какой даты показателю можно доверять: до неё данных нет — показываем «—», а не ноль, и не сравниваем.
+// Поправить можно в «Настройки → Метрики» (хранится в config/metrics.since); '' — с первой внесённой записи.
+var SINCE_DEFAULT = [
+  ['daily', 'Метрики дня: чаты, собеседования, отказы, выходы, увольнения, вакансии и ставки, новые публикации', '2024-07-01'],
+  ['calls', 'Звонки', '2024-07-01'],
+  ['chats_first', 'Первичные чаты', '2026-01-12'],
+  ['close_pub', 'Скорость закрытия: публикация → выход (ориентир)', '2025-01-01'],
+  ['close', 'Скорость закрытия: запрос → выход', '2026-10-01'],
+  ['seat_fields', 'Причина открытия, статус и источник поиска', '2026-10-14'],
+  ['offers', 'Офферы, принятие, причины отказа от оффера', '2026-10-20'],
+  ['probation', 'Испытательный срок (по вышедшим с этой даты)', '2026-08-01'],
+  ['hh_cost', 'Стоимость публикаций на hh.ru', ''],
+  ['talantix', 'Причины отказов из Talantix', ''],
+  ['cover', 'Передача вакансий и пауза на время отпуска', '2026-10-21']];
+var sinceOver = {};
+function sinceOf(k){
+  if(k in sinceOver) return sinceOver[k];
+  var d = SINCE_DEFAULT.filter(function(x){ return x[0] === k; })[0]; if(d) return d[2];
+  var m = metricList().filter(function(x){ return x.k === k; })[0];
+  return m && m.since ? m.since : sinceOf('daily');   // своя метрика — с даты добавления, встроенная метрика дня — как метрики дня
+}
+function uncovered(k, r){ var s = sinceOf(k); return !!s && !!r && r.to < s; }          // период целиком до начала учёта
+function covered(k, r){ var s = sinceOf(k); return !!r && (!s || r.from >= s); }         // период целиком после — можно сравнивать
+function clipSince(k, r){ var s = sinceOf(k); return r && s && r.from < s ? {from:s, to:r.to} : r; }   // частично учтённый период — только с даты начала
+function sinceMark(k, r){ var s = sinceOf(k); return s && r && r.from < s && s <= r.to ? ' · с ' + shortDate(s) : ''; }
 var vacancies = {};                // id → вакансия
 var vacations = {};                // id пользователя → [{from, to}]
 var COLLECT_START = '2024-07-01';  // с июля 2024 метрики собираются в таблице
@@ -662,9 +690,9 @@ function coverNote(v){
   return c.pause ? 'пауза до ' + shortDate(c.to) + ' — менеджер в отпуске' : 'ведёт ' + label(c.by) + ' до ' + shortDate(c.to) + ' — менеджер в отпуске';
 }
 // дни паузы вакансии (менеджер в отпуске) — входят в «дни в работе», показываются сноской
-function pauseDays(v){
-  var o = vacOwner(v), id = vidOf(v), s = vacStart(v); if(!o || !s) return 0;
-  var end = isActive(v) ? today() : (vacEnd(v) || today());
+function pauseDays(v, from, to){
+  var o = vacOwner(v), id = vidOf(v), s = from || vacStart(v); if(!o || !s) return 0;
+  var end = to || (isActive(v) ? today() : (vacEnd(v) || today()));
   return (vacations[o] || []).filter(function(x){ return x.sub && (x.pause || []).indexOf(id) >= 0; }).reduce(function(n, x){
     var a = x.from > s ? x.from : s, b = x.to < end ? x.to : end;
     return n + (a <= b ? daysBetween(a, b) + 1 : 0);
@@ -864,7 +892,7 @@ function rangeLabel(mode, r){
 }
 function rDates(r){ return dates().filter(function(d){ return d >= r.from && d <= r.to; }); }
 // Поток (собеседования, звонки…) — сумма за период; запас (вакансии, кандидаты) — на последний внесённый день периода
-function rSum(r, ps, k){ var s = null; rDates(r).forEach(function(d){ var v = sum(d, ps, k); if(v !== null) s = (s || 0) + v; }); return s; }
+function rSum(r, ps, k){ if(typeof k === 'string' && uncovered(k, r)) return null; var s = null; rDates(r).forEach(function(d){ var v = sum(d, ps, k); if(v !== null) s = (s || 0) + v; }); return s; }
 function rStock(r, ps, f){
   var ds = rDates(r), s = null;
   ps.forEach(function(p){ var v = null; ds.forEach(function(d){ var m = (byDate[d] || {})[p]; if(m){ var x = f(m); if(x !== null) v = x; } }); if(v !== null) s = (s || 0) + v; });
@@ -983,30 +1011,33 @@ function offersAnswered(r, ps, res){ var n = offerList(ps).filter(function(o){ r
 function probPassed(r, ps){ var n = hireUnits().filter(function(u){ return ps.indexOf(vacOwner(u.v)) >= 0 && u.prob && u.prob.result === 'passed' && inR(u.prob.at, r); }).length; return n || null; }
 function renderFunnel(w, wp, wl, ps){
   // первые шаги — из метрик дня, офферы и испытательный срок — из карточек вакансий
-  var steps = [['Чаты', chats], ['Назначено собеседований', 'int_planned'], ['Прошли собеседование', 'int_done'],
-    ['Офферы отправлены', null, offersSent], ['Офферы приняты', null, function(r, ps){ return offersAnswered(r, ps, 'accepted'); }],
-    ['Вышли на работу', 'hires'], ['Прошли испытательный срок', null, probPassed]];
-  function val(x, r){ return !r ? null : x[2] ? x[2](r, ps) : rSum(r, ps, x[1]); }
-  var v = steps.map(function(x){ return val(x, w); }), pv = steps.map(function(x){ return val(x, wp); });
+  var steps = [['Чаты', chats, null, 'daily'], ['Назначено собеседований', 'int_planned'], ['Прошли собеседование', 'int_done'],
+    ['Офферы отправлены', null, offersSent, 'offers'], ['Офферы приняты', null, function(r, ps){ return offersAnswered(r, ps, 'accepted'); }, 'offers'],
+    ['Вышли на работу', 'hires'], ['Прошли испытательный срок', null, probPassed, 'probation']];
+  function key(x){ return x[3] || x[1]; }
+  function val(x, r, prev){ if(!r || uncovered(key(x), r) || (prev && !covered(key(x), r))) return null; r = clipSince(key(x), r); return x[2] ? x[2](r, ps) : rSum(r, ps, x[1]); }
+  var v = steps.map(function(x){ return val(x, w); }), pv = steps.map(function(x){ return val(x, wp, true); });
+  var notYet = steps.filter(function(x){ return uncovered(key(x), w); }).map(function(x){ return x[0].toLowerCase() + ' — с ' + shortDate(sinceOf(key(x))); });
   var top = Math.max.apply(null, v.map(function(x){ return x || 0; })), head = '<h3>Воронка · '+esc(wl)+'</h3>';
   if(!top){ $('dFunnel').innerHTML = head + '<p class="sub">За период нет внесённых данных.</p>'; return; }
   var html = steps.map(function(x, i){
     var c = i ? pcnt(v[i], v[i-1]) : null, pc = i ? pcnt(pv[i], pv[i-1]) : null;
-    return (i ? '<div class="f-conv">↓ '+(c === null ? '—' : c + '%')+delta(num(c) && num(pc) ? c - pc : null, ' п.п.')+'</div>' : '') + bar(x[0], v[i], top, v[i] === null ? '—' : v[i]);
+    return (i ? '<div class="f-conv">↓ '+(c === null ? '—' : c + '%')+delta(num(c) && num(pc) ? c - pc : null, ' п.п.')+'</div>' : '') + bar(x[0] + sinceMark(key(x), w), v[i], top, v[i] === null ? '—' : v[i]);
   }).join('');
   function per(a, h){ return num(a) && h ? dec(a / h) : '—'; }
   var h = v[5], ph = pv[5];
   html += '<div class="detail-sum mt"><span>На 1 выход: <b>'+per(v[0], h)+'</b> чатов · <b>'+per(v[1], h)+'</b> назначенных · <b>'+per(v[2], h)+'</b> прошедших собеседований · <b>'+per(v[3], h)+'</b> офферов</span>' +
     (ph ? '<span>Прошлый период ('+spanLabel(wp)+'): '+per(pv[0], ph)+' · '+per(pv[1], ph)+' · '+per(pv[2], ph)+' · '+per(pv[3], ph)+'</span>' : '') + '</div>';
   // принимают оффер: принятые из получивших ответ; причины отказов от оффера
-  var acc = v[4] || 0, dec_ = offersAnswered(w, ps, 'declined') || 0;
+  var wo = clipSince('offers', w), acc = v[4] || 0, dec_ = uncovered('offers', w) ? 0 : offersAnswered(wo, ps, 'declined') || 0;
   if(acc + dec_){
-    var why = {}; offerList(ps).forEach(function(o){ if(o.result === 'declined' && inR(o.answerAt, w)){ var k = o.reason || 'не указана'; why[k] = (why[k] || 0) + 1; } });
-    var pacc = wp ? (offersAnswered(wp, ps, 'accepted') || 0) : 0, pdec = wp ? (offersAnswered(wp, ps, 'declined') || 0) : 0, pa = pcnt(acc, acc + dec_), pp = pacc + pdec ? pcnt(pacc, pacc + pdec) : null;
+    var why = {}; offerList(ps).forEach(function(o){ if(o.result === 'declined' && inR(o.answerAt, wo)){ var k = o.reason || 'не указана'; why[k] = (why[k] || 0) + 1; } });
+    var cmp = covered('offers', wp), pacc = cmp ? (offersAnswered(wp, ps, 'accepted') || 0) : 0, pdec = cmp ? (offersAnswered(wp, ps, 'declined') || 0) : 0, pa = pcnt(acc, acc + dec_), pp = pacc + pdec ? pcnt(pacc, pacc + pdec) : null;
     html += '<div class="detail-sum"><span>Принимают оффер: <b>'+pa+'%</b> — '+acc+' из '+(acc + dec_)+' ответивших'+delta(num(pp) ? pa - pp : null, ' п.п.')+'</span>' +
       (dec_ ? '<span>Отказались: ' + Object.keys(why).sort(function(a, b){ return why[b] - why[a]; }).map(function(k){ return esc(k) + ' — ' + why[k]; }).join(', ') + '</span>' : '') + '</div>';
   }
-  $('dFunnel').innerHTML = head + html + '<p class="hint">Шаги — суммы за период, а не путь одних и тех же кандидатов: чаты и собеседования — из метрик дня, офферы и испытательный срок — из карточек вакансий. Рядом с конверсией — изменение к прошлому периоду.</p>';
+  $('dFunnel').innerHTML = head + html + '<p class="hint">Шаги — суммы за период, а не путь одних и тех же кандидатов: чаты и собеседования — из метрик дня, офферы и испытательный срок — из карточек вакансий. Рядом с конверсией — изменение к прошлому периоду, если он учтён целиком.' +
+    (notYet.length ? ' Нет данных за период: ' + esc(notYet.join(', ')) + '.' : '') + '</p>';
 }
 
 // Причины отказов — из выгрузок Talantix (rejections/<ГГГГ-ММ>)
@@ -1048,15 +1079,17 @@ function renderTrend(r, ps){
 }
 
 // Испытательный срок: по каждому вышедшему — из карточек вакансий (у многоставочной — по единицам)
-var PROB_MONTHS = 2;            // в i’way — 2 месяца (лист «реферальная программа»)
-var PROB_FROM = '2026-08-01';   // мониторинг начат в октябре 2026: вышедшие раньше не отслеживаются
+var PROB_MONTHS = 2;            // по умолчанию — 2 месяца (лист «реферальная программа»); в оффере можно указать 3
+var PROB_OPTIONS = [2, 3];
+function PROB_FROM_(){ return sinceOf('probation') || '2026-08-01'; }   // мониторинг начат в октябре 2026: вышедшие раньше не отслеживаются
 function hireUnits(){
   var out = [];
   visibleVacancies().forEach(function(v){
-    if(isMulti(v)) v.seats.forEach(function(x, i){ if(x.startAt) out.push({v:v, i:i, person:x.person, startAt:x.startAt, prob:x.probation}); });
-    else if(v.startAt) out.push({v:v, i:null, person:v.person, startAt:v.startAt, prob:v.probation});
+    if(isMulti(v)) v.seats.forEach(function(x, i){ if(x.startAt) out.push({v:v, i:i, person:x.person, startAt:x.startAt, prob:x.probation, months:x.probMonths}); });
+    else if(v.startAt) out.push({v:v, i:null, person:v.person, startAt:v.startAt, prob:v.probation, months:v.probMonths});
   });
-  return out.filter(function(u){ return u.startAt >= PROB_FROM && u.startAt <= today(); }).map(function(u){ u.end = addMonths(u.startAt, PROB_MONTHS); return u; });
+  return out.filter(function(u){ return u.startAt >= PROB_FROM_() && u.startAt <= today(); })
+    .map(function(u){ u.months = u.months || PROB_MONTHS; u.end = addMonths(u.startAt, u.months); return u; });
 }
 function probState(u){ return u.prob ? u.prob.result : u.end > today() ? 'on' : 'due'; }
 function renderProb(w, wp, wl, ps){
@@ -1076,14 +1109,14 @@ function renderProb(w, wp, wl, ps){
     var act = done ? '<button class="btn ghost sm" data-prob="undo"'+key+' title="Снять отметку">↺</button>' :
       '<button class="btn sm" data-prob="passed"'+key+'>Прошёл</button> <button class="btn ghost sm" data-prob="failed"'+key+'>Не прошёл</button>';
     return '<tr><td class="l">'+(u.person ? esc(u.person) : '<span class="sub">имя — в карточке вакансии</span>')+'</td><td class="l">'+esc(u.v.title || '')+(u.v.dept ? ' <span class="sub">· '+esc(u.v.dept)+'</span>' : '')+'</td>' +
-      '<td class="l">'+esc(managerLabel(u.v))+'</td><td>'+shortDate(u.startAt)+'</td><td>'+shortDate(u.end)+'</td><td class="l">'+when+'</td><td class="l nowrap">'+act+'</td></tr>';
+      '<td class="l">'+esc(managerLabel(u.v))+'</td><td>'+shortDate(u.startAt)+'</td><td>'+shortDate(u.end)+' <span class="sub">('+u.months+' мес.)</span></td><td class="l">'+when+'</td><td class="l nowrap">'+act+'</td></tr>';
   }
   var done = us.filter(function(u){ return u.prob && u.prob.at >= w.from && u.prob.at <= w.to; });
   var list = open.sort(function(a, b){ return a.end < b.end ? -1 : 1; }).map(function(u){ return row(u, false); }).concat(done.map(function(u){ return row(u, true); }));
   $('dProb').innerHTML = '<h3>Испытательный срок · '+esc(wl)+'</h3>' + tiles +
     (list.length ? '<div class="scroll"><table><thead><tr><th class="l">Сотрудник</th><th class="l">Вакансия</th><th class="l">Рекрутер</th><th>Вышел</th><th>ИС до</th><th class="l">Статус</th><th></th></tr></thead><tbody>'+list.join('')+'</tbody></table></div>' :
-      '<p class="sub">Вышедших с '+shortDate(PROB_FROM)+' пока нет — они появятся здесь по дате выхода в карточке вакансии.</p>') +
-    '<p class="hint">Испытательный срок — '+PROB_MONTHS+' месяца от даты выхода в карточке вакансии; отслеживаются вышедшие с '+shortDate(PROB_FROM)+'. «Прошёл» считается датой окончания срока, «Не прошёл» — днём отметки.</p>';
+      '<p class="sub">Вышедших с '+shortDate(PROB_FROM_())+' пока нет — они появятся здесь по дате выхода в карточке вакансии.</p>') +
+    '<p class="hint">Испытательный срок — по условиям оффера (2 или 3 месяца, если не указано — '+PROB_MONTHS+') от даты выхода; отслеживаются вышедшие с '+shortDate(PROB_FROM_())+'. «Прошёл» считается датой окончания срока, «Не прошёл» — днём отметки.</p>';
 }
 function markProb(e){
   var b = e.target.closest('[data-prob]'); if(!b || !db) return;
@@ -1130,13 +1163,14 @@ function stageUnits(){
     if(isMulti(v)) v.seats.forEach(function(x){
       if(x.startAt && x.startAt <= today()) out.push({v:v, req:x.requestedAt || null, pub:x.publishedAt || (v.publishedAt && x.requestedAt && v.publishedAt >= x.requestedAt ? v.publishedAt : null), end:x.startAt});
     });
-    else if(isClosed(v)) out.push({v:v, req:v.requestedAt || null, pub:v.publishedAt || null, end:vacEnd(v)});
+    else if(v.status === 'выход сотрудника' && vacEnd(v)) out.push({v:v, req:v.requestedAt || null, pub:v.publishedAt || null, end:vacEnd(v)});
   });
   return out.map(function(u){
     var from = u.pub || u.req;
     u.s1 = u.req && u.pub ? Math.max(0, daysBetween(u.req, u.pub)) : null;
-    u.s2 = from ? Math.max(0, daysBetween(from, u.end)) : null;
-    u.all = u.req ? Math.max(0, daysBetween(u.req, u.end)) : u.s2;
+    function eff(a){ return a ? Math.max(0, daysBetween(a, u.end) - pauseDays(u.v, a, u.end)) : null; }   // без дней паузы — для оценки работы
+    u.s2 = u.end >= sinceOf('close_pub') ? eff(from) : null;
+    u.all = u.end >= sinceOf('close') ? eff(u.req) : null;
     return u;
   });
 }
@@ -1152,7 +1186,7 @@ function renderStages(w, wl){
     (us.length ? '<div class="scroll"><table><thead><tr><th class="l">'+STAGE_BY[by][0]+'</th><th>Закрыто</th><th>Запрос → публикация</th><th>Публикация → выход</th><th>Всего</th></tr></thead><tbody>' +
       keys.map(function(k){ return line(k, groups[k]); }).join('') + '</tbody>'+(keys.length > 1 ? '<tfoot>'+line('Все', us)+'</tfoot>' : '')+'</table></div>' :
       '<p class="sub">За период закрытых вакансий нет.</p>') +
-    '<p class="hint">Медианы по закрытым за период вакансиям (у многоставочных — по вышедшим единицам). Конец — дата выхода или закрытия.</p>';
+    '<p class="hint">Медианы по вышедшим за период сотрудникам (у многоставочных — по единицам), без архива. Весь путь — с ' + shortDate(sinceOf('close')) + ' (раньше дату запроса не фиксировали), поиск — с ' + shortDate(sinceOf('close_pub')) + '. Дни паузы на время отпуска менеджера не считаются.</p>';
 }
 
 // ---------- подробности по плитке: график по частям периода и разбивка по людям ----------
@@ -1545,10 +1579,18 @@ function seatStart(v, x){ return x.requestedAt || vacStart(v); }
 var NOT_HIRING = {'не актуальна':1, 'архив':1};
 function needOf(v){ return NOT_HIRING[v.status] || pausedOn(v, today()) ? 0 : isMulti(v) ? openSeats(v).length : (num(v.rate) ? v.rate : 1); }
 // Закрытые единицы для скорости закрытия: у обычной вакансии — она сама, у многоставочной — каждая вышедшая
+// Закрытые позиции для скорости закрытия — только реальные выходы («выход сотрудника», у единиц — «кандидат вышел»), без архива.
+// days — от запроса до выхода (с даты учёта «close»), pubDays — от публикации до выхода (ориентир с «close_pub»).
+// Для оценки работы дни паузы на время отпуска менеджера вычитаются; фактические «дни в работе» их включают.
 function closedUnits(v){
-  if(isMulti(v)) return v.seats.filter(function(x){ return x.startAt && seatStart(v, x); })
-    .map(function(x){ return {end:x.startAt, days:Math.max(0, daysBetween(seatStart(v, x), x.startAt))}; });
-  return isClosed(v) ? [{end:vacEnd(v), days:closeDays(v)}] : [];
+  var list = isMulti(v) ? v.seats.filter(function(x){ return x.startAt && x.startAt <= today(); }).map(function(x){ return {end:x.startAt, req:x.requestedAt || null, pub:x.publishedAt || v.publishedAt || null}; })
+    : v.status === 'выход сотрудника' && vacEnd(v) ? [{end:vacEnd(v), req:v.requestedAt || null, pub:v.publishedAt || null}] : [];
+  return list.map(function(u){
+    function d(a){ return a && a <= u.end ? Math.max(0, daysBetween(a, u.end) - pauseDays(v, a, u.end)) : null; }
+    u.days = u.end >= sinceOf('close') ? d(u.req) : null;
+    u.pubDays = u.end >= sinceOf('close_pub') ? d(u.pub) : null;
+    return u;
+  });
 }
 function daysInWork(v){
   var s = vacStart(v); if(!s) return null;
@@ -1575,13 +1617,22 @@ function visibleVacancies(){ var p = scope(); return Object.keys(vacancies).map(
 function vacCost(v){ return linkObjs(v).reduce(function(s, l){ return s + (num(l.cost) ? l.cost : 0); }, 0); }
 function rub(n){ return n ? n.toLocaleString('ru-RU') + '\u00a0₽' : '—'; }
 function vacStats(list){
-  var active = list.filter(isActive), units = [].concat.apply([], list.map(closedUnits)), cd = units.map(function(u){ return u.days; });
+  var active = list.filter(isActive), units = [].concat.apply([], list.map(closedUnits)), cd = units.map(function(u){ return u.days; }).filter(num),
+      cp = units.map(function(u){ return u.pubDays; }).filter(num);
   var since = new Date(); since.setDate(since.getDate() - 90); since = iso(since);
   return {active:active.length, need:active.reduce(function(s, v){ return s + needOf(v); }, 0),
-          mean:mean(cd), median:median(cd), closed:cd.length,
+          mean:mean(cd), median:median(cd), closed:units.length, sample:cd.length, pubMedian:median(cp), pubClosed:cp.length,
           recent:units.filter(function(u){ return u.end >= since; }).length,
           oldest:active.reduce(function(m, v){ var d = daysInWork(v); return d !== null && d > m ? d : m; }, 0),
           spent:list.reduce(function(s, v){ return s + vacCost(v); }, 0), spentActive:active.reduce(function(s, v){ return s + vacCost(v); }, 0)};
+}
+// Подпись к скорости закрытия: медиана от запроса до выхода; мало закрытых — так и пишем; есть ориентир по прошлым годам
+var FEW = 5;
+function speedNote(st){
+  var t = st.sample ? 'медиана от запроса до выхода · по ' + st.sample + ' ' + plural(st.sample, 'выходу', 'выходам', 'выходам') + (st.sample < FEW ? ' — мало данных' : '') + (st.mean !== null && st.sample >= FEW ? ' · среднее ' + st.mean + ' дн.' : '')
+    : 'считаем с ' + shortDate(sinceOf('close')) + ': закрытых с датой запроса пока нет';
+  if(st.pubMedian !== null) t += ' · ориентир с ' + shortDate(sinceOf('close_pub')) + ': публикация → выход ' + st.pubMedian + ' дн. (' + st.pubClosed + ')';
+  return t + ' · без дней паузы (отпуск менеджера)';
 }
 function renderVac(){
   $('vRemind').innerHTML = remindersHtml();
@@ -1592,8 +1643,8 @@ function renderVac(){
   $('vTiles').innerHTML =
     tile('План найма', st.need, null, {hero:true, note:'человек нужно по активным вакансиям'}) +
     tile('Публикаций в работе', livePubs(all).length, null, {note:'вакансий в работе: ' + st.active + (st.active ? ' · дольше всех — ' + st.oldest + ' дн.' : '')}) +
-    tile('Скорость закрытия', st.mean, null, {suffix:' <small>дн.</small>', note: st.median !== null ? 'медиана ' + st.median + ' дн., закрыто ' + st.closed : 'нет закрытых с датами'}) +
-    tile('Закрыто за 90 дней', st.recent, null, {note:'выход сотрудника или архив'}) +
+    tile('Скорость закрытия', st.median, null, {suffix:' <small>дн.</small>', note: speedNote(st)}) +
+    tile('Закрыто за 90 дней', st.recent, null, {note:'вышли сотрудники'}) +
     tile('Потрачено на hh.ru', null, null, {text:rub(st.spent), note:'на вакансии в работе: ' + rub(st.spentActive)});
 
   var q = norm($('vSearch').value), fs = vacStatusSel(), fm = $('vManager').value;
@@ -1626,8 +1677,10 @@ function renderVac(){
     return Object.keys(g).map(function(k){ var s = vacStats(g[k]); s.k = k; return s; }).sort(function(a, b){ return b.active - a.active || b.closed - a.closed; });
   }
   function gtable(rows, title){
-    return '<thead><tr><th>'+title+'</th><th>В работе</th><th>Закрыто</th><th>Средн., дн.</th><th>Медиана, дн.</th><th>Потрачено</th></tr></thead><tbody>' +
-      rows.map(function(s){ return '<tr><td>'+esc(s.k)+'</td><td>'+s.active+'</td><td>'+s.closed+'</td><td>'+(s.mean === null ? '—' : s.mean)+'</td><td>'+(s.median === null ? '—' : s.median)+'</td><td>'+rub(s.spent)+'</td></tr>'; }).join('') + '</tbody>';
+    // скорость — медиана от запроса до выхода без дней паузы; мало закрытых — помечаем; ориентир — от публикации
+    return '<thead><tr><th>'+title+'</th><th>В работе</th><th>Закрыто</th><th>Скорость, дн.</th><th>Ориентир: публикация → выход, дн.</th><th>Потрачено</th></tr></thead><tbody>' +
+      rows.map(function(s){ return '<tr><td>'+esc(s.k)+'</td><td>'+s.active+'</td><td>'+s.closed+'</td><td>'+(s.median === null ? '—' : s.median + (s.sample < FEW ? ' <span class="sub">мало данных</span>' : ''))+'</td>' +
+        '<td>'+(s.pubMedian === null ? '—' : s.pubMedian + ' <span class="sub">('+s.pubClosed+')</span>')+'</td><td>'+rub(s.spent)+'</td></tr>'; }).join('') + '</tbody>';
   }
   $('vByMgr').innerHTML = gtable(group('manager'), 'Ответственный');
   $('vByDept').innerHTML = gtable(group('dept'), 'Отдел');
@@ -1765,7 +1818,7 @@ function seatOptions(list, v){ return '<option value="">—</option>' + list.map
 function seatRow(x){
   x = x || {};
   // поля, которых нет в форме (итог испытательного срока), переживают пересохранение карточки
-  var keep = Object.assign({}, x); SEAT_FIELDS.concat(['published', 'offers', 'offerSentAt', 'offerAcceptedAt', 'person', 'startAt']).forEach(function(f){ delete keep[f]; });
+  var keep = Object.assign({}, x); SEAT_FIELDS.concat(['published', 'offers', 'offerSentAt', 'offerAcceptedAt', 'person', 'startAt', 'probMonths']).forEach(function(f){ delete keep[f]; });
   function f(label, html, cls){ return '<label class="f'+(cls ? ' ' + cls : '')+'">'+label+html+'</label>'; }
   function date(k){ return '<input type="date" class="s-'+k+'" value="'+esc(x[k] || '')+'">'; }
   return '<div class="seat" data-keep="'+esc(JSON.stringify(keep))+'"><div class="seat-head"><b class="seat-n">Единица</b><span class="pill"></span>' +
@@ -1789,6 +1842,7 @@ function offerRow(o){
     f('Дата ответа', '<input type="date" class="o-ans" value="'+esc(o.answerAt || '')+'">', 'o-ansWrap' + (o.result === 'accepted' || o.result === 'declined' ? '' : ' hide')) +
     f('Причина отказа', '<select class="o-why">'+seatOptions(DECLINE_REASONS, o.reason)+'</select>', 'o-whyWrap' + (o.result === 'declined' ? '' : ' hide')) +
     f('Дата выхода', '<input type="date" class="o-start" value="'+esc(o.startAt || '')+'">', 'o-acc' + (o.result === 'accepted' ? '' : ' hide')) +
+    f('Испытательный срок', '<select class="o-prob">' + PROB_OPTIONS.map(function(m){ return '<option value="'+m+'"'+(m === (o.probMonths || PROB_MONTHS) ? ' selected' : '')+'>'+m+' мес.</option>'; }).join('') + '</select>', 'o-acc' + (o.result === 'accepted' ? '' : ' hide')) +
     '<label class="check o-acc'+(o.result === 'accepted' ? '' : ' hide')+'" title="Отмечайте в день, когда человек действительно вышел: назначенная дата выхода его ещё не гарантирует"><input type="checkbox" class="o-started"'+(o.started ? ' checked' : '')+'> Кандидат вышел</label>' +
     '<button type="button" class="btn danger sm" data-del-offer aria-label="Убрать оффер">×</button></div>';
 }
@@ -1799,6 +1853,7 @@ function readOffers(el){
     if(o.result !== 'wait'){ o.answerAt = a || s || today(); if(o.result === 'declined' && w) o.reason = w; }
     if(o.result === 'accepted'){
       var st = r.querySelector('.o-start').value; if(st) o.startAt = st;
+      o.probMonths = +r.querySelector('.o-prob').value;
       if(r.querySelector('.o-started').checked){ o.started = true; if(!o.startAt) o.startAt = today(); }
     }
     return o;
@@ -1811,7 +1866,7 @@ function readSeats(){
     var offers = readOffers(el); if(offers.length) x.offers = offers;
     // единица закрыта, когда кандидат вышел: дата выхода и имя — для аналитики (скорость закрытия, испытательный срок)
     var came = offers.filter(function(o){ return o.started; }).pop();
-    if(came){ x.startAt = came.startAt; if(came.candidate) x.person = came.candidate; }
+    if(came){ x.startAt = came.startAt; if(came.candidate) x.person = came.candidate; if(came.probMonths) x.probMonths = came.probMonths; }
     // «уже опубликована» — дату не вводим: берём первую публикацию на hh.ru, если она есть
     delete x.published;
     if(el.querySelector('.s-pub').checked){ x.published = true; var first = vacFirstLinkAt(); if(first) x.publishedAt = first; else delete x.publishedAt; }
@@ -2036,10 +2091,17 @@ function renderMetrics(){
         '<td class="l"><span class="pill '+(m.off ? '' : 'active')+'">'+(m.off ? 'убрана' : m.custom ? 'своя' : 'встроенная')+'</span></td>' +
         '<td><div class="row-actions"><button class="btn sm '+(m.off ? 'ghost' : 'danger')+'" data-i="'+i+'" data-act="toggle">'+(m.off ? 'Вернуть' : 'Убрать')+'</button></div></td></tr>';
     }).join('') + '</tbody>';
+  // даты начала учёта: общие показатели и свои метрики (у своих — день добавления)
+  var rows = SINCE_DEFAULT.map(function(x){ return [x[0], x[1]]; }).concat(metricList().filter(function(m){ return m.custom && !m.off; }).map(function(m){ return [m.k, m.t + ' (своя метрика)']; }));
+  $('mSince').innerHTML = '<thead><tr><th class="l">Показатель</th><th class="l">Считаем с</th></tr></thead><tbody>' + rows.map(function(r){
+    var v = sinceOf(r[0]), changed = r[0] in sinceOver;
+    return '<tr><td class="l">'+esc(r[1])+'</td><td class="l"><input type="date" data-since="'+esc(r[0])+'" value="'+esc(v || '')+'" aria-label="Считаем с">'+(changed ? ' <span class="sub">изменено</span>' : '')+'</td></tr>';
+  }).join('') + '</tbody>';
 }
 function saveMetrics(list, msg){
   $('mStat').className = 'status';
-  return db.doc('config/metrics').set({list:list}).then(function(){ $('mStat').textContent = msg; },
+  var doc = {list:list}; if(Object.keys(sinceOver).length) doc.since = sinceOver;
+  return db.doc('config/metrics').set(doc).then(function(){ $('mStat').textContent = msg; },
     function(err){ $('mStat').className = 'status err'; $('mStat').textContent = writeError(err); });
 }
 function metricEdit(e){
@@ -2054,7 +2116,7 @@ function metricEdit(e){
 function addMetric(e){
   e.preventDefault();
   var t = $('mName').value.trim(); if(!t || !db) return;
-  saveMetrics(metricList().concat([{k:'c_' + Date.now().toString(36), t:t, g:$('mGroup').value, custom:true}]), 'Добавлена «' + t + '» — она уже в форме ввода.')
+  saveMetrics(metricList().concat([{k:'c_' + Date.now().toString(36), t:t, g:$('mGroup').value, custom:true, since:today()}]), 'Добавлена «' + t + '» — она уже в форме ввода.')
     .then(function(){ $('mName').value = ''; });
 }
 
@@ -2365,7 +2427,7 @@ function backupDocs(){
   var docs = {}, people = {};
   Object.keys(team).forEach(function(p){ var t = Object.assign({}, team[p]); delete t.salt; delete t.hash; people[p] = t; });
   docs['config/team'] = {people:people};
-  if(metrics) docs['config/metrics'] = {list:metrics};
+  if(metrics || Object.keys(sinceOver).length) docs['config/metrics'] = Object.keys(sinceOver).length ? {list:metricList(), since:sinceOver} : {list:metrics};
   Object.keys(months).forEach(function(id){ docs['months/' + id] = months[id]; });
   Object.keys(vacations).forEach(function(id){ docs['vacations/' + id] = {list:vacations[id]}; });
   Object.keys(vacancies).forEach(function(id){ docs['vacancies/' + id] = vacancies[id]; });
@@ -2572,6 +2634,14 @@ $('vTable').onkeydown = function(e){ var tr = e.target.closest('tr[data-id]'); i
 $('tUsers').onclick = teamAction; $('tUsers').onchange = teamEdit; $('tArchive').onclick = teamAction;
 $('tUserForm').onsubmit = addUser;
 $('mTable').onclick = metricEdit; $('mTable').onchange = metricEdit;
+$('mSince').onchange = function(e){
+  var k = e.target.dataset.since; if(!k || !db) return;
+  var def = (SINCE_DEFAULT.filter(function(x){ return x[0] === k; })[0] || [])[2], m = metricList().filter(function(x){ return x.k === k; })[0];
+  var next = Object.assign({}, sinceOver), v = e.target.value;
+  if(v === (def !== undefined ? def : (m && m.since) || '')) delete next[k]; else next[k] = v;
+  sinceOver = next;
+  saveMetrics(metricList(), 'Считаем с ' + (v ? shortDate(v) : 'первой записи') + ': ' + e.target.closest('tr').firstChild.textContent + '.');
+};
 $('mForm').onsubmit = addMetric;
 $('dTodo').onclick = todoClick;
 $('dTiles').onclick = $('dTiles').onkeydown = toggleDetail;
@@ -2587,7 +2657,7 @@ var api = CLOUD ? null : window.claude;
   if(CLOUD && !session){ teamLoaded = true; route(); return; }   // не вошли — экран входа через Яндекс
   if(!db){ offline(); return; }
   db.doc('config/team').onSnapshot(function(s){ team = (s.exists && s.data().people) || {}; teamLoaded = true; rebuild(); fillPeople(); route(); }, offline);
-  db.doc('config/metrics').onSnapshot(function(s){ metrics = (s.exists && s.data().list) || null; buildForm(); render(); }, function(){});
+  db.doc('config/metrics').onSnapshot(function(s){ metrics = (s.exists && s.data().list) || null; sinceOver = (s.exists && s.data().since) || {}; buildForm(); render(); }, function(){});
   db.collection('months').onSnapshot(ingest, offline);
   db.collection('vacations').onSnapshot(function(s){ vacations = {}; s.docs.forEach(function(x){ vacations[x.id] = x.data().list || []; }); if(session) route(); }, function(){});
   db.collection('rejections').onSnapshot(function(s){ rejections = {}; s.docs.forEach(function(x){ rejections[x.id] = x.data(); }); render(); }, function(){});

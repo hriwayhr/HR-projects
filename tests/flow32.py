@@ -48,6 +48,9 @@ with sync_playwright() as p:
     assert 'Анна Шулятицкая — в отпуске с 20.10.26 по 31.10.26, вакансии ведёт Юлия Немчинова — 1 вакансия в работе, 1 на паузе, нужно 1' in text, text
     assert 'Бухгалтер (пауза до 31.10.26)' in text and 'Логист (ведёт Юлия Немчинова до 31.10.26)' in text and '(в т. ч. пауза 2)' in text, text
     assert 'Юлия Немчинова — 1 вакансия в работе, нужно 1' in text and 'пауза до 31.10.26</span>' in html, text
+    # скорость закрытия для оценки работы — без дней паузы: запрос 01.10 → выход 21.10 = 20 дн., пауза 20–21.10 → 18
+    assert pg.evaluate("closedUnits(Object.assign({}, vacancies.v2, {id: 'v2', seats: [{requestedAt: '2026-10-01', startAt: '2026-10-21'}]}))[0].days") == 18
+    assert pg.evaluate("daysInWork(Object.assign({id: 'v2'}, vacancies.v2))") == 20   # а фактические дни в работе — с паузой
     pg.click('#tab_day'); pg.wait_for_timeout(200)
     ld = pg.inner_text('#dLoad'); assert 'Юлия Немчинова\t3\t2' in ld and 'Анна Шулятицкая\t0\t0' in ld, ld   # нагрузка — у того, кто ведёт сейчас
     # отпуска: передача и пауза меняются в строке отпуска
@@ -63,6 +66,18 @@ with sync_playwright() as p:
     pg.select_option('#oPerson', 'anna'); pg.fill('#oFrom', '2026-12-01'); pg.fill('#oTo', '2026-12-10'); pg.click('#oForm button[type=submit]'); pg.wait_for_timeout(300)
     assert pg.evaluate("window.__store['vacations/anna'].list[1]") == {'from': '2026-12-01', 'to': '2026-12-10', 'sub': 'yulia'}
     assert 'На это время вакансии ведёт Юлия Немчинова' in pg.inner_text('#oStat')
+    # испытательный срок — по условиям оффера: 3 месяца
+    pg.evaluate("""window.__store['vacancies/v4'] = {title: 'Аналитик', status: 'выход сотрудника', manager: 'Немчинова', multi: true, rate: 0,
+      seats: [{requestedAt: '2026-09-01', startAt: '2026-10-10', person: 'Орлова', probMonths: 3,
+               offers: [{candidate: 'Орлова', sentAt: '2026-10-01', result: 'accepted', answerAt: '2026-10-02', startAt: '2026-10-10', started: true, probMonths: 3}]}]}; window.__notify();"""); pg.wait_for_timeout(200)
+    assert pg.evaluate("hireUnits().filter(function(u){ return u.person === 'Орлова'; }).map(function(u){ return [u.months, u.end]; })") == [[3, '2027-01-10']]
+    # даты начала учёта — в «Настройки → Метрики»: поменяли — сохранилось в config/metrics.since, вернули — убралось
+    pg.click('#tab_settings'); pg.click('#sub_metrics'); pg.wait_for_timeout(200)
+    assert pg.input_value('#mSince input[data-since=offers]') == '2026-10-20' and pg.input_value('#mSince input[data-since=close]') == '2026-10-01'
+    pg.fill('#mSince input[data-since=offers]', '2026-10-01'); pg.dispatch_event('#mSince input[data-since=offers]', 'change'); pg.wait_for_timeout(300)
+    assert pg.evaluate("window.__store['config/metrics'].since") == {'offers': '2026-10-01'} and pg.evaluate("sinceOf('offers')") == '2026-10-01'
+    pg.fill('#mSince input[data-since=offers]', '2026-10-20'); pg.dispatch_event('#mSince input[data-since=offers]', 'change'); pg.wait_for_timeout(300)
+    assert 'since' not in pg.evaluate("window.__store['config/metrics']")
     # Анна в отпуске видит свои вакансии с пометкой, но напоминания о продлении — не ей
     a = start(b, 'anna'); a.click('#tab_vac'); a.wait_for_timeout(200)
     assert 'Логист' in a.inner_text('#vTable') and 'Бухгалтер' not in a.inner_text('#vRemind')

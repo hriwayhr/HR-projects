@@ -48,6 +48,10 @@ with sync_playwright() as p:
     b = p.chromium.launch(executable_path='/opt/pw-browsers/chromium')
     pg = start(b, 'yulia')
     assert pg.inner_text('#dayTitle').startswith('Октябрь 2026'), (pg.inner_text('#dayTitle'), errs)
+    # офферы считаем с 20.10.26: в октябре до этой даты их нет — «—», а не 2, и пометка «с 20.10»
+    f = txt(pg, '#dFunnel')
+    assert 'Офферы отправлены · с 20.10.26\n—' in f and 'Нет данных за период' not in f, f
+    pg.evaluate("sinceOver = {offers: '2026-09-01'}; render()"); pg.wait_for_timeout(100)   # как если бы офферы вносили с сентября
     # воронка: 30 чатов → 10 назначено (33%) → 6 прошло (60%) → 2 оффера (33%) → 1 принят (50%) → 1 выход (100%) → ИС
     f = txt(pg, '#dFunnel')
     assert 'Чаты\n30' in f and '↓ 33%' in f and '↓ 60%' in f and 'Офферы отправлены\n2' in f and '↓ 50%' in f and 'Офферы приняты\n1' in f and '↓ 100%' in f, f
@@ -61,7 +65,7 @@ with sync_playwright() as p:
     pg.click('#vSave'); pg.wait_for_timeout(300)
     s0 = pg.evaluate("window.__store['vacancies/c'].seats[0]")
     # закрытая раньше единица: выход переехал в принятый оффер с отметкой «вышел»
-    assert s0['offers'] == [{'result': 'accepted', 'candidate': 'Петрова', 'sentAt': '2026-07-28', 'answerAt': '2026-07-29', 'startAt': '2026-08-03', 'started': True}] and s0['startAt'] == '2026-08-03' and 'offerSentAt' not in s0, s0
+    assert s0['offers'] == [{'result': 'accepted', 'candidate': 'Петрова', 'sentAt': '2026-07-28', 'answerAt': '2026-07-29', 'startAt': '2026-08-03', 'probMonths': 2, 'started': True}] and s0['startAt'] == '2026-08-03' and s0['probMonths'] == 2 and 'offerSentAt' not in s0, s0
     # у второй единицы дата выхода 20.10 ещё впереди — после пересохранения она не закрыта, а ждёт выхода
     s1 = pg.evaluate("window.__store['vacancies/c'].seats[1]"); assert 'startAt' not in s1 and s1['offers'][1]['startAt'] == '2026-10-20' and not s1['offers'][1].get('started'), s1
     assert '2 из 3' in pg.inner_text('#vTable tr[data-id=c]')   # колонка «Офферы»: принято 2 из 3
@@ -102,6 +106,10 @@ with sync_playwright() as p:
     assert 'Октябрь по вакансиям: 1 выход (вышли 0, ожидаются 1)' in ld and 'В метриках дня: 1' in ld and '20.10.26\tСидоров\tМенеджер' in ld, ld
     # сроки по этапам — за год: Диспетчер (4 + 15 = 19 дн.), Петрова (7 + 2 = 9 дн.)
     pg.select_option('#dMode', 'year'); pg.wait_for_timeout(100)
+    st = txt(pg, '#dStages')
+    # выходы — в августе, а весь путь (от запроса) считаем с 01.10.26: «—»; поиск (от публикации) — с 01.01.25
+    assert 'Логистика\t1\t4 дн.\t15 дн.\t—' in st and 'Продажи\t1\t7 дн.\t2 дн.\t—' in st, st
+    pg.evaluate("sinceOver = Object.assign({}, sinceOver, {close: '2026-01-01'}); render()"); pg.wait_for_timeout(100)
     st = txt(pg, '#dStages')
     assert 'Логистика\t1\t4 дн.\t15 дн.\t19 дн.' in st and 'Продажи\t1\t7 дн.\t2 дн.\t9 дн.' in st and 'Все\t2\t6 дн.\t9 дн.\t14 дн.' in st, st
     pg.select_option('#dStageBy', 'owner'); pg.wait_for_timeout(100)
