@@ -120,16 +120,16 @@ with sync_playwright() as p:
     pg.screenshot(path=str(HERE / 'shots' / 'hr-sum.png'), full_page=True)
 
     # 6. вакансии: в работе 1 (нужно 2 человека); скорость — только выходы (архив не считается), от запроса — с 01.10.26:
-    # у старой вакансии запроса нет — только ориентир «публикация → выход» 30 дн.
+    # старые вакансии из таблицы — учёт ставок, не выходов: скорость считаем только с 01.10.26
     pg.click('#tab_vac'); pg.wait_for_timeout(200)
     vt = pg.inner_text('#vTiles')
-    assert 'вакансий в работе: 1' in vt and 'План найма\n2' in vt and 'Скорость закрытия\n—' in vt and 'публикация → выход 30 дн. (1)' in vt, vt
+    assert 'вакансий в работе: 1' in vt and 'План найма\n2' in vt and 'Скорость закрытия\n—' in vt and 'выходов с датой запроса пока нет' in vt and 'публикация' not in vt, vt
     pg.click('#vAdd'); pg.fill('#v_title', 'Тестировщик'); pg.fill('#v_manager', 'Шулятицкая'); pg.click('#vSave'); pg.wait_for_timeout(300)
     assert 'вакансий в работе: 2' in pg.inner_text('#vTiles')
     # «Шулятицкая» и «Катя Шулятицкая» — один ответственный: строка по пользователю, а не по тексту
     pg.click('#vAdd'); pg.fill('#v_title', 'Логист 2'); pg.fill('#v_manager', 'Катя Шулятицкая'); pg.click('#vSave'); pg.wait_for_timeout(300)
     bm = pg.inner_text('#vByMgr')
-    assert 'Катя Шулятицкая\t2\t0' in bm and 'Юля Немчинова\t1\t1\t—\t30 (1)' in bm and 'Юля Немчинова' in bm and '\nШулятицкая' not in bm, bm
+    assert 'Катя Шулятицкая\t2\t0' in bm and ('Юля Немчинова\t1\t1\t—' in bm or 'Юля Немчинова\t1\t0\t—' in bm) and 'Юля Немчинова' in bm and '\nШулятицкая' not in bm, bm
     assert 'Катя Шулятицкая' in pg.inner_text('#vManager')
     # фильтр по умолчанию — активные: закрытых в таблице нет, пока не выбрать «Все статусы»
     assert pg.evaluate('vacStatusSel()') == ['активна'] and pg.inner_text('#vStatusSum') == 'активна' and 'Логист\t' not in pg.inner_text('#vTable') and 'Аналитик' in pg.inner_text('#vTable')
@@ -189,8 +189,8 @@ with sync_playwright() as p:
     assert v['seats'][1] == {'requestedAt': dt.date.today().isoformat()}, v
     row = pg.inner_text('#vTable tr[data-id=%s]' % vid.split('/')[1]); assert '1 из 2' in row, row
     vt = pg.inner_text('#vTiles')
-    # единица: запрос 30 дн. назад → выход 10 дн. назад = 20, одна — «мало данных»; ориентир от публикации: (30 + 15) / 2
-    assert 'Скорость закрытия\n20' in vt and 'по 1 выходу — мало данных' in vt and 'публикация → выход 23 дн. (2)' in vt, vt
+    # единица: запрос 30 дн. назад → выход 10 дн. назад = 20, одна — «мало данных»
+    assert 'Скорость закрытия\n20' in vt and 'по 1 выходу — мало данных' in vt, vt
     # вторая единица закрыта — вакансия сама уходит в «выход сотрудника»; новая «+1» — снова «активна»
     s2 = '#vSeats .seat:nth-child(2) '; pg.click(s2 + '[data-add-offer]'); pg.select_option(s2 + '.o-res', 'accepted'); pg.check(s2 + '.o-started')   # без даты — сегодня
     pg.click('#vSave'); pg.wait_for_timeout(300)

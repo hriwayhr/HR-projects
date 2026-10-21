@@ -566,8 +566,7 @@ var SINCE_DEFAULT = [
   ['daily', 'Метрики дня: чаты, собеседования, отказы, выходы, увольнения, вакансии и ставки, новые публикации', '2024-07-01'],
   ['calls', 'Звонки', '2024-07-01'],
   ['chats_first', 'Первичные чаты', '2026-01-12'],
-  ['close_pub', 'Скорость закрытия: публикация → выход (ориентир)', '2025-01-01'],
-  ['close', 'Скорость закрытия: запрос → выход', '2026-10-01'],
+  ['close', 'Скорость закрытия и сроки по этапам (старые вакансии из таблицы — учёт ставок, не выходов)', '2026-10-01'],
   ['seat_fields', 'Причина открытия, статус и источник поиска', '2026-10-14'],
   ['offers', 'Офферы, принятие, причины отказа от оффера', '2026-10-20'],
   ['probation', 'Испытательный срок (по вышедшим с этой даты)', '2026-08-01'],
@@ -1188,14 +1187,16 @@ function stageUnits(){
     var from = u.pub || u.req;
     u.s1 = u.req && u.pub ? Math.max(0, daysBetween(u.req, u.pub)) : null;
     function eff(a){ return a ? Math.max(0, daysBetween(a, u.end) - pauseDays(u.v, a, u.end)) : null; }   // без дней паузы — для оценки работы
-    u.s2 = u.end >= sinceOf('close_pub') ? eff(from) : null;
-    u.all = u.end >= sinceOf('close') ? eff(u.req) : null;
+    var ok = u.end >= sinceOf('close');   // до даты учёта выходы и сроки не фиксировали — этапы не считаем
+    u.s1 = ok ? u.s1 : null;
+    u.s2 = ok ? eff(from) : null;
+    u.all = ok ? eff(u.req) : null;
     return u;
   });
 }
 var STAGE_BY = {dept:['Отдел', function(v){ return v.dept || '—'; }], customer:['Заказчик', function(v){ return v.customer || '—'; }], owner:['Ответственный', managerLabel]};
 function renderStages(w, wl){
-  var by = state.stageBy || 'dept', g = STAGE_BY[by][1], us = stageUnits().filter(function(u){ return u.end >= w.from && u.end <= w.to; }), groups = {};
+  var by = state.stageBy || 'dept', g = STAGE_BY[by][1], us = stageUnits().filter(function(u){ return u.end >= w.from && u.end <= w.to && u.end >= sinceOf('close'); }), groups = {};
   us.forEach(function(u){ var k = g(u.v); (groups[k] || (groups[k] = [])).push(u); });
   function med(list, f){ var m = median(list.map(function(u){ return u[f]; }).filter(num)); return m === null ? '—' : m + ' дн.'; }
   function line(name, list){ return '<tr><td class="l">'+esc(name)+'</td><td>'+list.length+'</td><td>'+med(list, 's1')+'</td><td>'+med(list, 's2')+'</td><td><b>'+med(list, 'all')+'</b></td></tr>'; }
@@ -1205,7 +1206,7 @@ function renderStages(w, wl){
     (us.length ? '<div class="scroll"><table><thead><tr><th class="l">'+STAGE_BY[by][0]+'</th><th>Закрыто</th><th>Запрос → публикация</th><th>Публикация → выход</th><th>Всего</th></tr></thead><tbody>' +
       keys.map(function(k){ return line(k, groups[k]); }).join('') + '</tbody>'+(keys.length > 1 ? '<tfoot>'+line('Все', us)+'</tfoot>' : '')+'</table></div>' :
       '<p class="sub">За период закрытых вакансий нет.</p>') +
-    '<p class="hint">Медианы по вышедшим за период сотрудникам (у многоставочных — по единицам), без архива. Весь путь — с ' + shortDate(sinceOf('close')) + ' (раньше дату запроса не фиксировали), поиск — с ' + shortDate(sinceOf('close_pub')) + '. Дни паузы на время отпуска менеджера не считаются.</p>';
+    '<p class="hint">Медианы по вышедшим за период сотрудникам (у многоставочных — по единицам), без архива. Считаем выходы с ' + shortDate(sinceOf('close')) + ': раньше выходы и сроки не фиксировали. Дни паузы на время отпуска менеджера не считаются.</p>';
 }
 
 // ---------- подробности по плитке: график по частям периода и разбивка по людям ----------
@@ -1599,7 +1600,7 @@ var NOT_HIRING = {'не актуальна':1, 'архив':1};
 function needOf(v){ return NOT_HIRING[v.status] || pausedOn(v, today()) ? 0 : isMulti(v) ? openSeats(v).length : (num(v.rate) ? v.rate : 1); }
 // Закрытые единицы для скорости закрытия: у обычной вакансии — она сама, у многоставочной — каждая вышедшая
 // Закрытые позиции для скорости закрытия — только реальные выходы («выход сотрудника», у единиц — «кандидат вышел»), без архива.
-// days — от запроса до выхода (с даты учёта «close»), pubDays — от публикации до выхода (ориентир с «close_pub»).
+// days — от запроса до выхода; только выходы с даты учёта «close» (старые вакансии из таблицы вели ставки, а не выходы и скорость).
 // Для оценки работы дни паузы на время отпуска менеджера вычитаются; фактические «дни в работе» их включают.
 function closedUnits(v){
   var list = isMulti(v) ? v.seats.filter(function(x){ return x.startAt && x.startAt <= today(); }).map(function(x){ return {end:x.startAt, req:x.requestedAt || null, pub:x.publishedAt || v.publishedAt || null}; })
@@ -1607,7 +1608,6 @@ function closedUnits(v){
   return list.map(function(u){
     function d(a){ return a && a <= u.end ? Math.max(0, daysBetween(a, u.end) - pauseDays(v, a, u.end)) : null; }
     u.days = u.end >= sinceOf('close') ? d(u.req) : null;
-    u.pubDays = u.end >= sinceOf('close_pub') ? d(u.pub) : null;
     return u;
   });
 }
@@ -1636,11 +1636,11 @@ function visibleVacancies(){ var p = scope(); return Object.keys(vacancies).map(
 function vacCost(v){ return linkObjs(v).reduce(function(s, l){ return s + (num(l.cost) ? l.cost : 0); }, 0); }
 function rub(n){ return n ? n.toLocaleString('ru-RU') + '\u00a0₽' : '—'; }
 function vacStats(list){
-  var active = list.filter(isActive), units = [].concat.apply([], list.map(closedUnits)), cd = units.map(function(u){ return u.days; }).filter(num),
-      cp = units.map(function(u){ return u.pubDays; }).filter(num);
+  var active = list.filter(isActive), units = [].concat.apply([], list.map(closedUnits)).filter(function(u){ return u.end >= sinceOf('close'); }),
+      cd = units.map(function(u){ return u.days; }).filter(num);
   var since = new Date(); since.setDate(since.getDate() - 90); since = iso(since);
   return {active:active.length, need:active.reduce(function(s, v){ return s + needOf(v); }, 0),
-          mean:mean(cd), median:median(cd), closed:units.length, sample:cd.length, pubMedian:median(cp), pubClosed:cp.length,
+          mean:mean(cd), median:median(cd), closed:units.length, sample:cd.length,
           recent:units.filter(function(u){ return u.end >= since; }).length,
           oldest:active.reduce(function(m, v){ var d = daysInWork(v); return d !== null && d > m ? d : m; }, 0),
           spent:list.reduce(function(s, v){ return s + vacCost(v); }, 0), spentActive:active.reduce(function(s, v){ return s + vacCost(v); }, 0)};
@@ -1649,8 +1649,7 @@ function vacStats(list){
 var FEW = 5;
 function speedNote(st){
   var t = st.sample ? 'медиана от запроса до выхода · по ' + st.sample + ' ' + plural(st.sample, 'выходу', 'выходам', 'выходам') + (st.sample < FEW ? ' — мало данных' : '') + (st.mean !== null && st.sample >= FEW ? ' · среднее ' + st.mean + ' дн.' : '')
-    : 'считаем с ' + shortDate(sinceOf('close')) + ': закрытых с датой запроса пока нет';
-  if(st.pubMedian !== null) t += ' · ориентир с ' + shortDate(sinceOf('close_pub')) + ': публикация → выход ' + st.pubMedian + ' дн. (' + st.pubClosed + ')';
+    : 'считаем с ' + shortDate(sinceOf('close')) + ': выходов с датой запроса пока нет';
   return t + ' · без дней паузы (отпуск менеджера)';
 }
 function renderVac(){
@@ -1663,7 +1662,7 @@ function renderVac(){
     tile('План найма', st.need, null, {hero:true, note:'человек нужно по активным вакансиям'}) +
     tile('Публикаций в работе', livePubs(all).length, null, {note:'вакансий в работе: ' + st.active + (st.active ? ' · дольше всех — ' + st.oldest + ' дн.' : '')}) +
     tile('Скорость закрытия', st.median, null, {suffix:' <small>дн.</small>', note: speedNote(st)}) +
-    tile('Закрыто за 90 дней', st.recent, null, {note:'вышли сотрудники'}) +
+    tile('Закрыто за 90 дней', st.recent, null, {note:'вышли сотрудники' + (addDays(today(), -90) < sinceOf('close') ? ' · считаем с ' + shortDate(sinceOf('close')) : '')}) +
     tile('Потрачено на hh.ru', null, null, {text:rub(st.spent), note:'на вакансии в работе: ' + rub(st.spentActive)});
 
   var q = norm($('vSearch').value), fs = vacStatusSel(), fm = $('vManager').value;
@@ -1697,9 +1696,9 @@ function renderVac(){
   }
   function gtable(rows, title){
     // скорость — медиана от запроса до выхода без дней паузы; мало закрытых — помечаем; ориентир — от публикации
-    return '<thead><tr><th>'+title+'</th><th>В работе</th><th>Закрыто</th><th>Скорость, дн.</th><th>Ориентир: публикация → выход, дн.</th><th>Потрачено</th></tr></thead><tbody>' +
+    return '<thead><tr><th>'+title+'</th><th>В работе</th><th>Закрыто с '+shortDate(sinceOf('close'))+'</th><th>Скорость, дн.</th><th>Потрачено</th></tr></thead><tbody>' +
       rows.map(function(s){ return '<tr><td>'+esc(s.k)+'</td><td>'+s.active+'</td><td>'+s.closed+'</td><td>'+(s.median === null ? '—' : s.median + (s.sample < FEW ? ' <span class="sub">мало данных</span>' : ''))+'</td>' +
-        '<td>'+(s.pubMedian === null ? '—' : s.pubMedian + ' <span class="sub">('+s.pubClosed+')</span>')+'</td><td>'+rub(s.spent)+'</td></tr>'; }).join('') + '</tbody>';
+        '<td>'+rub(s.spent)+'</td></tr>'; }).join('') + '</tbody>';
   }
   $('vByMgr').innerHTML = gtable(group('manager'), 'Ответственный');
   $('vByDept').innerHTML = gtable(group('dept'), 'Отдел');

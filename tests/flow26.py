@@ -114,8 +114,8 @@ with sync_playwright() as p:
     # сроки по этапам — за год: Диспетчер (4 + 15 = 19 дн.), Петрова (7 + 2 = 9 дн.)
     pg.select_option('#dMode', 'year'); pg.wait_for_timeout(100)
     st = txt(pg, '#dStages')
-    # выходы — в августе, а весь путь (от запроса) считаем с 01.10.26: «—»; поиск (от публикации) — с 01.01.25
-    assert 'Логистика\t1\t4 дн.\t15 дн.\t—' in st and 'Продажи\t1\t7 дн.\t2 дн.\t—' in st, st
+    # выходы — в августе, а сроки считаем с 01.10.26 (раньше их не фиксировали): закрытых за период нет
+    assert 'За период закрытых вакансий нет' in st, st
     pg.evaluate("sinceOver = Object.assign({}, sinceOver, {close: '2026-01-01'}); render()"); pg.wait_for_timeout(100)
     st = txt(pg, '#dStages')
     assert 'Логистика\t1\t4 дн.\t15 дн.\t19 дн.' in st and 'Продажи\t1\t7 дн.\t2 дн.\t9 дн.' in st and 'Все\t2\t6 дн.\t9 дн.\t14 дн.' in st, st
