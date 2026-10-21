@@ -185,7 +185,7 @@ with sync_playwright() as p:
     assert v['multi'] and v['rate'] == 1 and v['status'] == 'активна' and v['publishedAt'] == ago(25) and v['requestedAt'] == ago(30), v
     assert v['seats'][0] == {'requestedAt': ago(30), 'publishedAt': ago(25), 'reason': 'увольнение сотрудника', 'search': 'активный', 'source': 'рекомендация сотрудника', 'person': 'Иванова', 'startAt': ago(10),
         'offers': [{'candidate': 'Петров', 'sentAt': ago(20), 'result': 'declined', 'answerAt': ago(18), 'reason': 'зарплата'},
-                   {'candidate': 'Иванова', 'sentAt': ago(15), 'result': 'accepted', 'answerAt': ago(14), 'startAt': ago(10), 'probMonths': 2, 'started': True}], 'probMonths': 2}, v['seats'][0]
+                   {'candidate': 'Иванова', 'sentAt': ago(15), 'result': 'accepted', 'answerAt': ago(14), 'startAt': ago(10), 'started': True}]}, v['seats'][0]
     assert v['seats'][1] == {'requestedAt': dt.date.today().isoformat()}, v
     row = pg.inner_text('#vTable tr[data-id=%s]' % vid.split('/')[1]); assert '1 из 2' in row, row
     vt = pg.inner_text('#vTiles')

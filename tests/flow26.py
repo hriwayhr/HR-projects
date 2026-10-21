@@ -65,7 +65,7 @@ with sync_playwright() as p:
     pg.click('#vSave'); pg.wait_for_timeout(300)
     s0 = pg.evaluate("window.__store['vacancies/c'].seats[0]")
     # закрытая раньше единица: выход переехал в принятый оффер с отметкой «вышел»
-    assert s0['offers'] == [{'result': 'accepted', 'candidate': 'Петрова', 'sentAt': '2026-07-28', 'answerAt': '2026-07-29', 'startAt': '2026-08-03', 'probMonths': 2, 'started': True}] and s0['startAt'] == '2026-08-03' and s0['probMonths'] == 2 and 'offerSentAt' not in s0, s0
+    assert s0['offers'] == [{'result': 'accepted', 'candidate': 'Петрова', 'sentAt': '2026-07-28', 'answerAt': '2026-07-29', 'startAt': '2026-08-03', 'started': True}] and s0['startAt'] == '2026-08-03' and 'probMonths' not in s0 and 'offerSentAt' not in s0, s0
     # у второй единицы дата выхода 20.10 ещё впереди — после пересохранения она не закрыта, а ждёт выхода
     s1 = pg.evaluate("window.__store['vacancies/c'].seats[1]"); assert 'startAt' not in s1 and s1['offers'][1]['startAt'] == '2026-10-20' and not s1['offers'][1].get('started'), s1
     assert '2 из 3' in pg.inner_text('#vTable tr[data-id=c]')   # колонка «Офферы»: принято 2 из 3
@@ -77,7 +77,14 @@ with sync_playwright() as p:
     assert 'Всего за 12 месяцев: 1' in txt(pg, '#dTrend') and pg.get_attribute('#dTrend [data-trend="4"]', 'aria-pressed') == 'true'
     pg.click('#dTrend [data-trend="2"]'); pg.wait_for_timeout(100)
     assert 'За 12 месяцев: 56%' in txt(pg, '#dTrend'), txt(pg, '#dTrend')   # (3+6) / (6+10)
-    # испытательный срок: Петрова (вышла 3.08) — срок закончился 3.10, Иванов (20.08) — до 20.10
+    # испытательный срок: срок в оффере не указан — не придумываем 2 месяца: «срок не указан», на испытательном никого
+    pr = txt(pg, '#dProb')
+    assert 'Сейчас на испытательном\n0' in pr and 'срок не указан: 2' in pr and 'У 2 вышедших срок испытательного не указан' in pr and not pg.query_selector('#dProb [data-prob=passed]'), pr
+    pg.select_option('#dProb tr:has-text("Петрова") select[data-prob-months]', '2'); pg.wait_for_timeout(300)
+    c = pg.evaluate("window.__store['vacancies/c']"); assert c['seats'][0]['probMonths'] == 2, c
+    pg.select_option('#dProb tr:has-text("Иванов") select[data-prob-months]', '2'); pg.wait_for_timeout(300)
+    assert pg.evaluate("window.__store['vacancies/b'].probMonths") == 2
+    # указали 2 мес.: Петрова (вышла 3.08) — срок закончился 3.10, Иванов (20.08) — до 20.10
     pr = txt(pg, '#dProb')
     assert 'Сейчас на испытательном\n1' in pr and 'ждут итога: 1' in pr and 'закончился 4 дня назад' in pr and 'осталось 13 дней' in pr, pr
     assert pr.index('Петрова') < pr.index('Иванов Иван') and 'Сидоров' not in pr and 'Увольнения\n1' in pr

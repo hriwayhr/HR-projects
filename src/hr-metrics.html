@@ -1079,8 +1079,7 @@ function renderTrend(r, ps){
 }
 
 // Испытательный срок: по каждому вышедшему — из карточек вакансий (у многоставочной — по единицам)
-var PROB_MONTHS = 2;            // по умолчанию — 2 месяца (лист «реферальная программа»); в оффере можно указать 3
-var PROB_OPTIONS = [2, 3];
+var PROB_OPTIONS = [2, 3];      // срок — по условиям оффера; не указан — не придумываем: такого сотрудника нет в «на испытательном» и «ждут итога»
 function PROB_FROM_(){ return sinceOf('probation') || '2026-08-01'; }   // мониторинг начат в октябре 2026: вышедшие раньше не отслеживаются
 function hireUnits(){
   var out = [];
@@ -1089,20 +1088,25 @@ function hireUnits(){
     else if(v.startAt) out.push({v:v, i:null, person:v.person, startAt:v.startAt, prob:v.probation, months:v.probMonths});
   });
   return out.filter(function(u){ return u.startAt >= PROB_FROM_() && u.startAt <= today(); })
-    .map(function(u){ u.months = u.months || PROB_MONTHS; u.end = addMonths(u.startAt, u.months); return u; });
+    .map(function(u){ u.months = u.months || null; u.end = u.months ? addMonths(u.startAt, u.months) : null; return u; });
 }
-function probState(u){ return u.prob ? u.prob.result : u.end > today() ? 'on' : 'due'; }
+function probState(u){ return u.prob ? u.prob.result : !u.end ? 'nomonths' : u.end > today() ? 'on' : 'due'; }
 function renderProb(w, wp, wl, ps){
   var us = hireUnits(), t = today();
   function cnt(r, res){ return r ? us.filter(function(u){ return u.prob && u.prob.result === res && u.prob.at >= r.from && u.prob.at <= r.to; }).length : null; }
   var pass = cnt(w, 'passed'), fail = cnt(w, 'failed'), open = us.filter(function(u){ var s = probState(u); return s === 'on' || s === 'due'; });
   var due = open.filter(function(u){ return u.end <= t; }).length, dis = rSum(w, ps, 'dismissals');
+  var nom = us.filter(function(u){ return probState(u) === 'nomonths'; });
   var vs = 'к прошлому периоду';
   var tiles = '<div class="tiles">' + tile('Прошли испытательный срок', pass, cnt(wp, 'passed'), {vs:vs}) +
     tile('Не прошли', fail, cnt(wp, 'failed'), {vs:vs, lowerIsBetter:true, note: pass + fail ? 'прошли ' + Math.round(pass / (pass + fail) * 100) + '% из закончивших' : ''}) +
-    tile('Сейчас на испытательном', open.length - due, null, {noDelta:true, note: due ? '<span class="down">ждут итога: '+due+'</span>' : ''}) +
+    tile('Сейчас на испытательном', open.length - due, null, {noDelta:true, note: [due ? '<span class="down">ждут итога: '+due+'</span>' : '', nom.length ? 'срок не указан: ' + nom.length : ''].filter(Boolean).join(' · ')}) +
     tile('Увольнения', dis, wp ? rSum(wp, ps, 'dismissals') : null, {vs:vs, lowerIsBetter:true, note:'из метрик дня'}) + '</div>';
   function row(u, done){
+    var key0 = ' data-id="'+esc(u.v.id)+'" data-i="'+(u.i === null ? '' : u.i)+'"';
+    if(!u.end) return '<tr><td class="l">'+(u.person ? esc(u.person) : '<span class="sub">имя — в карточке вакансии</span>')+'</td><td class="l">'+esc(u.v.title || '')+'</td><td class="l">'+esc(managerLabel(u.v))+'</td><td>'+shortDate(u.startAt)+'</td>' +
+      '<td><select data-prob-months'+key0+' aria-label="Срок испытательного"><option value="">срок?</option>' + PROB_OPTIONS.map(function(m){ return '<option value="'+m+'">'+m+' мес.</option>'; }).join('') + '</select></td>' +
+      '<td class="l"><span class="pill pub-soon">срок не указан</span></td><td></td></tr>';
     var left = daysBetween(t, u.end), when = done ? '<span class="pill '+(u.prob.result === 'passed' ? 'hire' : 'long')+'">'+(u.prob.result === 'passed' ? 'прошёл' : 'не прошёл')+'</span>' :
       left > 0 ? 'осталось ' + left + ' ' + plural(left, 'день', 'дня', 'дней') : '<span class="down">закончился'+(left ? ' ' + -left + ' ' + plural(-left, 'день', 'дня', 'дней') + ' назад' : ' сегодня')+'</span>';
     var key = ' data-id="'+esc(u.v.id)+'" data-i="'+(u.i === null ? '' : u.i)+'" data-end="'+u.end+'"';
@@ -1112,11 +1116,26 @@ function renderProb(w, wp, wl, ps){
       '<td class="l">'+esc(managerLabel(u.v))+'</td><td>'+shortDate(u.startAt)+'</td><td>'+shortDate(u.end)+' <span class="sub">('+u.months+' мес.)</span></td><td class="l">'+when+'</td><td class="l nowrap">'+act+'</td></tr>';
   }
   var done = us.filter(function(u){ return u.prob && u.prob.at >= w.from && u.prob.at <= w.to; });
-  var list = open.sort(function(a, b){ return a.end < b.end ? -1 : 1; }).map(function(u){ return row(u, false); }).concat(done.map(function(u){ return row(u, true); }));
+  var list = nom.map(function(u){ return row(u, false); }).concat(open.sort(function(a, b){ return a.end < b.end ? -1 : 1; }).map(function(u){ return row(u, false); }), done.map(function(u){ return row(u, true); }));
   $('dProb').innerHTML = '<h3>Испытательный срок · '+esc(wl)+'</h3>' + tiles +
     (list.length ? '<div class="scroll"><table><thead><tr><th class="l">Сотрудник</th><th class="l">Вакансия</th><th class="l">Рекрутер</th><th>Вышел</th><th>ИС до</th><th class="l">Статус</th><th></th></tr></thead><tbody>'+list.join('')+'</tbody></table></div>' :
       '<p class="sub">Вышедших с '+shortDate(PROB_FROM_())+' пока нет — они появятся здесь по дате выхода в карточке вакансии.</p>') +
-    '<p class="hint">Испытательный срок — по условиям оффера (2 или 3 месяца, если не указано — '+PROB_MONTHS+') от даты выхода; отслеживаются вышедшие с '+shortDate(PROB_FROM_())+'. «Прошёл» считается датой окончания срока, «Не прошёл» — днём отметки.</p>';
+    (nom.length ? '<p class="hint"><span class="down">У '+nom.length+' '+plural(nom.length, 'вышедшего', 'вышедших', 'вышедших')+' срок испытательного не указан</span> — выберите 2 или 3 мес. в строке: до этого они не считаются на испытательном.</p>' : '') +
+    '<p class="hint">Испытательный срок — по условиям оффера (2 или 3 месяца) от даты выхода; не указан — не считаем, чтобы не сбить статистику; отслеживаются вышедшие с '+shortDate(PROB_FROM_())+'. «Прошёл» считается датой окончания срока, «Не прошёл» — днём отметки.</p>';
+}
+// срок испытательного у вышедшего, у которого он не указан: в единице и в оффере, по которому он вышел
+function setProbMonths(e){
+  var sel = e.target; if(!('probMonths' in sel.dataset) || !sel.value || !db) return;
+  var v = vacancies[sel.dataset.id], i = sel.dataset.i === '' ? null : +sel.dataset.i, m = +sel.value, upd = {updatedAt:new Date().toISOString()};
+  if(i === null) upd.probMonths = m;
+  else upd.seats = v.seats.map(function(x, j){
+    if(j !== i) return x;
+    var y = Object.assign({}, x, {probMonths:m}), offs = seatOffers(x), came = offs.filter(function(o){ return o.started; }).pop();
+    if(came){ came.probMonths = m; y.offers = offs; }
+    return y;
+  });
+  sel.disabled = true;
+  db.doc('vacancies/' + sel.dataset.id).update(upd).catch(function(err){ sel.disabled = false; alert(writeError(err)); });
 }
 function markProb(e){
   var b = e.target.closest('[data-prob]'); if(!b || !db) return;
@@ -1842,7 +1861,7 @@ function offerRow(o){
     f('Дата ответа', '<input type="date" class="o-ans" value="'+esc(o.answerAt || '')+'">', 'o-ansWrap' + (o.result === 'accepted' || o.result === 'declined' ? '' : ' hide')) +
     f('Причина отказа', '<select class="o-why">'+seatOptions(DECLINE_REASONS, o.reason)+'</select>', 'o-whyWrap' + (o.result === 'declined' ? '' : ' hide')) +
     f('Дата выхода', '<input type="date" class="o-start" value="'+esc(o.startAt || '')+'">', 'o-acc' + (o.result === 'accepted' ? '' : ' hide')) +
-    f('Испытательный срок', '<select class="o-prob">' + PROB_OPTIONS.map(function(m){ return '<option value="'+m+'"'+(m === (o.probMonths || PROB_MONTHS) ? ' selected' : '')+'>'+m+' мес.</option>'; }).join('') + '</select>', 'o-acc' + (o.result === 'accepted' ? '' : ' hide')) +
+    f('Испытательный срок', '<select class="o-prob"><option value="">не указан</option>' + PROB_OPTIONS.map(function(m){ return '<option value="'+m+'"'+(m === o.probMonths ? ' selected' : '')+'>'+m+' мес.</option>'; }).join('') + '</select>', 'o-acc' + (o.result === 'accepted' ? '' : ' hide')) +
     '<label class="check o-acc'+(o.result === 'accepted' ? '' : ' hide')+'" title="Отмечайте в день, когда человек действительно вышел: назначенная дата выхода его ещё не гарантирует"><input type="checkbox" class="o-started"'+(o.started ? ' checked' : '')+'> Кандидат вышел</label>' +
     '<button type="button" class="btn danger sm" data-del-offer aria-label="Убрать оффер">×</button></div>';
 }
@@ -1853,7 +1872,7 @@ function readOffers(el){
     if(o.result !== 'wait'){ o.answerAt = a || s || today(); if(o.result === 'declined' && w) o.reason = w; }
     if(o.result === 'accepted'){
       var st = r.querySelector('.o-start').value; if(st) o.startAt = st;
-      o.probMonths = +r.querySelector('.o-prob').value;
+      var pm = r.querySelector('.o-prob').value; if(pm) o.probMonths = +pm;
       if(r.querySelector('.o-started').checked){ o.started = true; if(!o.startAt) o.startAt = today(); }
     }
     return o;
@@ -2557,7 +2576,7 @@ $('bootForm').onsubmit = bootstrap;
 $('dDate').onchange = function(){ if(this.value){ state.date = this.value; renderDay(); } };
 $('dTrend').onclick = function(e){ var b = e.target.closest('[data-trend]'); if(b){ state.trend = +b.dataset.trend; renderDay(); } };
 $('dStages').onchange = function(e){ if(e.target.id === 'dStageBy'){ state.stageBy = e.target.value; renderDay(); } };
-$('dProb').onclick = markProb;
+$('dProb').onclick = markProb; $('dProb').onchange = setProbMonths;
 $('dQuarter').onchange = function(){ state.date = this.value; renderDay(); };
 $('dMonth').onchange = function(){ if(this.value){ state.date = this.value + '-01'; renderDay(); } };
 $('dFrom').onchange = function(){ if(!this.value) return; state.from = this.value; if(state.to < state.from) state.to = state.from; renderDay(); };
