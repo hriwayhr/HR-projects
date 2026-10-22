@@ -13,6 +13,7 @@ const PASSWORD = process.env.AUTH === 'password';
 if (PASSWORD) Object.assign(process.env, { LOCAL: '1', WEB_IMPORT: '0' });
 const { create, config, importDocs, docsFromFile } = require(APP + '/index');
 const { sqliteStore, logStore, dailyBackup } = require(APP + '/store');
+const auth = require(APP + '/auth');
 
 const DATA = process.env.DATA_DIR || '/data', PORT = +process.env.PORT || 8080, KEEP = +process.env.BACKUP_KEEP_DAYS || 30;
 const MAX_BODY = 16 * 1024 * 1024, MAX_SMALL = 1024 * 1024;   // 16 МБ — только журналы локальной версии при переносе данных, остальное — до 1 МБ
@@ -47,7 +48,9 @@ async function importFromDisk() {
 
 const server = http.createServer((req, res) => {
   const chunks = []; let size = 0;
-  const limit = req.url.split('?')[0] === '/api/replace-data' ? MAX_BODY : MAX_SMALL;
+  // 16 МБ — только с действующей сессией (права администратора проверит обработчик); без входа большое тело не принимаем
+  const limit = req.url.split('?')[0] === '/api/replace-data' && auth.sessionEmail(cfg.sessionSecret, req.headers) ? MAX_BODY : MAX_SMALL;
+  if (+req.headers['content-length'] > limit) { res.writeHead(413).end(); req.destroy(); return; }
   req.on('data', c => { size += c.length; if (size > limit) { res.writeHead(413).end(); req.destroy(); } else chunks.push(c); });
   req.on('end', async () => {
     if (res.writableEnded) return;

@@ -85,7 +85,7 @@ window.HR_SERVER = true;
       var since = +((url.match(/since=(\d+)/) || [])[1] || 0);
       var out = Object.keys(st.docs).filter(function(p){ return st.docs[p].ver > since; }).map(function(p){
         var d = get(p); return {path:p, data:d === null ? null : acl.readable(u, p, d, ps)};
-      }).filter(function(d){ return since || d.data !== null; });
+      }).filter(function(d){ return (since && u.role !== 'employee') || d.data !== null; });
       return [200, {ver:st.ver, docs:out}];
     }
     if(path === '/api/doc'){

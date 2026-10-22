@@ -48,6 +48,9 @@ test('сервер: вход по паролю, данные из файла, з
     // больше 1 МБ без входа — сервер обрывает приём, память не забивается
     const big = await fetch(base + '/api/plogin', { method: 'POST', headers: { 'X-HR': '1' }, body: 'x'.repeat(2 * 1024 * 1024) }).then(r => r.status, () => 'обрыв');
     assert.ok(big === 413 || big === 'обрыв', String(big));
+    // перенос журналов (до 16 МБ) — только с действующей сессией; без неё и 2 МБ не принимаем
+    const big2 = await fetch(base + '/api/replace-data', { method: 'POST', headers: { 'X-HR': '1' }, body: 'x'.repeat(2 * 1024 * 1024) }).then(r => r.status, () => 'обрыв');
+    assert.ok(big2 === 413 || big2 === 'обрыв', String(big2));
     const me = await (await fetch(base + '/api/me')).json();
     assert.equal(me.empty, undefined);
     const ok = await post('/api/plogin', { login: 'Yulia@Example.ru', password: 'Secret-1' });
@@ -56,8 +59,8 @@ test('сервер: вход по паролю, данные из файла, з
     assert.match(await (await fetch(base + '/metrics', { headers: { Cookie: cookie } })).text(), /window\.HR_LOCAL = true; window\.HR_PORTAL = true/);
     const sync = await (await fetch(base + '/api/sync', { headers: { Cookie: cookie } })).json();
     assert.ok(sync.docs.some(d => d.path === 'months/y_2026-10'));
-    for (let i = 0; i < 20; i++) assert.equal((await post('/api/plogin', { login: 'yulia@example.ru', password: 'bad' })).status, 401);
-    assert.equal((await post('/api/plogin', { login: 'yulia@example.ru', password: 'Secret-1' })).status, 429);   // даже верный пароль — после 20 ошибок с адреса ждать
+    for (let i = 0; i < 10; i++) assert.equal((await post('/api/plogin', { login: 'yulia@example.ru', password: 'bad' })).status, 401);
+    assert.equal((await post('/api/plogin', { login: 'yulia@example.ru', password: 'Secret-1' })).status, 429);   // даже верный пароль — после 10 ошибок по логину с адреса ждать
   } finally { p.kill(); }
 });
 
@@ -234,19 +237,20 @@ test('атаки на вход и данные портала', async () => {
   const cookieOf = r => r.multiValueHeaders['Set-Cookie'][0].split(';')[0];
   const call = (c, method, url, body) => h({ httpMethod: method, url, headers: { 'x-hr': '1', cookie: c }, body: body && JSON.stringify(body) });
 
-  // перебор с одного адреса — закрыт этот адрес, а не вход для всех
-  for (let i = 0; i < 20; i++) assert.equal((await login('yulia-sec', 'bad' + i, '203.0.113.5')).statusCode, 401);
-  assert.equal((await login('anna-sec', 'A-2', '203.0.113.5')).statusCode, 429);
-  assert.equal((await login('yulia-sec', 'Y-1', '198.51.100.7')).statusCode, 200);
+  // анна уже входила из офиса (адрес 203.0.113.5) — потом с этого же адреса кто-то перебирает пароли
+  assert.equal((await login('anna-sec', 'A-2', '203.0.113.5')).statusCode, 200);
+  for (let i = 0; i < 10; i++) assert.equal((await login('yulia-sec', 'bad' + i, '203.0.113.5')).statusCode, 401);
+  assert.equal((await login('yulia-sec', 'Y-1', '203.0.113.5')).statusCode, 429);       // этот логин с этого адреса — ждать
+  for (let i = 0; i < 10; i++) await login('nobody' + i, 'x', '203.0.113.5');
+  assert.equal((await login('sec.one', 'N-3', '203.0.113.5')).statusCode, 429);         // новый человек с этого адреса — ждать
+  assert.equal((await login('anna-sec', 'A-2', '203.0.113.5')).statusCode, 200);        // а кто уже входил отсюда — входит
+  assert.equal((await login('yulia-sec', 'Y-1', '198.51.100.7')).statusCode, 200);      // с другого адреса — всё работает
   // подменённый X-Forwarded-For при прямом соединении не помогает: считаем по адресу соединения
-  assert.equal((await login('anna-sec', 'A-2', '198.51.100.99', '203.0.113.5')).statusCode, 429);
-  for (let i = 0; i < 20; i++) await login('nobody', 'x', '10.9.9.' + i, '203.0.113.6');
-  assert.equal((await login('anna-sec', 'A-2', '198.51.100.98', '203.0.113.6')).statusCode, 429);
-  // перебор одного логина с многих адресов — после 50 ошибок закрыт только этот логин
-  for (let i = 0; i < 50; i++) await login('sec.one', 'bad', '192.0.2.' + i, '8.8.' + i + '.1');
-  assert.equal((await login('sec.one', 'N-3', '192.0.2.200', '8.8.200.1')).statusCode, 429);
-  assert.equal((await login('anna-sec', 'A-2', '192.0.2.201', '8.8.201.1')).statusCode, 200);
-
+  assert.equal((await login('sec.one', 'N-3', '198.51.100.99', '203.0.113.5')).statusCode, 429);
+  // перебор одного логина с многих адресов сразу (параллельно): новым адресам ждать, владелец со своего адреса входит
+  await Promise.all(Array.from({ length: 60 }, (_, i) => login('yulia-sec', 'bad', '192.0.2.' + i, '8.8.' + i + '.1')));
+  assert.equal((await login('yulia-sec', 'Y-1', '192.0.2.250', '8.8.250.1')).statusCode, 429);
+  assert.equal((await login('yulia-sec', 'Y-1', '198.51.100.7')).statusCode, 200);
   // сменили пароль — прежняя сессия больше не действует
   const a = cookieOf(await login('anna-sec', 'A-2', '198.51.100.50'));
   assert.equal((await call(a, 'GET', '/api/me')).statusCode, 200);
@@ -260,6 +264,11 @@ test('атаки на вход и данные портала', async () => {
   await store.tx('employees/IW-SEC2', () => ({ code: 'IW-SEC2', login: 'sec.two', salt: 's4', hash: sha('s4', 'N-4') }));
   const e = cookieOf(await login('sec.two', 'N-4', '198.51.100.60'));
   const own = JSON.parse((await call(e, 'GET', '/api/sync')).body).docs.find(d => d.path === 'employees/IW-SEC2').data;
+  // обновления не раскрывают адреса чужих документов (коды коллег, месяцы метрик)
+  await store.tx('months/a_2026-10', () => ({ person: 'a', month: '2026-10', days: {} }));
+  await store.tx('employees/IW-SEC9', () => ({ code: 'IW-SEC9' }));
+  await store.tx('employees/IW-SEC9', () => null);
+  assert.deepEqual(JSON.parse((await call(e, 'GET', '/api/sync?since=1')).body).docs.map(d => d.path), ['employees/IW-SEC2']);
   const put = (c, p, data, base) => call(c, 'POST', '/api/doc', { path: p, op: 'set', data, base: base || null }).then(r => r.statusCode);
   assert.equal(await put(e, 'employees/IW-SEC2', Object.assign({}, own, { cardChoice: '<img src=x onerror=alert(1)>' }), own), 403);
   assert.equal(await put(e, 'employees/IW-SEC2', Object.assign({}, own, { progress: { docs: '<script>' } }), own), 403);
@@ -270,7 +279,7 @@ test('атаки на вход и данные портала', async () => {
   assert.equal((await call(e, 'POST', '/api/doc', { path: 'config/departments', op: 'set', data: { list: [] } })).statusCode, 403);
   assert.equal((await call(e, 'POST', '/api/doc', { path: '../config/team', op: 'set', data: {} })).statusCode, 403);
   // HR: пароль открытым текстом (страница без https) не сохраняется
-  const y = cookieOf(await login('yulia-sec', 'Y-1', '198.51.100.61'));
+  const y = cookieOf(await login('yulia-sec', 'Y-1', '198.51.100.7'));
   assert.equal(await put(y, 'employees/IW-SEC3', { code: 'IW-SEC3', salt: 'a', hash: 'plain:a::123' }), 403);
   // запрос не со страницы портала (без заголовка X-HR) — отклоняется
   assert.equal((await h({ httpMethod: 'POST', url: '/api/doc', headers: { cookie: y }, body: '{}' })).statusCode, 403);

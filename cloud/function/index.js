@@ -128,9 +128,10 @@ async function sync(user, store, since) {
       acl.readable(user, d.path, d.data, user.people) !== null));
   }
   const docs = changed.map(d => ({ path: d.path, ver: d.ver, data: d.data === null ? null : acl.readable(user, d.path, d.data, user.people) }));
-  // невидимое после изменения (вакансию передали другому) приходит как удалённое — страница его уберёт
+  // невидимое после изменения (вакансию передали другому) приходит как удалённое — страница его уберёт;
+  // новичку удалённое не шлём вовсе: иначе он увидел бы адреса всех документов (коды коллег, месяцы метрик)
   // при полной загрузке невидимое не отдаём совсем — даже адресом
-  return { ver: docs.reduce((m, d) => Math.max(m, d.ver), since), docs: docs.filter(d => since || d.data !== null).map(d => ({ path: d.path, data: d.data })) };
+  return { ver: docs.reduce((m, d) => Math.max(m, d.ver), since), docs: docs.filter(d => (since && user.role !== 'employee') || d.data !== null).map(d => ({ path: d.path, data: d.data })) };
 }
 
 // Слияние трёх версий: base — документ, как его видела страница до правки, mine — с правкой, theirs — сейчас в базе.
@@ -180,11 +181,19 @@ async function backup(cfg, store, context, fetchFn = fetch) {
 
 // ---------- локальная версия: вход по паролю и первичная загрузка данных ----------
 // Пароль — тот же SHA-256(salt + '::' + пароль), что выдаёт «Команда»; проверяет сервер, страница хешей не получает.
-// Перебор: за 15 минут не больше 20 неудачных попыток с одного адреса и 50 — на один логин со всех адресов.
-// Общего замка нет: иначе любой, набрав неверные пароли, закрыл бы вход всем.
-const FAILS = new Map(), LOCK_MS = 15 * 60e3, IP_MAX = 20, LOGIN_MAX = 50;
+// Перебор (окно 15 минут):
+//  - логин с одного адреса: 10 ошибок — этому адресу по этому логину ждать;
+//  - адрес: 20 ошибок, логин со всех адресов: 50 — ждать новым адресам; кто уже входил этим логином с этого адреса, тот входит:
+//    так чужой перебор не закроет вход ни владельцу логина, ни коллегам за тем же офисным адресом.
+// Общего замка нет; счётчики целиком не стираются — при переполнении уходят устаревшие, а новые не заводятся.
+const FAILS = new Map(), GOOD = new Map(), LOCK_MS = 15 * 60e3, GOOD_MS = 30 * 864e5, PAIR_MAX = 10, IP_MAX = 20, LOGIN_MAX = 50, KEYS_MAX = 200000;
 function failsOf(key, now) { const f = FAILS.get(key); return f && now - f.at < LOCK_MS ? f.n : 0; }
-function addFail(key, now) { FAILS.set(key, { n: failsOf(key, now) + 1, at: FAILS.has(key) && now - FAILS.get(key).at < LOCK_MS ? FAILS.get(key).at : now }); }
+function prune(map, now, ttl, get) { for (const [k, v] of map) if (now - get(v) >= ttl) map.delete(k); }
+function addFail(key, now) {
+  const n = failsOf(key, now);
+  if (!n && FAILS.size >= KEYS_MAX) { prune(FAILS, now, LOCK_MS, v => v.at); if (FAILS.size >= KEYS_MAX) return; }
+  FAILS.set(key, { n: n + 1, at: n ? FAILS.get(key).at : now });
+}
 // Адрес клиента: за Caddy (адрес из внутренней сети) — последний в X-Forwarded-For, его ставит Caddy; напрямую — адрес соединения
 const PRIVATE_IP = /^(::ffff:)?(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)|^::1$|^f[cd]/;
 function clientIp(event) {
@@ -196,8 +205,8 @@ function clientIp(event) {
 const pwMark = hash => crypto.createHash('sha256').update('session::' + String(hash || '')).digest('hex').slice(0, 16);
 async function passwordLogin(cfg, store, b, ip) {
   const people = ((await store.get('config/team')) || {}).people || {}, login = acl.norm(b.login).slice(0, 200);
-  const now = Date.now(), ipKey = 'ip:' + ip, loginKey = 'l:' + login;
-  if (failsOf(ipKey, now) >= IP_MAX || failsOf(loginKey, now) >= LOGIN_MAX)
+  const now = Date.now(), ipKey = 'ip:' + ip, loginKey = 'l:' + login, pairKey = 'p:' + login + '|' + ip, known = now - (GOOD.get(pairKey) || 0) < GOOD_MS;
+  if (failsOf(pairKey, now) >= PAIR_MAX || (!known && (failsOf(ipKey, now) >= IP_MAX || failsOf(loginKey, now) >= LOGIN_MAX)))
     return json(429, { error: 'Слишком много неудачных попыток — подождите 15 минут.' });
   // команда — по логину или почте; иначе новичок портала — по логину, рабочей почте или коду доступа
   const pid = Object.keys(people).find(p => acl.norm(people[p].login) === login) || Object.keys(people).find(p => people[p].login && acl.norm(people[p].email) === login);
@@ -209,13 +218,14 @@ async function passwordLogin(cfg, store, b, ip) {
   }
   const want = Buffer.from(String((t && t.hash) || '')), got = Buffer.from(crypto.createHash('sha256').update(String((t && t.salt) || '') + '::' + String(b.password || '')).digest('hex'));
   if (!t || !t.hash || want.length !== got.length || !crypto.timingSafeEqual(want, got)) {
-    addFail(ipKey, now); addFail(loginKey, now);
-    if (FAILS.size > 20000) for (const [k, v] of FAILS) if (now - v.at >= LOCK_MS) FAILS.delete(k);   // память не растёт: старые записи — вон
-    if (FAILS.size > 20000) FAILS.clear();
+    addFail(pairKey, now); addFail(ipKey, now); addFail(loginKey, now);
     await new Promise(r => setTimeout(r, 400));             // перебор паролей — медленно
     return json(401, { error: 'Неверный логин или пароль.' });
   }
-  FAILS.delete(loginKey);   // счётчик адреса не сбрасываем: иначе свой вход обнулял бы перебор чужих паролей
+  // счётчики адреса и логина не сбрасываем: иначе свой вход обнулял бы перебор чужих паролей
+  FAILS.delete(pairKey);
+  if (GOOD.size >= KEYS_MAX) prune(GOOD, now, GOOD_MS, v => v);
+  if (GOOD.size < KEYS_MAX) GOOD.set(pairKey, now);
   if (t.archived) return json(403, { error: 'Учётная запись в архиве — обратитесь к администратору.' });
   return respond(200, { ok: true }, {}, { multiValueHeaders: { 'Set-Cookie': [auth.sessionCookie(cfg.sessionSecret, session + '|' + pwMark(t.hash))] } });
 }
