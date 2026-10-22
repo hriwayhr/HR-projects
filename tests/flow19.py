@@ -3,10 +3,23 @@
 # закрытый этап не открывается, нумерация шагов пересчитывается.
 from playwright.sync_api import sync_playwright
 import pathlib, json, hashlib
+from datetime import date, timedelta
+MONTHS = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря']
+def ru(n):
+    """«7 ноября» — как это пишет страница"""
+    d = date.today() + timedelta(days=n)
+    return '%d %s' % (d.day, MONTHS[d.month - 1])
+def dmy(n):
+    d = date.today() + timedelta(days=n)
+    return d.strftime('%d.%m.%Y')
+def day(n):
+    """дата относительно сегодня: иначе тесты протухают, когда жёстко
+    зашитый «день выхода» уезжает в прошлое и кабинет открывает другой этап"""
+    return (date.today() + timedelta(days=n)).isoformat()
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 base = str(HERE) + '/'
-SRC = str(ROOT / 'src' / 'iway-welcome.html')
+SRC = str(ROOT / 'src' / 'iway-portal.html')
 html = pathlib.Path(SRC).read_text(encoding='utf-8')
 pathlib.Path(base+'preview.html').write_text('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style></head><body>'+html+'</body></html>', encoding='utf-8')
 url='file://'+base+'preview.html'
@@ -38,12 +51,12 @@ with sync_playwright() as p:
     b=p.chromium.launch(executable_path='/opt/pw-browsers/chromium')
 
     # ——— новичок: открыт только «до выхода», сроки остальных посчитаны
-    pg = open_page(b, emp('2026-10-05', '2 месяца'))     # сегодня 19.09.2026
+    pg = open_page(b, emp(day(16), '2 месяца'))     # сегодня 19.09.2026
     assert pg.inner_text('#tbStage') == 'До выхода', 'открылся не тот этап: ' + pg.inner_text('#tbStage')
     assert not pg.is_visible('#stageDay'), 'закрытый этап показан'
     dis = pg.eval_on_selector_all('#viewEmployee .st', 'els => els.map(e => e.getAttribute("aria-disabled"))')
     assert dis == ['false','true','true','true','true','false'], 'не те этапы закрыты: %s' % dis
-    assert notes(pg) == ['открыт', 'с 5 октября', 'с 12 октября', 'с 4 ноября', 'с 5 декабря'], \
+    assert notes(pg) == ['открыт', 'с ' + ru(16), 'с ' + ru(23), 'с ' + ru(16 + 30), 'с ' + ru(16 + 61)], \
         'сроки этапов посчитаны не так: %s' % notes(pg)
     print('новичок:', ' | '.join(notes(pg)))
 
@@ -62,16 +75,16 @@ with sync_playwright() as p:
     pg.close()
 
     # ——— вышел месяц назад: открыты «1-й день» и «неделя», срок ИС — 2 месяца
-    pg = open_page(b, emp('2026-09-01', '2 месяца'))
+    pg = open_page(b, emp(day(-18), '2 месяца'))
     n = notes(pg)
     assert n[1].startswith('открыт') and n[2].startswith('открыт'), 'этапы не открылись по сроку: %s' % n
-    assert n[3] == 'с 1 октября' and n[4] == 'с 1 ноября', 'сроки месяца и ИС посчитаны не так: %s' % n
+    assert n[3] == 'с ' + ru(-18 + 30) and n[4] == 'с ' + ru(-18 + 61), 'сроки месяца и ИС посчитаны не так: %s' % n
     print('вышел месяц назад:', ' | '.join(n))
 
     # по умолчанию — последний доступный этап
     assert pg.inner_text('#tbStage') == 'Первая неделя', 'открылся не последний доступный этап: ' + pg.inner_text('#tbStage')
     assert pg.is_visible('#week') and not pg.is_visible('#plan'), 'показан не тот этап'
-    assert pg.eval_on_selector('#week .stage-when', 'e => e.textContent') == 'Этап с 8 сентября', \
+    assert pg.eval_on_selector('#week .stage-when', 'e => e.textContent') == 'Этап с ' + ru(-18 + 7), \
         'срок первой недели в карточке не тот: ' + pg.eval_on_selector('#week .stage-when', 'e => e.textContent')
     print('по умолчанию открыт последний доступный этап, срок в карточке на месте')
 
@@ -99,7 +112,7 @@ with sync_playwright() as p:
     pg.close()
 
     # ——— отметки на этапах: свой счётчик, та же запись в прогресс
-    pg = open_page(b, emp('2026-06-01', '3 месяца'))
+    pg = open_page(b, emp(day(-110), '3 месяца'))
     for stage, box, count, key in [('week', '#planWeek', '#weekCount', 'week0'),
                                    ('month', '#planMonths', '#monthCount', 'mon0'),
                                    ('prob', '#planProb', '#probCount', 'prob0')]:
@@ -163,13 +176,13 @@ with sync_playwright() as p:
     pg.close()
 
     # ——— срок не указан — считаем стандартные три месяца
-    pg = open_page(b, emp('2026-09-01'))
-    assert notes(pg)[4] == 'с 1 декабря', 'без срока в оффере ИС посчитан не как 3 месяца: %s' % notes(pg)[4]
+    pg = open_page(b, emp(day(-18)))
+    assert notes(pg)[4] == 'с ' + ru(-18 + 92), 'без срока в оффере ИС посчитан не как 3 месяца: %s' % notes(pg)[4]
     print('без срока в оффере: испытательный срок 3 месяца —', notes(pg)[4])
     pg.close()
 
     # ——— HR скрыл шаг: нумерация пересчитывается без дырки
-    pg = open_page(b, emp('2026-10-05'))
+    pg = open_page(b, emp(day(16)))
     nums = pg.eval_on_selector_all('#stagePre section[data-step] .s-num', 'els => els.map(e => e.textContent)')
     assert nums == ['01','02','03','04','05','06'], 'нумерация до правки: %s' % nums
     pg.evaluate("location.hash='#admin'"); pg.wait_for_timeout(900)

@@ -3,11 +3,16 @@
 # у каждого счётчик людей; поиск сужает список, но не счётчики.
 from playwright.sync_api import sync_playwright
 import pathlib, hashlib, json
+from datetime import date, timedelta
+def day(n):
+    """дата относительно сегодня: иначе тесты протухают, когда жёстко
+    зашитый «день выхода» уезжает в прошлое и кабинет открывает другой этап"""
+    return (date.today() + timedelta(days=n)).isoformat()
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 (HERE / 'shots').mkdir(exist_ok=True)
 base = str(HERE) + '/'
-SRC = str(ROOT / 'src' / 'iway-welcome.html')
+SRC = str(ROOT / 'src' / 'iway-portal.html')
 html = pathlib.Path(SRC).read_text(encoding='utf-8')
 pathlib.Path(base+'preview.html').write_text('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style></head><body>'+html+'</body></html>', encoding='utf-8')
 url='file://'+base+'preview.html'
@@ -16,7 +21,7 @@ salt='s1'; h=hashlib.sha256((salt+'::'+'тест').encode()).hexdigest()
 def rec(code, first, last, gender='f', **kw):
     r={'code':code,'login':code.lower(),'firstName':first,'lastName':last,'gender':gender,
        'dept':'Операционный отдел','email':'','personalEmail':first.lower()+'@ex.com',
-       'startDate':'2026-10-05','startTime':'10:00','createdAt':'2026-09-18',
+       'startDate':day(12),'startTime':'10:00','createdAt':'2026-09-18',
        'openedAt':'','sentAt':'','salt':salt,'hash':h,'progress':{}}
     r.update(kw); return r
 

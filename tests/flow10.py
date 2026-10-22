@@ -1,10 +1,15 @@
 from playwright.sync_api import sync_playwright
 import pathlib, sys
+from datetime import date, timedelta
+def day(n):
+    """дата относительно сегодня: иначе тесты протухают, когда жёстко
+    зашитый «день выхода» уезжает в прошлое и кабинет открывает другой этап"""
+    return (date.today() + timedelta(days=n)).isoformat()
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 (HERE / 'shots').mkdir(exist_ok=True)
 base = str(HERE) + '/'
-SRC = str(ROOT / 'src' / 'iway-welcome.html')
+SRC = str(ROOT / 'src' / 'iway-portal.html')
 import json, hashlib, re
 html = pathlib.Path(SRC).read_text(encoding='utf-8')
 pathlib.Path(base+'preview.html').write_text('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style></head><body>'+html+'</body></html>', encoding='utf-8')
@@ -12,17 +17,17 @@ url='file://'+base+'preview.html'
 salt='s1'; h=hashlib.sha256((salt+'::'+'тест').encode()).hexdigest()
 def emp(code, first, last, gender, **kw):
     r={'code':code,'login':code.lower(),'firstName':first,'lastName':last,'gender':gender,'dept':'Операционный отдел',
-       'email':'','personalEmail':'x@ex.com','startDate':'2026-10-05','startTime':'10:00','createdAt':'2026-09-18',
+       'email':'','personalEmail':'x@ex.com','startDate':day(12),'startTime':'10:00','createdAt':'2026-09-18',
        'openedAt':'','sentAt':'','salt':salt,'hash':h,'progress':{}}
     r.update(kw); return r
 seed={
  'employees/IW-1': emp('IW-1','Кристина','Тестовая','f', sentAt=''),
- 'employees/IW-2': emp('IW-2','Пётр','Петров','m', sentAt='2026-09-19T08:00:00Z', startDate='2026-09-30'),
+ 'employees/IW-2': emp('IW-2','Пётр','Петров','m', sentAt='2026-09-19T08:00:00Z', startDate=day(7)),
  'employees/IW-3': emp('IW-3','Анна','Иванова','f', sentAt='2026-09-18T08:00:00Z', openedAt='2026-09-19T09:00:00Z',
-                       progress={'passport':1,'snils':1}, cardChoice='need', email='a.ivanova@iway.ru', startDate='2026-10-12'),
+                       progress={'passport':1,'snils':1}, cardChoice='need', email='a.ivanova@iway.ru', startDate=day(19)),
  'employees/IW-4': emp('IW-4','Олег','Смирнов','m', sentAt='2026-09-17T08:00:00Z', openedAt='2026-09-18T09:00:00Z',
                        progress={'passport':1,'snils':1,'military':1,'labor':1,'inn':1}, cardChoice='have',
-                       demoPass='тест', startDate='2026-09-28'),
+                       demoPass='тест', startDate=day(5)),
  'config/departments':{'list':[{'name':'Операционный отдел','head':'','senior':'','chat':''},{'name':'Маркетинг','head':'','senior':'','chat':''}]}}
 errs=[]
 def open_row(pg, text=''):

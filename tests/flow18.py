@@ -3,16 +3,29 @@
 # обновляются сразу после отметки и ведут в нужный раздел.
 from playwright.sync_api import sync_playwright
 import pathlib, json, hashlib
+from datetime import date, timedelta
+MONTHS = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря']
+def ru(n):
+    """«7 ноября» — как это пишет страница"""
+    d = date.today() + timedelta(days=n)
+    return '%d %s' % (d.day, MONTHS[d.month - 1])
+def dmy(n):
+    d = date.today() + timedelta(days=n)
+    return d.strftime('%d.%m.%Y')
+def day(n):
+    """дата относительно сегодня: иначе тесты протухают, когда жёстко
+    зашитый «день выхода» уезжает в прошлое и кабинет открывает другой этап"""
+    return (date.today() + timedelta(days=n)).isoformat()
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 base = str(HERE) + '/'
-SRC = str(ROOT / 'src' / 'iway-welcome.html')
+SRC = str(ROOT / 'src' / 'iway-portal.html')
 html = pathlib.Path(SRC).read_text(encoding='utf-8')
 pathlib.Path(base+'preview.html').write_text('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style></head><body>'+html+'</body></html>', encoding='utf-8')
 url='file://'+base+'preview.html'
 salt='s1'; h=hashlib.sha256((salt+'::'+'тест').encode()).hexdigest()
 seed={'employees/IW-N':{'code':'IW-N','login':'аня','firstName':'Анна','lastName':'Иванова','gender':'f',
-      'dept':'Операционный отдел','email':'','personalEmail':'x@ex.com','startDate':'2026-09-30','startTime':'10:00',
+      'dept':'Операционный отдел','email':'','personalEmail':'x@ex.com','startDate':day(7),'startTime':'10:00',
       'createdAt':'2026-09-18','openedAt':'','sentAt':'','salt':salt,'hash':h,
       'progress':{'passport':True,'snils':True,'day0':True}},
       'config/departments':{'list':[{'name':'Операционный отдел','head':'М. Соколова','senior':'И. Крылов','chat':''}]}}
@@ -35,7 +48,7 @@ with sync_playwright() as p:
     print('плитки: документы %s, отдел %s' % (pg.inner_text('#hpDocs'), pg.inner_text('#mDept')))
 
     # дата выхода и сколько осталось
-    assert pg.inner_text('#mDate').startswith('30 сентября'), 'в плитке не та дата: ' + pg.inner_text('#mDate')
+    assert pg.inner_text('#mDate').startswith(ru(7)), 'в плитке не та дата: ' + pg.inner_text('#mDate')
     left = pg.inner_text('#hpLeft')
     assert 'через' in left and 'дн' in left, 'нет срока до выхода: ' + left
     print('плитка выхода:', pg.inner_text('#mDate'), '·', left)
