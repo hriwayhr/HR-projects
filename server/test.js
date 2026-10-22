@@ -42,13 +42,15 @@ test('сервер: вход по паролю, данные из файла, з
     await new Promise((ok, no) => { p.stdout.on('data', d => /слушают/.test(d) && ok()); p.on('exit', c => no(new Error('вышел ' + c))); });
     const base = 'http://localhost:8798', post = (u, b) => fetch(base + u, { method: 'POST', headers: { 'X-HR': '1', 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
     assert.ok(!fs.existsSync(path.join(data, 'import.html')));   // загружен и удалён
-    assert.match(await (await fetch(base + '/')).text(), /window\.HR_LOCAL = true/);
+    assert.match(await (await fetch(base + '/')).text(), /window\.HR_SERVER = true/);   // на «/» — портал с общим входом
+    assert.equal((await fetch(base + '/metrics', { redirect: 'manual' })).status, 302);    // метрики — только после входа
     assert.equal((await post('/api/import-initial', { docs: seed.data })).status, 401);   // со страницы на сервере — нельзя
     const me = await (await fetch(base + '/api/me')).json();
     assert.equal(me.empty, undefined);
     const ok = await post('/api/plogin', { login: 'Yulia@Example.ru', password: 'Secret-1' });
     assert.equal(ok.status, 200);
     const cookie = ok.headers.get('set-cookie').split(';')[0];
+    assert.match(await (await fetch(base + '/metrics', { headers: { Cookie: cookie } })).text(), /window\.HR_LOCAL = true; window\.HR_PORTAL = true/);
     const sync = await (await fetch(base + '/api/sync', { headers: { Cookie: cookie } })).json();
     assert.ok(sync.docs.some(d => d.path === 'months/y_2026-10'));
     for (let i = 0; i < 10; i++) assert.equal((await post('/api/plogin', { login: 'yulia@example.ru', password: 'bad' })).status, 401);
@@ -98,7 +100,7 @@ test('сервер: администратор заменяет данные ж�
   const sha = (s, p) => crypto.createHash('sha256').update(s + '::' + p).digest('hex');
   // сегодня: данные из версии для ПК — Юля и старая вакансия
   const seed = { data: { 'config/team': { people: { y: { name: 'Юля', login: 'yulia', salt: 's1', hash: sha('s1', 'Y-1'), admin: true }, a: { name: 'Анна', login: 'anna' } } },
-    'vacancies/old': { title: 'Старая', manager: 'Юля' } } };
+    'vacancies/old': { title: 'Старая', manager: 'Юля' }, 'employees/IW-AAAA': { code: 'IW-AAAA', firstName: 'Новичок' } } };
   fs.writeFileSync(path.join(data, 'import.html'), '<script>\n  var SEED = ' + JSON.stringify(seed) + ';\n  var TEMPLATE = "";</script>');
   // завтра: журналы двух ПК из «Обменника» — у Анны появился пароль
   const jdir = fs.mkdtempSync(path.join(os.tmpdir(), 'hr-obm-'));
@@ -121,7 +123,7 @@ test('сервер: администратор заменяет данные ж�
     assert.ok(a);
     assert.equal((await post('/api/replace-data', { files }, a)).status, 404);   // не администратор — нельзя
     const docs = (await (await fetch(base + '/api/sync', { headers: { Cookie: y } })).json()).docs.map(d => d.path).sort();
-    assert.deepEqual(docs, ['config/team', 'months/a_2026-10']);   // старая вакансия ушла, журналы — целиком
+    assert.deepEqual(docs, ['config/team', 'employees/IW-AAAA', 'months/a_2026-10']);   // старая вакансия ушла, журналы — целиком; пребординг портала цел
   } finally { p.kill(); }
 });
 
@@ -153,4 +155,63 @@ test('отпуск с передачей: коллега видит и ведё�
   await store.tx('vacations/y', () => ({ list: [{ from: add(-6), to: add(-1), sub: 'a' }] }));
   s = await sync(); assert.deepEqual(s.docs.map(d => d.path).filter(p => p.startsWith('vacancies/')), []);
   assert.equal(await put({ title: 'Логист', manager: 'Немчинова', status: 'активна' }), 403);
+});
+
+test('портал: один вход, роли администратор / HR-менеджер / сотрудник', async () => {
+  process.env.PORTAL_SRC = path.join(__dirname, '..', 'src', 'iway-portal.html');
+  delete require.cache[require.resolve('../cloud/function/index')];
+  const { forTests } = require('../cloud/function/index');
+  const crypto = require('crypto'), sha = (s, p) => crypto.createHash('sha256').update(s + '::' + p).digest('hex');
+  const store = forTests.memoryStore();
+  const h = forTests.makeHandler(store, forTests.config({ LOCAL: '1', SESSION_SECRET: 's'.repeat(48) }));
+  await store.tx('config/team', () => ({ people: { y: { name: 'Юлия', login: 'yulia', salt: 's1', hash: sha('s1', 'Y-1'), admin: true },
+    a: { name: 'Анна', surname: 'Шулятицкая', login: 'anna', email: 'anna@iway.ru', salt: 's2', hash: sha('s2', 'A-2') } } }));
+  await store.tx('employees/IW-AAAA', () => ({ code: 'IW-AAAA', login: 'new.person', email: 'n.person@iway.ru', firstName: 'Ника', lastName: 'Новая', salt: 's3', hash: sha('s3', 'N-3'), offer: { salary: 1 } }));
+  await store.tx('employees/IW-BBBB', () => ({ code: 'IW-BBBB', firstName: 'Другой' }));
+  await store.tx('config/departments', () => ({ list: [{ name: 'Логистика' }] }));
+  await store.tx('config/templates', () => ({ tpl: { offer: {} } }));
+  await store.tx('months/a_2026-10', () => ({ person: 'a', month: '2026-10', days: {} }));
+  const call = (method, url, cookie, body) => h({ httpMethod: method, url, headers: Object.assign({ 'x-hr': '1' }, cookie ? { cookie } : {}), body: body && JSON.stringify(body) });
+  const login = async (l, pw) => { const r = await call('POST', '/api/plogin', null, { login: l, password: pw }); return r.statusCode === 200 ? r.multiValueHeaders['Set-Cookie'][0].split(';')[0] : null; };
+  const paths = async c => JSON.parse((await call('GET', '/api/sync', c)).body).docs.map(d => d.path).sort();
+  // как страница: base — документ, каким его видели; сервер применяет только правку поверх
+  const put = async (c, p, data, base) => (await call('POST', '/api/doc', c, { path: p, op: 'set', data, base: base || null })).statusCode;
+
+  // сотрудник: входит кодом, логином или почтой; видит свою карточку без пароля и справочник отделов
+  assert.ok(await login('iw-aaaa', 'N-3') && await login('n.person@iway.ru', 'N-3'));
+  const e = await login('new.person', 'N-3');
+  const me = JSON.parse((await call('GET', '/api/me', e)).body);
+  assert.deepEqual([me.role, me.code, me.name], ['employee', 'IW-AAAA', 'Ника Новая']);
+  assert.deepEqual(await paths(e), ['config/departments', 'employees/IW-AAAA']);
+  const own = JSON.parse((await call('GET', '/api/sync', e)).body).docs.find(d => d.path === 'employees/IW-AAAA').data;
+  assert.equal(own.hash, undefined);
+  assert.equal(await put(e, 'employees/IW-AAAA', Object.assign({}, own, { progress: { day1: true } }), own), 200);   // свои шаги — можно
+  assert.equal((await store.get('employees/IW-AAAA')).hash, sha('s3', 'N-3'));                                 // пароль при этом цел
+  assert.equal(await put(e, 'employees/IW-AAAA', Object.assign({}, own, { offer: { salary: 2 } }), own), 403);    // оффер — только HR
+  assert.equal(await put(e, 'employees/IW-BBBB', { code: 'IW-BBBB' }), 403);
+  assert.equal((await h({ httpMethod: 'GET', url: '/metrics', headers: { cookie: e } })).statusCode, 302);  // метрики сотруднику закрыты
+
+  // HR-менеджер: входит почтой, правит пребординг целиком, в метриках — как рекрутер (своё), настройки — нет
+  const a = await login('anna@iway.ru', 'A-2');
+  assert.equal(JSON.parse((await call('GET', '/api/me', a)).body).role, 'hr');
+  assert.deepEqual(await paths(a), ['config/departments', 'config/team', 'config/templates', 'employees/IW-AAAA', 'employees/IW-BBBB', 'months/a_2026-10']);
+  assert.equal(await put(a, 'employees/IW-BBBB', { code: 'IW-BBBB', firstName: 'Другой', dept: 'Логистика' }), 200);
+  assert.equal(await put(a, 'config/templates', { tpl: { offer: { subj: 'x' } } }), 200);
+  assert.equal(await put(a, 'employees/IW-CCCC', { code: 'IW-CCCC', login: 'yulia' }), 403);   // логин занят командой
+  assert.equal(await put(a, 'employees/IW-DDDD', { code: 'IW-XXXX' }), 403);
+  assert.equal(await put(a, 'config/team', { people: {} }), 403);
+  assert.equal((await h({ httpMethod: 'GET', url: '/metrics', headers: { cookie: a } })).statusCode, 200);
+  assert.equal((await call('POST', '/api/import-preboard', a, { docs: {} })).statusCode, 404);
+
+  // администратор: переносит пребординг из прежнего артефакта; учётные записи admins/* не переносятся
+  const y = await login('yulia', 'Y-1');
+  assert.equal(JSON.parse((await call('GET', '/api/me', y)).body).role, 'admin');
+  const r = await call('POST', '/api/import-preboard', y, { docs: { 'employees/IW-EEEE': { code: 'IW-EEEE' }, 'config/page': { sections: {} }, 'admins/x@iway.ru': { hash: 'h' }, 'months/y_2026-10': { person: 'y' } } });
+  assert.equal(JSON.parse(r.body).docs, 2);
+  assert.equal(await store.get('admins/x@iway.ru'), null);
+  assert.equal(await store.get('months/y_2026-10'), null);
+
+  // удалили карточку — вход сотрудника закрыт сразу
+  await store.tx('employees/IW-AAAA', () => null);
+  assert.equal((await call('GET', '/api/me', e)).statusCode, 401);
 });

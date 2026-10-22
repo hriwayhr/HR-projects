@@ -247,7 +247,7 @@
   <header>
     <div class="logo" role="img" aria-label="i’way"></div>
     <h1>HR-метрики</h1>
-    <div class="me" id="me" hidden><span class="role" id="meRole"></span><b id="meName"></b><button class="btn ghost sm" id="logout">Выйти</button></div>
+    <div class="me" id="me" hidden><a class="btn ghost sm" id="toPortal" href="/" hidden>Портал</a><span class="role" id="meRole"></span><b id="meName"></b><button class="btn ghost sm" id="logout">Выйти</button></div>
     <nav role="tablist" id="tabs"></nav>
     <nav role="tablist" id="subTabs" class="sub" hidden>
       <button role="tab" id="sub_team" data-view="team">Команда</button>
@@ -558,6 +558,7 @@ var db = null, isOwner = false;
 var CLOUD = !!window.HR_CLOUD || !!window.HR_LOCAL, cloudEmail = null;
 // Локальная версия (Windows, сетевая папка): тот же сервер, но на этом ПК и вход по логину и паролю
 var LOCAL = !!window.HR_LOCAL, YA = CLOUD && !LOCAL, localEmpty = false;
+if(window.HR_PORTAL) $('toPortal').hidden = false;
 var team = {}, teamLoaded = false; // id → {name, surname, login, salt, hash, order, admin, recruiter, archived}
 var metrics = null;                // [{k, t, g, off, custom, since}] из config/metrics; null — встроенный набор
 // С какой даты показателю можно доверять: до неё данных нет — показываем «—», а не ноль, и не сравниваем.
@@ -2423,6 +2424,8 @@ function cloudStart(){
   $('offline').textContent = LOCAL && /^(localhost|127\.)/.test(location.hostname) ? 'Программа на этом ПК не отвечает — запустите «Запустить HR-метрики» снова.' : 'Сервер недоступен — данные не загрузились. Обновите страницу через минуту.';
   if(LOCAL) return fetch('/api/me', {credentials:'same-origin'}).then(function(r){ return r.json().then(function(j){ return r.ok ? j : (localEmpty = !!j.empty, null); }); }).then(function(m){
     session = m ? {id:m.pid} : null;
+    // в портале вход общий — на его странице
+    if(!session && window.HR_PORTAL){ location.replace('/'); return new Promise(function(){}); }
     return session ? cloudDb() : null;
   });
   $('yaBtn').onclick = function(){ location.href = '/api/login'; };

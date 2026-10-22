@@ -25,16 +25,21 @@ function config(env = process.env) {
   };
 }
 
-// Страница — src/hr-metrics.html как есть; здесь она получает документ и флаг облачного режима
-let PAGE = null;
-function pageHtml(local) {
-  if (!PAGE) {
-    const raw = fs.readFileSync(process.env.PAGE_SRC || path.join(__dirname, 'static', 'page.html'), 'utf8');
-    PAGE = '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>' +
-      '<script>window.' + (local ? 'HR_LOCAL' : 'HR_CLOUD') + ' = true;</script>' + raw + '</body></html>';
+// Страница — src/hr-metrics.html как есть; здесь она получает документ и флаг облачного режима.
+// Если рядом лежит портал (src/iway-portal.html → static/portal.html), он открывается на «/» с общим входом, а метрики — на «/metrics».
+const PORTAL_SRC = process.env.PORTAL_SRC || path.join(__dirname, 'static', 'portal.html');
+const PAGES = {};
+function pageHtml(local, which = 'metrics') {
+  if (!PAGES[which]) {
+    const portal = fs.existsSync(PORTAL_SRC);
+    const raw = fs.readFileSync(which === 'portal' ? PORTAL_SRC : process.env.PAGE_SRC || path.join(__dirname, 'static', 'page.html'), 'utf8');
+    const flags = which === 'portal' ? 'window.HR_SERVER = true;' : 'window.' + (local ? 'HR_LOCAL' : 'HR_CLOUD') + ' = true;' + (portal ? ' window.HR_PORTAL = true;' : '');
+    PAGES[which] = '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>' +
+      '<script>' + flags + '</script>' + raw + '</body></html>';
   }
-  return PAGE;
+  return PAGES[which];
 }
+const portalOn = cfg => cfg.local && fs.existsSync(PORTAL_SRC);
 
 const BASE_HEADERS = {
   'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
@@ -54,9 +59,9 @@ function respond(status, body, headers = {}, extra = {}) {
 const json = (status, body) => respond(status, body);
 const redirect = (to, cookies) => respond(302, '', { Location: to }, cookies ? { multiValueHeaders: { 'Set-Cookie': cookies } } : {});
 
-function page(local) {
+function page(local, which) {
   const nonce = crypto.randomBytes(16).toString('base64');
-  const html = pageHtml(local).replace(/<script>/g, '<script nonce="' + nonce + '">');
+  const html = pageHtml(local, which).replace(/<script>/g, '<script nonce="' + nonce + '">');
   return respond(200, html, {
     'Content-Type': 'text/html; charset=utf-8',
     'Content-Security-Policy': "default-src 'none'; script-src 'nonce-" + nonce + "'; style-src 'unsafe-inline'; img-src 'self' data:; font-src data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
@@ -69,6 +74,11 @@ async function currentUser(cfg, store, headers) {
   const email = auth.sessionEmail(cfg.sessionSecret, headers);
   if (!email) return null;
   const team = await store.get('config/team');
+  // новичок портала: в сессии «emp:<код>»; удалили карточку — доступа нет сразу
+  if (email.startsWith('emp:')) {
+    const code = email.slice(4), rec = cfg.local && /^[A-Za-z0-9_-]{1,100}$/.test(code) ? await store.get('employees/' + code) : null;
+    return rec ? { pid: email, email, admin: false, role: 'employee', code, name: [rec.firstName, rec.lastName].filter(Boolean).join(' '), people: (team || {}).people || {}, vacations: {} } : null;
+  }
   const user = acl.userByEmail((team || {}).people, email, cfg.local ? 'login' : 'email');
   if (!user) return null;
   const people = (team || {}).people || {}, vacations = {};
@@ -178,7 +188,14 @@ async function passwordLogin(cfg, store, b) {
   if (now - allFails.at > LOCK_MS) allFails = { n: 0, at: now };
   if ((f && f.n >= 10 && now - f.at < LOCK_MS) || allFails.n >= 100)
     return json(429, { error: 'Слишком много неудачных попыток — подождите 15 минут.' });
-  const pid = Object.keys(people).find(p => acl.norm(people[p].login) === login), t = pid && people[pid];
+  // команда — по логину или почте; иначе новичок портала — по логину, рабочей почте или коду доступа
+  const pid = Object.keys(people).find(p => acl.norm(people[p].login) === login) || Object.keys(people).find(p => people[p].login && acl.norm(people[p].email) === login);
+  let t = pid && people[pid], session = t && acl.norm(t.login);
+  if (!t && portalOn(cfg) && login) {
+    const emps = (await store.changes(0)).filter(d => d.path.startsWith('employees/') && d.data).map(d => d.data);
+    t = emps.find(e => acl.norm(e.login) === login) || emps.find(e => acl.norm(e.email) === login) || emps.find(e => acl.norm(e.code) === login);
+    session = t && 'emp:' + t.code;
+  }
   const want = Buffer.from(String((t && t.hash) || '')), got = Buffer.from(crypto.createHash('sha256').update(String((t && t.salt) || '') + '::' + String(b.password || '')).digest('hex'));
   if (!t || !t.hash || want.length !== got.length || !crypto.timingSafeEqual(want, got)) {
     FAILS.set(login, { n: (f && now - f.at < LOCK_MS ? f.n : 0) + 1, at: now }); allFails.n++;
@@ -188,7 +205,7 @@ async function passwordLogin(cfg, store, b) {
   }
   FAILS.delete(login);
   if (t.archived) return json(403, { error: 'Учётная запись в архиве — обратитесь к администратору.' });
-  return respond(200, { ok: true }, {}, { multiValueHeaders: { 'Set-Cookie': [auth.sessionCookie(cfg.sessionSecret, login)] } });
+  return respond(200, { ok: true }, {}, { multiValueHeaders: { 'Set-Cookie': [auth.sessionCookie(cfg.sessionSecret, session)] } });
 }
 // Только в пустую базу: данные из версии для ПК или резервной копии; нужен администратор с паролем
 // Возвращает число загруженных документов или текст ошибки
@@ -221,10 +238,24 @@ async function replaceFromJournals(store, user, b) {
   if (!Object.keys(people).some(p => people[p].admin && people[p].login && people[p].hash && !people[p].archived))
     return json(400, { error: 'В файлах нет команды с администратором и паролем — выберите все файлы changes-….jsonl из папки data.' });
   const keep = Object.keys(docs).filter(p => acl.PATH_RE.test(p) && isObj(docs[p]));
-  const old = (await store.changes(0)).filter(d => d.data !== null && !keep.includes(d.path)).map(d => d.path);
+  // пребординг портала в журналах локальной версии не бывает — его не трогаем
+  const old = (await store.changes(0)).filter(d => d.data !== null && !keep.includes(d.path) && !acl.isPreboard(d.path)).map(d => d.path);
   for (const p of old) await store.tx(p, () => null, user.email);
   for (const p of keep) await store.tx(p, () => JSON.parse(JSON.stringify(docs[p])), user.email);
   return json(200, { ok: true, docs: keep.length, removed: old.length });
+}
+// Перенос пребординга из прежнего артефакта: администратор загружает файл с документами employees/* и config/departments|page|templates.
+// Учётные записи HR (admins/*) не переносятся: вход HR — из «Команды».
+async function importPreboard(store, user, b) {
+  const docs = isObj(b.docs) ? b.docs : {};
+  const paths = Object.keys(docs).filter(p => acl.PATH_RE.test(p) && acl.isPreboard(p) && isObj(docs[p]));
+  if (!paths.length) return json(400, { error: 'В файле нет данных пребординга.' });
+  for (const p of paths) {
+    const err = acl.writeError(user, p, null, docs[p], user.people);
+    if (err) return json(400, { error: p + ': ' + err });
+  }
+  for (const p of paths) await store.tx(p, () => JSON.parse(JSON.stringify(docs[p])), user.email);
+  return json(200, { ok: true, docs: paths.length });
 }
 async function importInitial(store, b) {
   const r = await importDocs(store, b.docs);
@@ -237,7 +268,12 @@ function makeHandler(store, cfg, fetchFn) {
       if (event && (event.messages || (event.event_metadata && /Timer/.test(event.event_metadata.event_type || '')))) return await backup(cfg, store, context, fetchFn);
       // API Gateway: в url — настоящий адрес запроса, в path — шаблон маршрута ("/{proxy+}")
       const method = event.httpMethod, url = String(event.url || event.path || '/').split('?')[0], headers = event.headers || {}, query = event.queryStringParameters || {};
-      if (method === 'GET' && url === '/') return page(cfg.local);
+      if (method === 'GET' && url === '/') return page(cfg.local, portalOn(cfg) ? 'portal' : 'metrics');
+      if (method === 'GET' && url === '/metrics' && portalOn(cfg)) {
+        // метрики — только команде; новичок и гость попадают на вход портала
+        const u = await currentUser(cfg, store, headers);
+        return u && u.role !== 'employee' ? page(cfg.local, 'metrics') : redirect('/');
+      }
       if (!cfg.local && method === 'GET' && url === '/api/login') return auth.loginRedirect(cfg);
       if (!cfg.local && method === 'GET' && url === '/api/callback') return await callback(cfg, store, query, headers, fetchFn);
       if (!url.startsWith('/api/')) return respond(404, 'Не найдено');
@@ -248,8 +284,10 @@ function makeHandler(store, cfg, fetchFn) {
       if (cfg.webImport && method === 'POST' && url === '/api/import-initial') return await importInitial(store, body() || {});
       const user = await currentUser(cfg, store, headers);
       if (!user) return json(401, { error: 'Нужно войти.', empty: cfg.webImport ? (await store.count()) === 0 : undefined });
+      if (portalOn(cfg) && user.admin && method === 'POST' && url === '/api/import-preboard') return await importPreboard(store, user, body() || {});
       if (cfg.local && user.admin && method === 'POST' && url === '/api/replace-data') return await replaceFromJournals(store, user, body() || {});
-      if (method === 'GET' && url === '/api/me') return json(200, { pid: user.pid, email: user.email, admin: user.admin });
+      if (method === 'GET' && url === '/api/me') return json(200, { pid: user.pid, email: user.email, admin: user.admin, role: user.role, code: user.code,
+        name: user.name || [(user.people[user.pid] || {}).name, (user.people[user.pid] || {}).surname].filter(Boolean).join(' ') });
       if (method === 'GET' && url === '/api/sync') return json(200, await sync(user, store, Math.max(0, Number(query.since) || 0)));
       if (method === 'POST' && url === '/api/doc') {
         const b = body();

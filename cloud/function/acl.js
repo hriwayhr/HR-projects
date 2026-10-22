@@ -2,9 +2,16 @@
 // Права доступа к документам. Сервер — единственное место, где они проверяются:
 // страница может показывать что угодно, но получит и запишет только разрешённое здесь.
 //
-// user = {pid, email, admin} — пользователь из config/team, вошедший через Яндекс ID.
+// user = {pid, email, admin, role} — человек из config/team (role: admin | hr) или новичок из employees (role: employee, code).
+// Портал: HR Preboard (employees, config/departments|page|templates) — правят администратор и HR, новичок видит и отмечает только своё;
+// HR-метрики (остальное) — права команды как были: администратор всё, рекрутер своё.
 
-const PATH_RE = /^(config|months|vacations|vacancies|rejections)\/[A-Za-z0-9_-]{1,100}$/;
+const PATH_RE = /^(config|months|vacations|vacancies|rejections|employees)\/[A-Za-z0-9_-]{1,100}$/;
+const PRE_CONFIG = ['departments', 'page', 'templates'];
+const isPreboard = path => { const [c, id] = path.split('/'); return c === 'employees' || (c === 'config' && PRE_CONFIG.includes(id)); };
+// что новичок отмечает на своей странице сам; остальное в его карточке (пароль, логин, оффер) — только HR
+const EMP_FIELDS = ['openedAt', 'firstTime', 'progress', 'cardChoice', 'docsSentAt', 'updatedAt'];
+const sameJson = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
 const MAX_DOC = 256 * 1024;
 
 function norm(s) { return String(s || '').trim().toLowerCase(); }
@@ -24,7 +31,7 @@ function userByEmail(people, email, field = 'email') {
   const e = norm(email);
   const pid = Object.keys(people || {}).find(p => norm(people[p][field]) === e);
   if (!pid || people[pid].archived) return null;
-  return { pid, email: e, admin: !!people[pid].admin, field };
+  return { pid, email: e, admin: !!people[pid].admin, role: people[pid].admin ? 'admin' : 'hr', field };
 }
 
 // Отпуск с передачей вакансий: в дни отпуска владельца его вакансии ведёт sub из записи отпуска (vacations/<pid>.list[].sub).
@@ -46,6 +53,11 @@ const PUBLIC_PERSON = ['name', 'surname', 'order', 'admin', 'recruiter', 'archiv
 // Что пользователь увидит из документа; null — ничего
 function readable(user, path, data, people) {
   const [coll, id] = path.split('/');
+  if (user.role === 'employee') {
+    if (coll === 'employees' && id === user.code) { const out = Object.assign({}, data); delete out.hash; delete out.salt; return out; }
+    return coll === 'config' && (id === 'departments' || id === 'page') ? data : null;
+  }
+  if (isPreboard(path)) return data;
   if (coll === 'config' && id === 'team') {
     if (user.admin) return data;
     const out = {};
@@ -73,6 +85,20 @@ function writeError(user, path, prev, next, people) {
     if (Buffer.byteLength(JSON.stringify(next)) > MAX_DOC) return 'Документ больше 256 КБ.';
   }
   const [coll, id] = path.split('/');
+  if (user.role === 'employee') {
+    if (coll !== 'employees' || id !== user.code || !prev || !next) return 'Нет прав.';
+    const keys = new Set(Object.keys(prev).concat(Object.keys(next)));
+    for (const k of keys) if (!EMP_FIELDS.includes(k) && !sameJson(prev[k], next[k])) return 'Можно отмечать только свои шаги.';
+    return '';
+  }
+  if (coll === 'employees') {
+    if (!next) return '';
+    if (next.code !== id) return 'Код не совпадает с адресом.';
+    // логин новичка не должен совпадать со входом команды: вход сначала ищет команду, и новичок бы не вошёл
+    const taken = [norm(next.login), norm(next.email)].filter(Boolean).find(v => Object.keys(people || {}).some(p => norm(people[p].login) === v || norm(people[p].email) === v));
+    return taken ? 'Логин «' + taken + '» уже занят в команде.' : '';
+  }
+  if (coll === 'config' && PRE_CONFIG.includes(id)) return '';
   if (coll === 'config') {
     if (!user.admin) return 'Настройки меняет администратор.';
     if (id === 'team') return teamError(user, next);
@@ -122,4 +148,4 @@ function teamError(user, next) {
   return '';
 }
 
-module.exports = { ownerOf, userByEmail, readable, writeError, norm, PATH_RE, ownersFor, coverOf, todayMsk };
+module.exports = { ownerOf, userByEmail, readable, writeError, norm, PATH_RE, ownersFor, coverOf, todayMsk, isPreboard };

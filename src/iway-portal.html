@@ -1647,8 +1647,66 @@
     };
   }
 
+  /* ——— сервер портала: вход и права проверяет сервер, страница получает только разрешённое ———
+     Тот же интерфейс, что у базы артефакта (collection/where/doc), поэтому dbStore работает поверх него как есть. */
+  function serverDb(){
+    var cache = {}, ver = 0;
+    function req(method, url, body){
+      return fetch(url, {method:method, credentials:'same-origin', headers:Object.assign({'X-HR':'1'}, body ? {'Content-Type':'application/json'} : {}), body:body ? JSON.stringify(body) : undefined})
+        .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error || 'Сервер не ответил.'); return j; }); });
+    }
+    function sync(){
+      /* перекрытие в 5 секунд — на случай расхождения часов */
+      return req('GET', '/api/sync?since=' + Math.max(0, ver - 5e6)).then(function(r){
+        r.docs.forEach(function(d){ if(d.data) cache[d.path] = d.data; else delete cache[d.path]; });
+        ver = Math.max(ver, r.ver);
+      });
+    }
+    function snap(path){ var d = cache[path]; return {exists:!!d, data:function(){ return d; }}; }
+    function query(c, field, val){
+      var q = {
+        where:function(f, op, v){ return query(c, f, v); },
+        limit:function(){ return q; },
+        get:function(){ return sync().then(function(){
+          return {docs:Object.keys(cache).sort().filter(function(p){ return p.indexOf(c + '/') === 0 && (!field || cache[p][field] === val); }).map(snap)};
+        }); },
+        onSnapshot:function(cb){ var t = setInterval(function(){ if(!document.hidden) q.get().then(cb, function(){}); }, 60000); return function(){ clearInterval(t); }; }
+      };
+      return q;
+    }
+    /* base — документ, как его видела страница: сервер применит только сделанные здесь правки */
+    function write(path, op, data){ return req('POST', '/api/doc', {path:path, op:op, data:data, base:cache[path] || null}).then(sync); }
+    return {
+      collection:function(c){ return query(c); },
+      doc:function(path){ return {
+        get:function(){ return sync().then(function(){ return snap(path); }); },
+        set:function(d){ return write(path, 'set', d); },
+        delete:function(){ return write(path, 'delete'); }
+      }; }
+    };
+  }
+  function serverStore(){
+    var s = dbStore(serverDb());
+    s.mode = 'server';
+    /* учётные записи HR — в «Команде» HR-метрик, а не в admins/* */
+    s.getAdmin = function(){ var m = state.server; return Promise.resolve(m && m.role !== 'employee' ? {email:m.email, name:m.name} : null); };
+    s.listAdmins = function(){ return s.getAdmin().then(function(a){ return a ? [a] : []; }); };
+    return s;
+  }
+
   function boot(){
     var tasks;
+    if(window.HR_SERVER){
+      return fetch('/api/me', {credentials:'same-origin'}).then(function(r){ return r.ok ? r.json() : null; }, function(){ return null; }).then(function(me){
+        state.server = me; state.store = serverStore(); state.mode = 'server';
+        if(!me) return;
+        if(me.role !== 'employee') hideHrAccounts();
+        return Promise.all([state.store.getDepartments(), state.store.listAdmins(), state.store.getPage(),
+          me.role === 'employee' ? {} : state.store.getTemplates()]).then(function(r){
+          state.depts = r[0] || []; state.admins = r[1] || []; state.page = r[2] || {}; state.templates = r[3] || {};
+        });
+      });
+    }
     if(window.claude && typeof window.claude.use === 'function'){
       tasks = [window.claude.use('db').catch(function(){ return null; }), window.claude.use('user').catch(function(){ return null; })];
     } else { tasks = [Promise.resolve(null), Promise.resolve(null)]; }
@@ -1704,6 +1762,11 @@
 
   /* ——— сессия ——— */
   function session(v){
+    if(window.HR_SERVER){
+      if(v === null && state.server){ state.server = null; fetch('/api/logout', {method:'POST', credentials:'same-origin', headers:{'X-HR':'1'}}); }
+      var m = state.server;
+      return m ? {kind:m.role === 'employee' ? 'emp' : 'hr', id:m.role === 'employee' ? m.code : m.email} : null;
+    }
     try{
       if(v === undefined){ var raw = localStorage.getItem('iway_session'); return raw ? JSON.parse(raw) : null; }
       if(v === null) localStorage.removeItem('iway_session'); else localStorage.setItem('iway_session', JSON.stringify(v));
@@ -1723,15 +1786,15 @@
      Уровень доступа решает, что человек вообще видит: у новичка это одна своя
      страница, у HR — разделы портала. Метрики подбора закрыты для всех, кроме
      HR, и в списке у остальных не появляются вовсе. */
-  var METRICS_URL = 'https://claude.ai/artifact/LT73wVkVx9bYcwANYwPVt1';
+  var METRICS_URL = window.HR_SERVER ? '/metrics' : 'https://claude.ai/artifact/LT73wVkVx9bYcwANYwPVt1';
   var SECTIONS = [
     {key:'pre', roles:['hr'], tag:'Пребординг',
      title:'Доступы и адаптация', go:'Открыть панель HR',
      desc:'Офферы и приглашения, доступы новичкам, документы, шаблоны писем и страница сотрудника.',
      open:function(){ location.hash = 'admin'; }},
-    {key:'metrics', roles:['hr'], tag:'Подбор', ext:true,
+    {key:'metrics', roles:['hr'], tag:'Подбор', ext:!window.HR_SERVER,
      title:'HR-метрики', go:'Открыть метрики',
-     desc:'Дашборд дня, сводка по команде подбора, вакансии и отпуска. Пока открывается отдельной страницей.',
+     desc:'Дашборд дня, сводка по команде подбора, вакансии и отпуска.' + (window.HR_SERVER ? '' : ' Пока открывается отдельной страницей.'),
      href:METRICS_URL}
   ];
   /* У новичка раздел один — своя страница, поэтому экран разделов он не видит:
@@ -1740,7 +1803,10 @@
     var sess = session();
     return sess ? (sess.kind === 'hr' ? 'hr' : 'emp') : null;
   }
-  function roleLabel(role){ return role === 'hr' ? 'HR' : 'сотрудник'; }
+  function roleLabel(role){
+    if(state.server) return {admin:'администратор', hr:'HR-менеджер'}[state.server.role] || 'сотрудник';
+    return role === 'hr' ? 'HR' : 'сотрудник';
+  }
   function sectionsFor(role){
     return SECTIONS.filter(function(sec){ return sec.roles.indexOf(role) > -1; });
   }
@@ -1755,7 +1821,7 @@
     list.forEach(function(sec){
       var card = document.createElement(sec.href ? 'a' : 'button');
       card.className = 'hub-card';
-      if(sec.href){ card.href = sec.href; card.target = '_blank'; card.rel = 'noopener'; }
+      if(sec.href){ card.href = sec.href; if(sec.ext){ card.target = '_blank'; card.rel = 'noopener'; } }
       else card.type = 'button';
       card.setAttribute('data-section', sec.key);
       var r = document.createElement('span'); r.className = 'hub-r'; r.textContent = sec.tag;
@@ -1812,6 +1878,14 @@
     btn.disabled = true;
     var done = function(){ btn.disabled = false; };
     var v = login.toLowerCase();
+    if(window.HR_SERVER){
+      fetch('/api/plogin', {method:'POST', credentials:'same-origin', headers:{'X-HR':'1', 'Content-Type':'application/json'}, body:JSON.stringify({login:v, password:pass})})
+        .then(function(r){ return r.json().then(function(j){
+          if(r.ok){ location.replace(location.pathname); return; }
+          done(); openGate(j.error || 'Не получилось войти.');
+        }); }, function(){ done(); openGate('Сервер не отвечает — попробуй через минуту.'); });
+      return;
+    }
     var asHr = v.indexOf('@') > -1
       ? state.store.getAdmin(v).then(function(rec){
           if(!rec) return null;
@@ -1855,6 +1929,7 @@
     state.store.getEmployee(code).then(function(rec){
       if(!rec){ session(null); openGate(); return; }
       state.rec = rec; renderEmployee(); show('employee');
+      if(state.server && !rec.openedAt){ rec.openedAt = new Date().toISOString(); saveRec(); }
     }).catch(function(){ openGate(); });
   }
   function enterHr(mail, home){
@@ -1877,6 +1952,26 @@
     if(!state.admins.length && state.canEditPage){ state.me = null; openAdmin(); return; }
     history.replaceState(null, '', location.pathname + location.search);
     openGate('Войди под учётной записью HR — этот раздел доступен только HR.');
+  }
+
+  /* На сервере учётные записи HR и администраторов ведутся в «Команде» HR-метрик — вкладка «Администраторы» не нужна.
+     Администратор один раз загружает сюда данные прежнего пребординга (файл .json с документами). */
+  function hideHrAccounts(){
+    $('tabAdmins').hidden = true;
+    if(state.server.role !== 'admin' || $('preImport')) return;
+    var box = document.createElement('div'); box.className = 'notice'; box.id = 'preImport';
+    box.innerHTML = '<b>Учётные записи HR</b> — в HR-метриках → «Команда»: там администратор выдаёт вход и права. ' +
+      'Перенос данных прежнего пребординга: <input type="file" accept=".json" id="preImportFile" aria-label="Файл данных пребординга">';
+    $('adminNotice').parentNode.insertBefore(box, $('adminNotice'));
+    $('preImportFile').addEventListener('change', function(e){
+      var f = e.target.files[0]; if(!f) return;
+      f.text().then(function(t){ return JSON.parse(t); }).then(function(j){
+        return fetch('/api/import-preboard', {method:'POST', credentials:'same-origin', headers:{'X-HR':'1', 'Content-Type':'application/json'}, body:JSON.stringify({docs:j.docs || j})})
+          .then(function(r){ return r.json().then(function(x){ if(!r.ok) throw new Error(x.error); return x; }); });
+      }).then(function(x){ return notify('Данные перенесены', 'Загружено документов: ' + x.docs + '.').then(function(){ location.reload(); }); },
+        function(er){ notify('Не перенесено', er.message || 'Файл не прочитался.'); });
+      e.target.value = '';
+    });
   }
 
   /* ——— панель HR ——— */

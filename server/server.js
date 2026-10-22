@@ -7,6 +7,7 @@ const path = require('path');
 // в Docker код лежит в app/, в репозитории — в cloud/function, а страница — в src/
 const APP = fs.existsSync(path.join(__dirname, 'app')) ? './app' : '../cloud/function';
 if (APP !== './app' && !process.env.PAGE_SRC) process.env.PAGE_SRC = path.join(__dirname, '..', 'src', 'hr-metrics.html');
+if (APP !== './app' && !process.env.PORTAL_SRC) process.env.PORTAL_SRC = path.join(__dirname, '..', 'src', 'iway-portal.html');
 // AUTH=password — вход по почте (логину) и паролю из «Команды», как в версии для ПК; иначе — через Яндекс ID
 const PASSWORD = process.env.AUTH === 'password';
 if (PASSWORD) Object.assign(process.env, { LOCAL: '1', WEB_IMPORT: '0' });
