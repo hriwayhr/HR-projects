@@ -11,6 +11,11 @@ const PRE_CONFIG = ['departments', 'page', 'templates'];
 const isPreboard = path => { const [c, id] = path.split('/'); return c === 'employees' || (c === 'config' && PRE_CONFIG.includes(id)); };
 // что новичок отмечает на своей странице сам; остальное в его карточке (пароль, логин, оффер) — только HR
 const EMP_FIELDS = ['openedAt', 'firstTime', 'progress', 'cardChoice', 'docsSentAt', 'updatedAt'];
+// что можно записать в эти поля: страница пишет только такое — остальное отсекаем, чтобы в карточку не попала разметка или мусор
+const isIso = v => typeof v === 'string' && v.length <= 40 && !isNaN(Date.parse(v));
+const boolMap = v => v !== null && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length <= 100 &&
+  Object.keys(v).every(k => /^[A-Za-z0-9_-]{1,60}$/.test(k) && typeof v[k] === 'boolean');
+const EMP_CHECK = { openedAt: isIso, docsSentAt: isIso, updatedAt: isIso, cardChoice: v => ['', 'need', 'have'].includes(v), progress: boolMap, firstTime: boolMap };
 const sameJson = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
 const MAX_DOC = 256 * 1024;
 
@@ -88,12 +93,17 @@ function writeError(user, path, prev, next, people) {
   if (user.role === 'employee') {
     if (coll !== 'employees' || id !== user.code || !prev || !next) return 'Нет прав.';
     const keys = new Set(Object.keys(prev).concat(Object.keys(next)));
-    for (const k of keys) if (!EMP_FIELDS.includes(k) && !sameJson(prev[k], next[k])) return 'Можно отмечать только свои шаги.';
+    for (const k of keys) {
+      if (!EMP_FIELDS.includes(k)) { if (!sameJson(prev[k], next[k])) return 'Можно отмечать только свои шаги.'; }
+      else if (next[k] !== undefined && !sameJson(prev[k], next[k]) && !EMP_CHECK[k](next[k])) return 'Неверное значение отметки.';
+    }
     return '';
   }
   if (coll === 'employees') {
     if (!next) return '';
     if (next.code !== id) return 'Код не совпадает с адресом.';
+    // без https браузер не умеет SHA-256 и страница записала бы пароль открытым текстом
+    if (next.hash !== undefined && !/^[0-9a-f]{64}$/.test(String(next.hash))) return 'Пароль не зашифрован — откройте портал по https.';
     // логин новичка не должен совпадать со входом команды: вход сначала ищет команду, и новичок бы не вошёл
     const taken = [norm(next.login), norm(next.email)].filter(Boolean).find(v => Object.keys(people || {}).some(p => norm(people[p].login) === v || norm(people[p].email) === v));
     return taken ? 'Логин «' + taken + '» уже занят в команде.' : '';

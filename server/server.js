@@ -15,7 +15,7 @@ const { create, config, importDocs, docsFromFile } = require(APP + '/index');
 const { sqliteStore, logStore, dailyBackup } = require(APP + '/store');
 
 const DATA = process.env.DATA_DIR || '/data', PORT = +process.env.PORT || 8080, KEEP = +process.env.BACKUP_KEEP_DAYS || 30;
-const MAX_BODY = 16 * 1024 * 1024;   // журналы локальной версии при переносе данных
+const MAX_BODY = 16 * 1024 * 1024, MAX_SMALL = 1024 * 1024;   // 16 МБ — только журналы локальной версии при переносе данных, остальное — до 1 МБ
 const cfg = config();
 const missing = (PASSWORD ? ['SESSION_SECRET'] : ['SESSION_SECRET', 'OAUTH_CLIENT_ID', 'OAUTH_CLIENT_SECRET', 'BASE_URL', 'ALLOWED_DOMAINS', 'ADMIN_EMAILS']).filter(k => !process.env[k]);
 if (missing.length || cfg.sessionSecret.length < 32) { console.error('Заполните в .env: ' + (missing.join(', ') || 'SESSION_SECRET (от 32 символов)')); process.exit(1); }
@@ -47,11 +47,12 @@ async function importFromDisk() {
 
 const server = http.createServer((req, res) => {
   const chunks = []; let size = 0;
-  req.on('data', c => { size += c.length; if (size > MAX_BODY) { res.writeHead(413).end(); req.destroy(); } else chunks.push(c); });
+  const limit = req.url.split('?')[0] === '/api/replace-data' ? MAX_BODY : MAX_SMALL;
+  req.on('data', c => { size += c.length; if (size > limit) { res.writeHead(413).end(); req.destroy(); } else chunks.push(c); });
   req.on('end', async () => {
     if (res.writableEnded) return;
     const u = new URL(req.url, 'http://local');
-    const r = await handler({ httpMethod: req.method, url: req.url, headers: req.headers, queryStringParameters: Object.fromEntries(u.searchParams), body: Buffer.concat(chunks).toString() }, {});
+    const r = await handler({ httpMethod: req.method, url: req.url, headers: req.headers, requestContext: { identity: { sourceIp: req.socket.remoteAddress } }, queryStringParameters: Object.fromEntries(u.searchParams), body: Buffer.concat(chunks).toString() }, {});
     const h = Object.assign({}, r.headers);
     if (r.multiValueHeaders && r.multiValueHeaders['Set-Cookie']) h['Set-Cookie'] = r.multiValueHeaders['Set-Cookie'];
     res.writeHead(r.statusCode, h); res.end(r.body);

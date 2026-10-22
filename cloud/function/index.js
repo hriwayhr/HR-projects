@@ -71,16 +71,17 @@ function page(local, which) {
 // Пользователь запроса: подпись cookie верна, почта — в команде и не в архиве. Проверяется на каждом запросе,
 // поэтому архивация в «Команде» закрывает доступ сразу, не дожидаясь конца сессии.
 async function currentUser(cfg, store, headers) {
-  const email = auth.sessionEmail(cfg.sessionSecret, headers);
+  let email = auth.sessionEmail(cfg.sessionSecret, headers), mark = null;
   if (!email) return null;
+  if (cfg.local) { [email, mark] = email.split('|'); if (!mark) return null; }
   const team = await store.get('config/team');
   // новичок портала: в сессии «emp:<код>»; удалили карточку — доступа нет сразу
   if (email.startsWith('emp:')) {
     const code = email.slice(4), rec = cfg.local && /^[A-Za-z0-9_-]{1,100}$/.test(code) ? await store.get('employees/' + code) : null;
-    return rec ? { pid: email, email, admin: false, role: 'employee', code, name: [rec.firstName, rec.lastName].filter(Boolean).join(' '), people: (team || {}).people || {}, vacations: {} } : null;
+    return rec && pwMark(rec.hash) === mark ? { pid: email, email, admin: false, role: 'employee', code, name: [rec.firstName, rec.lastName].filter(Boolean).join(' '), people: (team || {}).people || {}, vacations: {} } : null;
   }
   const user = acl.userByEmail((team || {}).people, email, cfg.local ? 'login' : 'email');
-  if (!user) return null;
+  if (!user || (cfg.local && pwMark(team.people[user.pid].hash) !== mark)) return null;
   const people = (team || {}).people || {}, vacations = {};
   // отпуска команды — для прав на вакансии коллеги, которые пользователь ведёт на время его отпуска
   await Promise.all(Object.keys(people).map(async p => { const d = await store.get('vacations/' + p); if (d && Array.isArray(d.list)) vacations[p] = d.list; }));
@@ -179,14 +180,24 @@ async function backup(cfg, store, context, fetchFn = fetch) {
 
 // ---------- локальная версия: вход по паролю и первичная загрузка данных ----------
 // Пароль — тот же SHA-256(salt + '::' + пароль), что выдаёт «Команда»; проверяет сервер, страница хешей не получает.
-// Перебор: после 10 неудачных попыток подряд логин закрыт на 15 минут, после 100 за 15 минут — вход закрыт для всех
-const FAILS = new Map(), LOCK_MS = 15 * 60e3;
-let allFails = { n: 0, at: 0 };
-async function passwordLogin(cfg, store, b) {
-  const people = ((await store.get('config/team')) || {}).people || {}, login = acl.norm(b.login);
-  const now = Date.now(), f = FAILS.get(login);
-  if (now - allFails.at > LOCK_MS) allFails = { n: 0, at: now };
-  if ((f && f.n >= 10 && now - f.at < LOCK_MS) || allFails.n >= 100)
+// Перебор: за 15 минут не больше 20 неудачных попыток с одного адреса и 50 — на один логин со всех адресов.
+// Общего замка нет: иначе любой, набрав неверные пароли, закрыл бы вход всем.
+const FAILS = new Map(), LOCK_MS = 15 * 60e3, IP_MAX = 20, LOGIN_MAX = 50;
+function failsOf(key, now) { const f = FAILS.get(key); return f && now - f.at < LOCK_MS ? f.n : 0; }
+function addFail(key, now) { FAILS.set(key, { n: failsOf(key, now) + 1, at: FAILS.has(key) && now - FAILS.get(key).at < LOCK_MS ? FAILS.get(key).at : now }); }
+// Адрес клиента: за Caddy (адрес из внутренней сети) — последний в X-Forwarded-For, его ставит Caddy; напрямую — адрес соединения
+const PRIVATE_IP = /^(::ffff:)?(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)|^::1$|^f[cd]/;
+function clientIp(event) {
+  const sock = String(((event.requestContext || {}).identity || {}).sourceIp || '');
+  const xff = String(auth.headerOf(event.headers, 'x-forwarded-for') || '').split(',').map(x => x.trim()).filter(Boolean);
+  return (!sock || PRIVATE_IP.test(sock)) && xff.length ? xff[xff.length - 1] : sock;
+}
+// В сессии — отпечаток пароля: сменили пароль — прежние входы (в том числе украденная cookie) больше не действуют
+const pwMark = hash => crypto.createHash('sha256').update('session::' + String(hash || '')).digest('hex').slice(0, 16);
+async function passwordLogin(cfg, store, b, ip) {
+  const people = ((await store.get('config/team')) || {}).people || {}, login = acl.norm(b.login).slice(0, 200);
+  const now = Date.now(), ipKey = 'ip:' + ip, loginKey = 'l:' + login;
+  if (failsOf(ipKey, now) >= IP_MAX || failsOf(loginKey, now) >= LOGIN_MAX)
     return json(429, { error: 'Слишком много неудачных попыток — подождите 15 минут.' });
   // команда — по логину или почте; иначе новичок портала — по логину, рабочей почте или коду доступа
   const pid = Object.keys(people).find(p => acl.norm(people[p].login) === login) || Object.keys(people).find(p => people[p].login && acl.norm(people[p].email) === login);
@@ -198,14 +209,15 @@ async function passwordLogin(cfg, store, b) {
   }
   const want = Buffer.from(String((t && t.hash) || '')), got = Buffer.from(crypto.createHash('sha256').update(String((t && t.salt) || '') + '::' + String(b.password || '')).digest('hex'));
   if (!t || !t.hash || want.length !== got.length || !crypto.timingSafeEqual(want, got)) {
-    FAILS.set(login, { n: (f && now - f.at < LOCK_MS ? f.n : 0) + 1, at: now }); allFails.n++;
-    if (FAILS.size > 10000) FAILS.clear();                 // память не растёт от случайных логинов
+    addFail(ipKey, now); addFail(loginKey, now);
+    if (FAILS.size > 20000) for (const [k, v] of FAILS) if (now - v.at >= LOCK_MS) FAILS.delete(k);   // память не растёт: старые записи — вон
+    if (FAILS.size > 20000) FAILS.clear();
     await new Promise(r => setTimeout(r, 400));             // перебор паролей — медленно
     return json(401, { error: 'Неверный логин или пароль.' });
   }
-  FAILS.delete(login);
+  FAILS.delete(loginKey);   // счётчик адреса не сбрасываем: иначе свой вход обнулял бы перебор чужих паролей
   if (t.archived) return json(403, { error: 'Учётная запись в архиве — обратитесь к администратору.' });
-  return respond(200, { ok: true }, {}, { multiValueHeaders: { 'Set-Cookie': [auth.sessionCookie(cfg.sessionSecret, session)] } });
+  return respond(200, { ok: true }, {}, { multiValueHeaders: { 'Set-Cookie': [auth.sessionCookie(cfg.sessionSecret, session + '|' + pwMark(t.hash))] } });
 }
 // Только в пустую базу: данные из версии для ПК или резервной копии; нужен администратор с паролем
 // Возвращает число загруженных документов или текст ошибки
@@ -280,7 +292,7 @@ function makeHandler(store, cfg, fetchFn) {
       // запись — только со своей страницы: свой заголовок кросс-доменный сайт без разрешения CORS не пошлёт
       if (method !== 'GET' && auth.headerOf(headers, 'x-hr') !== '1') return json(403, { error: 'Запрос не со страницы приложения.' });
       const body = () => { try { return JSON.parse(event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || ''); } catch (e) { return null; } };
-      if (cfg.local && method === 'POST' && url === '/api/plogin') return await passwordLogin(cfg, store, body() || {});
+      if (cfg.local && method === 'POST' && url === '/api/plogin') return await passwordLogin(cfg, store, body() || {}, clientIp(event));
       if (cfg.webImport && method === 'POST' && url === '/api/import-initial') return await importInitial(store, body() || {});
       const user = await currentUser(cfg, store, headers);
       if (!user) return json(401, { error: 'Нужно войти.', empty: cfg.webImport ? (await store.count()) === 0 : undefined });
@@ -324,4 +336,4 @@ module.exports.create = (store, cfg, f) => withLogout(makeHandler(store, cfg, f)
 module.exports.config = config;
 module.exports.importDocs = importDocs;
 module.exports.docsFromFile = docsFromFile;
-module.exports.forTests = { makeHandler: (store, cfg, f) => withLogout(makeHandler(store, cfg, f)), config, memoryStore };
+module.exports.forTests = { makeHandler: (store, cfg, f) => withLogout(makeHandler(store, cfg, f)), config, memoryStore, pwMark };
