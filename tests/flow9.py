@@ -1,10 +1,15 @@
 from playwright.sync_api import sync_playwright
 import pathlib, sys
+from datetime import date, timedelta
+def day(n):
+    """дата относительно сегодня: иначе тесты протухают, когда жёстко
+    зашитый «день выхода» уезжает в прошлое и кабинет открывает другой этап"""
+    return (date.today() + timedelta(days=n)).isoformat()
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 (HERE / 'shots').mkdir(exist_ok=True)
 base = str(HERE) + '/'
-SRC = str(ROOT / 'src' / 'iway-welcome.html')
+SRC = str(ROOT / 'src' / 'iway-portal.html')
 import json, hashlib, re
 html = pathlib.Path(SRC).read_text(encoding='utf-8')
 pathlib.Path(base+'preview.html').write_text('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style></head><body>'+html+'</body></html>', encoding='utf-8')
@@ -12,7 +17,7 @@ url='file://'+base+'preview.html'
 salt='s1'; h=hashlib.sha256((salt+'::'+'тест').encode()).hexdigest()
 def emp(code, login, first, last, gender):
     return {'code':code,'login':login,'firstName':first,'lastName':last,'gender':gender,'dept':'Операционный отдел',
-            'email':'','personalEmail':'x@ex.com','startDate':'2026-09-30','startTime':'10:00','createdAt':'2026-09-18',
+            'email':'','personalEmail':'x@ex.com','startDate':day(7),'startTime':'10:00','createdAt':'2026-09-18',
             'openedAt':'','sentAt':'','salt':salt,'hash':h,'progress':{}}
 seed={'employees/IW-F': emp('IW-F','аня','Анна','Иванова','f'),
       'employees/IW-M': emp('IW-M','пётр','Пётр','Петров','m'),

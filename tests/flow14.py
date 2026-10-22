@@ -1,15 +1,20 @@
 from playwright.sync_api import sync_playwright
 import pathlib, json, hashlib
+from datetime import date, timedelta
+def day(n):
+    """дата относительно сегодня: иначе тесты протухают, когда жёстко
+    зашитый «день выхода» уезжает в прошлое и кабинет открывает другой этап"""
+    return (date.today() + timedelta(days=n)).isoformat()
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 base = str(HERE) + '/'
-SRC = str(ROOT / 'src' / 'iway-welcome.html')
+SRC = str(ROOT / 'src' / 'iway-portal.html')
 html = pathlib.Path(SRC).read_text(encoding='utf-8')
 pathlib.Path(base+'preview.html').write_text('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style></head><body>'+html+'</body></html>', encoding='utf-8')
 url='file://'+base+'preview.html'
 salt='s1'; h=hashlib.sha256((salt+'::'+'тест').encode()).hexdigest()
 seed={'employees/IW-P':{'code':'IW-P','login':'аня','firstName':'Анна','lastName':'Иванова','gender':'f',
-      'dept':'Клиентский сервис','email':'','personalEmail':'x@ex.com','startDate':'2026-10-05','startTime':'10:00',
+      'dept':'Клиентский сервис','email':'','personalEmail':'x@ex.com','startDate':day(12),'startTime':'10:00',
       'createdAt':'2026-09-18','openedAt':'','sentAt':'','salt':salt,'hash':h,'progress':{}},
       'config/departments':{'list':[{'name':'Клиентский сервис','head':'М. Соколова','senior':'И. Ли','chat':''}]}}
 errs=[]

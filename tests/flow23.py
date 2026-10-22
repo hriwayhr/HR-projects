@@ -3,11 +3,24 @@
 # подробности, раскрытие по клику и память о раскрытых строках.
 from playwright.sync_api import sync_playwright
 import pathlib, json, hashlib
+from datetime import date, timedelta
+MONTHS = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря']
+def ru(n):
+    """«7 ноября» — как это пишет страница"""
+    d = date.today() + timedelta(days=n)
+    return '%d %s' % (d.day, MONTHS[d.month - 1])
+def dmy(n):
+    d = date.today() + timedelta(days=n)
+    return d.strftime('%d.%m.%Y')
+def day(n):
+    """дата относительно сегодня: иначе тесты протухают, когда жёстко
+    зашитый «день выхода» уезжает в прошлое и кабинет открывает другой этап"""
+    return (date.today() + timedelta(days=n)).isoformat()
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 (HERE / 'shots').mkdir(exist_ok=True)
 base = str(HERE) + '/'
-html = pathlib.Path(str(ROOT / 'src' / 'iway-welcome.html')).read_text(encoding='utf-8')
+html = pathlib.Path(str(ROOT / 'src' / 'iway-portal.html')).read_text(encoding='utf-8')
 pathlib.Path(base+'preview.html').write_text('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style></head><body>'+html+'</body></html>', encoding='utf-8')
 url='file://'+base+'preview.html'
 salt='s1'; h=hashlib.sha256((salt+'::'+'тест').encode()).hexdigest()
@@ -15,7 +28,7 @@ salt='s1'; h=hashlib.sha256((salt+'::'+'тест').encode()).hexdigest()
 def rec(code, first, last, gender='f', **kw):
     r={'code':code,'login':code.lower(),'firstName':first,'lastName':last,'gender':gender,
        'dept':'Операционный отдел','email':'','personalEmail':first.lower()+'@ex.com',
-       'startDate':'2026-10-05','startTime':'10:00','createdAt':'2026-09-18','openedAt':'','sentAt':'',
+       'startDate':day(12),'startTime':'10:00','createdAt':'2026-09-18','openedAt':'','sentAt':'',
        'salt':salt,'hash':h,'progress':{}}
     r.update(kw); return r
 
@@ -63,7 +76,7 @@ with sync_playwright() as p:
     # ——— в шапке строки всё для просмотра сверху вниз
     anna = [x for x in r if x['who'] == 'Иванова Анна'][0]
     assert anna['id'].startswith('iw-2') and 'нужна карта' in anna['id'], anna['id']
-    assert anna['dept'] == 'Операционный отдел' and '05.10.2026' in anna['date'] and '10:00' in anna['date'], anna
+    assert anna['dept'] == 'Операционный отдел' and dmy(12) in anna['date'] and '10:00' in anna['date'], anna
     assert '1 из 4' in anna['docs'] and anna['status'] == 'собирает документы', anna
     maria = [x for x in r if x['who'] == 'Зотова Мария'][0]
     assert maria['id'] == 'кандидат' and maria['docs'] == 'нет доступа', maria

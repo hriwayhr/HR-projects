@@ -3,16 +3,21 @@
 # может ещё не быть — ответ «Да, впервые» закрывает пункт.
 from playwright.sync_api import sync_playwright
 import pathlib, json, hashlib
+from datetime import date, timedelta
+def day(n):
+    """дата относительно сегодня: иначе тесты протухают, когда жёстко
+    зашитый «день выхода» уезжает в прошлое и кабинет открывает другой этап"""
+    return (date.today() + timedelta(days=n)).isoformat()
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 (HERE / 'shots').mkdir(exist_ok=True)
 base = str(HERE) + '/'
-html = pathlib.Path(str(ROOT / 'src' / 'iway-welcome.html')).read_text(encoding='utf-8')
+html = pathlib.Path(str(ROOT / 'src' / 'iway-portal.html')).read_text(encoding='utf-8')
 pathlib.Path(base+'preview.html').write_text('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style></head><body>'+html+'</body></html>', encoding='utf-8')
 url='file://'+base+'preview.html'
 salt='s1'; h=hashlib.sha256((salt+'::'+'тест').encode()).hexdigest()
 seed={'employees/IW-F': {'code':'IW-F','login':'iw-f','firstName':'Дарья','lastName':'Первая','gender':'f',
-      'dept':'Операционный отдел','email':'','personalEmail':'d@ex.com','startDate':'2026-10-05','startTime':'10:00',
+      'dept':'Операционный отдел','email':'','personalEmail':'d@ex.com','startDate':day(12),'startTime':'10:00',
       'createdAt':'2026-09-18','openedAt':'','sentAt':'2026-09-19T08:00:00Z','salt':salt,'hash':h,'progress':{}},
       'config/departments':{'list':[{'name':'Операционный отдел','head':'','senior':'','chat':''}]}}
 errs=[]

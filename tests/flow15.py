@@ -3,7 +3,7 @@ import pathlib
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 base = str(HERE) + '/'
-SRC = str(ROOT / 'src' / 'iway-welcome.html')
+SRC = str(ROOT / 'src' / 'iway-portal.html')
 html = pathlib.Path(SRC).read_text(encoding='utf-8')
 pathlib.Path(base+'preview.html').write_text('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;font:14px system-ui}[hidden]{display:none!important}</style></head><body>'+html+'</body></html>', encoding='utf-8')
 url='file://'+base+'preview.html'
