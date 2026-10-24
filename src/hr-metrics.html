@@ -188,6 +188,7 @@
   .link-row input.v-link{min-width:240px;}
   .link-row label.f{font-size:11px;}
   input[readonly]{background:var(--paper); color:var(--ink-2);}
+  .pill.leaver{background:var(--warn-bg); color:var(--warn-ink);}
   #fGroups input.manual{background:var(--warn-bg); border-color:var(--warn-ink); color:var(--warn-ink);}
   .link-row input{flex:1;}
   .pubs{display:block; font-size:12px; margin-top:2px;}
@@ -543,7 +544,8 @@ var VAC_STATUSES = ['активна', 'выход сотрудника', 'арх
 var CLOSED = {'выход сотрудника':1, 'архив':1};
 var VAC_FIELDS = ['title','dept','status','manager','customer','comment'];
 // Единица найма: каждый человек, которого нужно нанять; закрыта успешно, когда есть дата выхода
-var SEAT_FIELDS = ['requestedAt','publishedAt','reason','search','source'];
+var SEAT_FIELDS = ['requestedAt','publishedAt','reason','leaver','search','source'];
+var LEAVE_REASON = 'увольнение сотрудника';   // при этой причине в единице пишем, кто уволился (leaver)
 // Офферы единицы: несколько кандидатов подряд, если предыдущий отказался
 var OFFER_RESULTS = [['wait', 'ждём ответа'], ['accepted', 'принят'], ['declined', 'отклонён']];
 var DECLINE_REASONS = ['другое предложение', 'зарплата', 'остался на текущей работе', 'условия / график', 'пропал, не вышел на связь', 'другое'];
@@ -1090,6 +1092,13 @@ function hireUnits(){
   return out.filter(function(u){ return u.startAt >= PROB_FROM_() && u.startAt <= today(); })
     .map(function(u){ u.months = u.months || null; u.end = u.months ? addMonths(u.startAt, u.months) : null; return u; });
 }
+// кто уволился за период — из «Кто уволился» в метриках дня
+function dismissedIn(r, ps){
+  var out = [];
+  rDates(r).forEach(function(d){ ps.forEach(function(p){ var m = (byDate[d] || {})[p];
+    String((m && m.dismissed_names) || '').split(',').forEach(function(n){ n = n.trim(); if(n && out.indexOf(n) < 0) out.push(n); }); }); });
+  return out;
+}
 function probState(u){ return u.prob ? u.prob.result : !u.end ? 'nomonths' : u.end > today() ? 'on' : 'due'; }
 function renderProb(w, wp, wl, ps){
   var us = hireUnits(), t = today();
@@ -1101,7 +1110,8 @@ function renderProb(w, wp, wl, ps){
   var tiles = '<div class="tiles">' + tile('Прошли испытательный срок', pass, cnt(wp, 'passed'), {vs:vs}) +
     tile('Не прошли', fail, cnt(wp, 'failed'), {vs:vs, lowerIsBetter:true, note: pass + fail ? 'прошли ' + Math.round(pass / (pass + fail) * 100) + '% из закончивших' : ''}) +
     tile('Сейчас на испытательном', open.length - due, null, {noDelta:true, note: [due ? '<span class="down">ждут итога: '+due+'</span>' : '', nom.length ? 'срок не указан: ' + nom.length : ''].filter(Boolean).join(' · ')}) +
-    tile('Увольнения', dis, wp ? rSum(wp, ps, 'dismissals') : null, {vs:vs, lowerIsBetter:true, note:'из метрик дня'}) + '</div>';
+    tile('Увольнения', dis, wp ? rSum(wp, ps, 'dismissals') : null, {vs:vs, lowerIsBetter:true, note: dismissedIn(w, ps).length ?
+      dismissedIn(w, ps).map(function(n){ return '<span class="pill leaver">'+esc(n)+'</span>'; }).join(' ') : 'из метрик дня'}) + '</div>';
   function row(u, done){
     var key0 = ' data-id="'+esc(u.v.id)+'" data-i="'+(u.i === null ? '' : u.i)+'"';
     if(!u.end) return '<tr><td class="l">'+(u.person ? esc(u.person) : '<span class="sub">имя — в карточке вакансии</span>')+'</td><td class="l">'+esc(u.v.title || '')+'</td><td class="l">'+esc(managerLabel(u.v))+'</td><td>'+shortDate(u.startAt)+'</td>' +
@@ -1339,7 +1349,8 @@ function buildForm(){
   $('fGroups').innerHTML = Object.keys(GROUPS).map(function(g){
     var list = ms.filter(function(m){ return m.g === g; });
     return list.length ? '<fieldset><legend>'+GROUPS[g]+'</legend><div class="fields">'+list.map(function(m){
-      return '<label class="f">'+esc(m.t)+'<input type="number" min="0" step="1" inputmode="numeric" id="m_'+m.k+'" data-k="'+m.k+'"></label>';
+      return '<label class="f">'+esc(m.t)+'<input type="number" min="0" step="1" inputmode="numeric" id="m_'+m.k+'" data-k="'+m.k+'"></label>' +
+        (m.k === 'dismissals' ? '<label class="f">Кто уволился<input type="text" id="m_dismissed_names" placeholder="Фамилия Имя, через запятую" maxlength="300"></label>' : '');
     }).join('')+'</div></fieldset>' : '';
   }).join('');
   loadForm();
@@ -1359,7 +1370,8 @@ function loadForm(){
   var p = formPerson(), d = $('fDate').value, m = (byDate[d] || {})[p], hint = '';
   if(!p || !d) return;
   var own = (entered[d] || {})[p], sync = isSynced(d, p);
-  document.querySelectorAll('#fGroups input').forEach(function(i){ i.value = m && num(m[i.dataset.k]) ? m[i.dataset.k] : ''; i.placeholder = ''; i.classList.remove('manual'); });
+  document.querySelectorAll('#fGroups input[data-k]').forEach(function(i){ i.value = m && num(m[i.dataset.k]) ? m[i.dataset.k] : ''; i.placeholder = ''; i.classList.remove('manual'); });
+  if($('m_dismissed_names')) $('m_dismissed_names').value = (m && m.dismissed_names) || '';
   if(sync){
     // цифры из «Вакансий»; поправленные вручную за этот день — свои, пустое поле — снова считается само
     var reg = registryDay(p, d), manual = [];
@@ -1393,7 +1405,9 @@ function saveDay(e){
   var id = p + '_' + d.slice(0, 7), doc = months[id] || {days:{}}, old = doc.days[d] || {}, vals = {};
   // метрики, убранные из формы, сохраняем как были; остальное — из полей
   Object.keys(old).forEach(function(k){ if(!$('m_'+k)) vals[k] = old[k]; });
-  document.querySelectorAll('#fGroups input').forEach(function(i){ var v = i.value.trim(); if(v !== '') vals[i.dataset.k] = Math.max(0, Math.round(+v)); });
+  document.querySelectorAll('#fGroups input[data-k]').forEach(function(i){ var v = i.value.trim(); if(v !== '') vals[i.dataset.k] = Math.max(0, Math.round(+v)); });
+  var names = $('m_dismissed_names') ? $('m_dismissed_names').value.trim() : '';
+  if(names) vals.dismissed_names = names.slice(0, 300); else delete vals.dismissed_names;
   if(isSynced(d, p)){   // из реестра храним только исправленное вручную — совпадающее с расчётом дальше считается само
     var reg = registryDay(p, d);
     SYNCED.forEach(function(k){ if(vals[k] === reg[k]) delete vals[k]; });
@@ -1671,14 +1685,14 @@ function renderVac(){
   function livePub(v){ return livePubs([v]).length > 0; }
   function statusOk(v){ return !fs.length || fs.indexOf(v.status || '') >= 0 || (fs.indexOf('активна') >= 0 && v.status === 'не актуальна' && livePub(v)); }
   var list = all.filter(function(v){
-    return (!q || norm(v.title + ' ' + v.dept + ' ' + (v.customer || '')).indexOf(q) >= 0) && statusOk(v) && (!fm || managerLabel(v) === fm);
+    return (!q || norm(v.title + ' ' + v.dept + ' ' + (v.customer || '') + ' ' + leaversOf(v).join(' ')).indexOf(q) >= 0) && statusOk(v) && (!fm || managerLabel(v) === fm);
   }).sort(function(a, b){
     return (isActive(a) ? 0 : 1) - (isActive(b) ? 0 : 1) || (vacStart(b) || '').localeCompare(vacStart(a) || '');
   });
   $('vTable').innerHTML = '<thead><tr><th>Вакансия</th><th class="l">Отдел</th><th class="l">Заказчик</th><th class="l">Статус</th><th class="l">Ответственный</th><th>Нужно людей</th><th>Публикация</th><th>Закрытие</th><th>Дней в работе</th><th>Продлений</th><th>Офферы</th><th>Потрачено</th></tr></thead><tbody>' +
     (list.length ? list.map(function(v){
       var d = daysInWork(v), cls = isActive(v) ? 'active' : CLOSED[v.status] ? 'hire' : '';
-      return '<tr class="click" data-id="'+esc(v.id)+'" tabindex="0"><td class="wrapc">'+(vacLinks(v).length ? '<a href="'+esc(vacLinks(v)[0])+'" target="_blank" rel="noopener">'+esc(v.title)+'</a>' : esc(v.title))+pubsHtml(v)+'</td><td class="l">'+esc(v.dept||'—')+'</td><td class="l">'+esc(v.customer||'—')+'</td>' +
+      return '<tr class="click" data-id="'+esc(v.id)+'" tabindex="0"><td class="wrapc">'+(vacLinks(v).length ? '<a href="'+esc(vacLinks(v)[0])+'" target="_blank" rel="noopener">'+esc(v.title)+'</a>' : esc(v.title))+pubsHtml(v)+leaversHtml(v)+'</td><td class="l">'+esc(v.dept||'—')+'</td><td class="l">'+esc(v.customer||'—')+'</td>' +
         '<td class="l"><span class="pill '+cls+'">'+esc(v.status||'без статуса')+'</span>'+(coverNote(v) ? '<div class="hint">'+esc(coverNote(v))+'</div>' : '')+'</td><td class="l">'+esc(managerLabel(v))+'</td><td>'+(isMulti(v) ? needOf(v)+' из '+v.seats.length : num(v.rate) ? v.rate : '—')+'</td>' +
         '<td>'+shortDate(vacStart(v))+'</td><td>'+shortDate(vacEnd(v))+'</td><td>'+(d === null ? '—' : (isActive(v) && d > 60 ? '<span class="pill long">'+d+'</span>' : d))+(pauseDays(v) ? '<div class="hint">в т. ч. пауза '+pauseDays(v)+' дн. — менеджер в отпуске</div>' : '')+'</td>' +
         '<td>'+(num(v.extensions) ? v.extensions : '—')+'</td><td>'+(offersOf(v) ? offersOf(v).acc+' из '+offersOf(v).sent : '—')+'</td><td>'+rub(vacCost(v))+'</td></tr>';
@@ -1846,6 +1860,7 @@ function seatRow(x){
     '<label class="check"><input type="checkbox" class="s-pub"'+(x.published ? ' checked' : '')+'> Вакансия уже опубликована</label>' +
     f('Дата публикации вакансии', date('publishedAt'), 's-pubWrap' + (x.published ? ' hide' : '')) +
     f('Причина открытия', '<select class="s-reason">'+seatOptions(REASONS, x.reason)+'</select>') +
+    f('Кто уволился', '<input type="text" class="s-leaver" value="'+esc(x.leaver || '')+'" placeholder="Фамилия Имя" maxlength="120">', 's-leaverWrap' + (x.reason === LEAVE_REASON ? '' : ' hide')) +
     f('Статус поиска', '<select class="s-search">'+seatOptions(SEARCHES, x.search)+'</select>') +
     f('Источник поиска', '<select class="s-source">'+seatOptions(SOURCES, x.source)+'</select>') +
     '<div class="offers"><div class="offers-head"><b>Офферы</b><span class="hint">если кандидат отказался — добавьте оффер следующему</span></div>' +
@@ -1882,6 +1897,7 @@ function readSeats(){
   return Array.prototype.map.call(document.querySelectorAll('#vSeats .seat'), function(el){
     var x = JSON.parse(el.dataset.keep || '{}');
     SEAT_FIELDS.forEach(function(k){ var v = el.querySelector('.s-' + k).value.trim(); if(v) x[k] = v; });
+    if(x.reason !== LEAVE_REASON) delete x.leaver;
     var offers = readOffers(el); if(offers.length) x.offers = offers;
     // единица закрыта, когда кандидат вышел: дата выхода и имя — для аналитики (скорость закрытия, испытательный срок)
     var came = offers.filter(function(o){ return o.started; }).pop();
@@ -1902,10 +1918,14 @@ function seatSummary(){
     pill.className = 'pill ' + (done ? 'hire' : plan ? 'pub-soon' : idle ? '' : 'active');
     pill.textContent = done ? 'закрыта — сотрудник вышел' : plan ? 'ждём выхода ' + shortDate(plan.querySelector('.o-start').value) : idle ? 'не ищем' : 'в поиске';
     el.querySelector('.s-pubWrap').classList.toggle('hide', el.querySelector('.s-pub').checked);
+    el.querySelector('.s-leaverWrap').classList.toggle('hide', el.querySelector('.s-reason').value !== LEAVE_REASON);
   });
 }
 function vacFirstLinkAt(){ return Array.prototype.map.call(document.querySelectorAll('#vLinks .link-row'), readLinkRow).filter(function(l){ return l.url; }).map(function(l){ return l.at; }).filter(Boolean).sort()[0] || null; }
 function seatPubToggle(){ seatSummary(); }
+// на чьё место ищем: имена уволившихся из единиц вакансии — плашкой под названием
+function leaversOf(v){ return seatsOf(v).map(function(x){ return x.reason === LEAVE_REASON ? x.leaver : null; }).filter(Boolean); }
+function leaversHtml(v){ var l = leaversOf(v); return l.length ? '<div class="hint">вместо: ' + l.map(function(n){ return '<span class="pill leaver">'+esc(n)+'</span>'; }).join(' ') + '</div>' : ''; }
 // Интервал [a, b): открыта в момент d — на конец дня (eod) или на начало (до изменений этого дня)
 function openOn(a, b, d, eod){ return !!a && (eod ? a <= d : a < d) && (!b || (eod ? b > d : b >= d)); }
 function vacSpan(v){
