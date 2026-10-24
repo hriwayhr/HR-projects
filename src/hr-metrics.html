@@ -188,6 +188,7 @@
   .link-row input.v-link{min-width:240px;}
   .link-row label.f{font-size:11px;}
   input[readonly]{background:var(--paper); color:var(--ink-2);}
+  .dis-names{display:contents;}
   .pill.leaver{background:var(--warn-bg); color:var(--warn-ink);}
   #fGroups input.manual{background:var(--warn-bg); border-color:var(--warn-ink); color:var(--warn-ink);}
   .link-row input{flex:1;}
@@ -1096,7 +1097,7 @@ function hireUnits(){
 function dismissedIn(r, ps){
   var out = [];
   rDates(r).forEach(function(d){ ps.forEach(function(p){ var m = (byDate[d] || {})[p];
-    String((m && m.dismissed_names) || '').split(',').forEach(function(n){ n = n.trim(); if(n && out.indexOf(n) < 0) out.push(n); }); }); });
+    namesOf(m).forEach(function(n){ if(out.indexOf(n) < 0) out.push(n); }); }); });
   return out;
 }
 function probState(u){ return u.prob ? u.prob.result : !u.end ? 'nomonths' : u.end > today() ? 'on' : 'due'; }
@@ -1350,7 +1351,7 @@ function buildForm(){
     var list = ms.filter(function(m){ return m.g === g; });
     return list.length ? '<fieldset><legend>'+GROUPS[g]+'</legend><div class="fields">'+list.map(function(m){
       return '<label class="f">'+esc(m.t)+'<input type="number" min="0" step="1" inputmode="numeric" id="m_'+m.k+'" data-k="'+m.k+'"></label>' +
-        (m.k === 'dismissals' ? '<label class="f">Кто уволился<input type="text" id="m_dismissed_names" placeholder="Фамилия Имя, через запятую" maxlength="300"></label>' : '');
+        (m.k === 'dismissals' ? '<span class="dis-names" id="mDisNames"></span>' : '');
     }).join('')+'</div></fieldset>' : '';
   }).join('');
   loadForm();
@@ -1371,7 +1372,7 @@ function loadForm(){
   if(!p || !d) return;
   var own = (entered[d] || {})[p], sync = isSynced(d, p);
   document.querySelectorAll('#fGroups input[data-k]').forEach(function(i){ i.value = m && num(m[i.dataset.k]) ? m[i.dataset.k] : ''; i.placeholder = ''; i.classList.remove('manual'); });
-  if($('m_dismissed_names')) $('m_dismissed_names').value = (m && m.dismissed_names) || '';
+  renderDisNames(namesOf(m));
   if(sync){
     // цифры из «Вакансий»; поправленные вручную за этот день — свои, пустое поле — снова считается само
     var reg = registryDay(p, d), manual = [];
@@ -1397,6 +1398,20 @@ function loadForm(){
   } else hint = 'День уже внесён — сохранение заменит значения.';
   $('fStatus').className = 'status'; $('fStatus').textContent = hint;
 }
+// Кто уволился: по полю на каждое увольнение дня; вписанные имена не пропадают, если число уменьшили
+function namesOf(m){
+  var v = m && m.dismissed_names;
+  return (Array.isArray(v) ? v : String(v || '').split(',')).map(function(n){ return String(n).trim(); }).filter(Boolean);   // строка через запятую — прежний вид
+}
+function renderDisNames(list){
+  var box = $('mDisNames'); if(!box) return;
+  var cur = list || Array.prototype.map.call(box.querySelectorAll('input'), function(i){ return i.value; });
+  var n = Math.min(30, Math.max(Math.round(+$('m_dismissals').value) || 0, cur.filter(function(x){ return x.trim(); }).length));
+  box.innerHTML = Array.from({length:n}, function(_, i){
+    return '<label class="f">Кто уволился' + (n > 1 ? ' — ' + (i + 1) : '') + '<input type="text" maxlength="120" placeholder="Фамилия Имя" value="'+esc(cur[i] || '')+'"></label>';
+  }).join('');
+}
+$('fGroups').addEventListener('input', function(e){ if(e.target.id === 'm_dismissals') renderDisNames(); });
 function saveDay(e){
   e.preventDefault();
   var p = formPerson(), d = $('fDate').value, st = $('fStatus');
@@ -1406,8 +1421,10 @@ function saveDay(e){
   // метрики, убранные из формы, сохраняем как были; остальное — из полей
   Object.keys(old).forEach(function(k){ if(!$('m_'+k)) vals[k] = old[k]; });
   document.querySelectorAll('#fGroups input[data-k]').forEach(function(i){ var v = i.value.trim(); if(v !== '') vals[i.dataset.k] = Math.max(0, Math.round(+v)); });
-  var names = $('m_dismissed_names') ? $('m_dismissed_names').value.trim() : '';
-  if(names) vals.dismissed_names = names.slice(0, 300); else delete vals.dismissed_names;
+  if($('mDisNames')){
+    var names = Array.prototype.map.call(document.querySelectorAll('#mDisNames input'), function(i){ return i.value.trim().slice(0, 120); }).filter(Boolean);
+    if(names.length) vals.dismissed_names = names; else delete vals.dismissed_names;
+  }
   if(isSynced(d, p)){   // из реестра храним только исправленное вручную — совпадающее с расчётом дальше считается само
     var reg = registryDay(p, d);
     SYNCED.forEach(function(k){ if(vals[k] === reg[k]) delete vals[k]; });
