@@ -284,3 +284,95 @@ test('атаки на вход и данные портала', async () => {
   // запрос не со страницы портала (без заголовка X-HR) — отклоняется
   assert.equal((await h({ httpMethod: 'POST', url: '/api/doc', headers: { cookie: y }, body: '{}' })).statusCode, 403);
 });
+
+test('код на почту: новое устройство, знакомое устройство, восстановление пароля', async () => {
+  process.env.PORTAL_SRC = path.join(__dirname, '..', 'src', 'iway-portal.html');
+  delete require.cache[require.resolve('../cloud/function/index')];
+  const { forTests } = require('../cloud/function/index');
+  const crypto = require('crypto'), sha = (s, p) => crypto.createHash('sha256').update(s + '::' + p).digest('hex');
+  const store = forTests.memoryStore(), mails = [];
+  const cfg = Object.assign(forTests.config({ LOCAL: '1', SESSION_SECRET: 's'.repeat(48) }), { mailer: async (to, subj, text) => { mails.push({ to, subj, text }); } });
+  const h = forTests.makeHandler(store, cfg);
+  await store.tx('config/team', () => ({ people: { y: { name: 'Юлия', login: 'ny@iway.ru', salt: 's1', hash: sha('s1', 'Y-1'), admin: true },
+    a: { name: 'Анна', login: 'anna', email: 'shua@iway.ru', salt: 's2', hash: sha('s2', 'A-2') } } }));
+  await store.tx('employees/IW-OTP1', () => ({ code: 'IW-OTP1', login: 'otp.one', salt: 's3', hash: sha('s3', 'N-3') }));
+  const jar = {};   // cookie браузера
+  const call = async (url, body, c = jar) => {
+    const r = await h({ httpMethod: 'POST', url, headers: { 'x-hr': '1', cookie: Object.entries(c).map(([k, v]) => k + '=' + v).join('; ') }, body: JSON.stringify(body) });
+    ((r.multiValueHeaders || {})['Set-Cookie'] || []).forEach(x => { const [kv] = x.split(';'), i = kv.indexOf('='); c[kv.slice(0, i)] = kv.slice(i + 1); });
+    return { status: r.statusCode, body: JSON.parse(r.body) };
+  };
+  const codeOf = m => m.text.match(/: (\d{6})/)[1];
+
+  // новый компьютер: пароль верный — сессии нет, код ушёл на рабочую почту
+  let r = await call('/api/plogin', { login: 'anna', password: 'A-2' });
+  assert.deepEqual([r.status, r.body.need, r.body.to], [200, 'code', 's•••@iway.ru']);
+  assert.equal(jar.hr_s, undefined);
+  assert.equal(mails.length, 1); assert.equal(mails[0].to, 'shua@iway.ru');
+  assert.equal((await call('/api/plogin-code', { ticket: r.body.ticket, code: '000000' === codeOf(mails[0]) ? '111111' : '000000' })).status, 401);
+  assert.equal((await call('/api/plogin-code', { ticket: r.body.ticket, code: codeOf(mails[0]) })).status, 200);
+  assert.ok(jar.hr_s && jar.hr_d);
+  assert.equal((await call('/api/plogin-code', { ticket: r.body.ticket, code: codeOf(mails[0]) })).status, 401);   // код одноразовый
+  // знакомое устройство — хватает пароля
+  delete jar.hr_s;
+  r = await call('/api/plogin', { login: 'anna', password: 'A-2' });
+  assert.deepEqual([r.status, r.body.need], [200, undefined]); assert.ok(jar.hr_s); assert.equal(mails.length, 1);
+  // чужое устройство Анны не помогает Юле; повторно код — не раньше чем через минуту
+  r = await call('/api/plogin', { login: 'ny@iway.ru', password: 'Y-1' });
+  assert.equal(r.body.need, 'code'); assert.equal(mails[1].to, 'ny@iway.ru');
+  assert.equal((await call('/api/plogin', { login: 'ny@iway.ru', password: 'Y-1' })).status, 429);
+  // 5 неверных кодов — заявка сгорает
+  for (let i = 0; i < 4; i++) assert.equal((await call('/api/plogin-code', { ticket: r.body.ticket, code: 'x' })).body.error, 'Неверный код.');
+  assert.match((await call('/api/plogin-code', { ticket: r.body.ticket, code: 'x' })).body.error, /5 раз/);
+  assert.equal((await call('/api/plogin-code', { ticket: r.body.ticket, code: codeOf(mails[1]) })).status, 401);
+  // новичку код не нужен
+  assert.equal((await call('/api/plogin', { login: 'otp.one', password: 'N-3' }, {})).body.need, undefined);
+
+  forTests.resetLimits();   // как будто прошёл час: лимит отправки кодов не мешает
+  // восстановление пароля: ответ один и тот же, есть человек или нет
+  const nobody = await call('/api/reset-start', { login: 'nobody@iway.ru' }, {});
+  assert.equal(nobody.status, 200); assert.ok(nobody.body.ticket); assert.equal(mails.length, 2);
+  const other = {};   // другое устройство
+  const rs = await call('/api/reset-start', { login: 'shua@iway.ru' }, other);
+  assert.equal(rs.status, 200); assert.match(mails[2].subj, /восстановления пароля/);
+  assert.equal((await call('/api/reset-finish', { ticket: rs.body.ticket, code: codeOf(mails[2]), password: 'short' }, other)).status, 400);
+  assert.equal((await call('/api/plogin-code', { ticket: rs.body.ticket, code: codeOf(mails[2]) }, other)).status, 401);   // код восстановления не годится для входа
+  assert.equal((await call('/api/reset-finish', { ticket: rs.body.ticket, code: codeOf(mails[2]), password: 'Новый-пароль-1' }, other)).status, 200);
+  assert.ok(other.hr_s && other.hr_d);
+  // старый пароль не действует, прежние сессия и знакомое устройство сброшены
+  assert.equal((await h({ httpMethod: 'GET', url: '/api/me', headers: { cookie: 'hr_s=' + jar.hr_s } })).statusCode, 401);
+  delete jar.hr_s;
+  assert.equal((await call('/api/plogin', { login: 'anna', password: 'A-2' })).status, 401);
+  assert.equal((await call('/api/plogin', { login: 'anna', password: 'Новый-пароль-1' }, jar)).status, 429);   // устройство снова незнакомое, а код только что отправлялся
+});
+
+test('письмо с кодом: разговор с почтовым сервером по SMTP', async () => {
+  const net = require('net');
+  const { forTests } = require('../cloud/function/index');
+  const got = [];
+  const srv = net.createServer(sock => {
+    sock.write('220 smtp.test ready\r\n');
+    let data = false, buf = '';
+    sock.on('data', d => {
+      buf += d;
+      if (data) { if (!buf.endsWith('\r\n.\r\n')) return; got.push(buf); buf = ''; data = false; return sock.write('250 queued\r\n'); }
+      const line = buf.trim(); buf = ''; got.push(line);
+      if (line.startsWith('EHLO')) sock.write('250-smtp.test\r\n250 AUTH PLAIN\r\n');
+      else if (line.startsWith('AUTH')) sock.write(line === 'AUTH PLAIN ' + Buffer.from('\0noreply@iway.ru\0app-pass').toString('base64') ? '235 ok\r\n' : '535 bad\r\n');
+      else if (line === 'DATA') { data = true; sock.write('354 go\r\n'); }
+      else if (line === 'QUIT') { sock.write('221 bye\r\n'); sock.end(); }
+      else sock.write('250 ok\r\n');
+    });
+  });
+  await new Promise(r => srv.listen(0, r));
+  const smtp = { host: '127.0.0.1', port: srv.address().port, user: 'noreply@iway.ru', pass: 'app-pass', from: 'noreply@iway.ru' };
+  const plain = o => net.connect(o.port, o.host);
+  try {
+  await forTests.smtpSend(smtp, 'shua@iway.ru', 'Код входа: 123456', 'Код входа в портал: 123456', plain);
+  assert.deepEqual(got.slice(2, 5), ['MAIL FROM:<noreply@iway.ru>', 'RCPT TO:<shua@iway.ru>', 'DATA']);
+  const msg = got[5], body = msg.split('\r\n\r\n')[1].replace(/\r\n\.\r\n$/, '');
+  assert.match(msg, /Subject: =\?UTF-8\?B\?/);
+  assert.equal(Buffer.from(body.replace(/\r\n/g, ''), 'base64').toString(), 'Код входа в портал: 123456');
+  await assert.rejects(forTests.smtpSend(Object.assign({}, smtp, { pass: 'wrong' }), 'shua@iway.ru', 's', 't', plain), /SMTP AUTH: 535/);
+  } finally { srv.close(); }
+});

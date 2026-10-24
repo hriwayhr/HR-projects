@@ -39,7 +39,7 @@ window.HR_SERVER = true;
   MERGE
   var KEY = 'iwayPortalDemo', SEED = DOCS, st = null;
   try{ st = JSON.parse(sessionStorage.getItem(KEY)); }catch(e){}
-  if(!st){ st = {ver:1, session:null, docs:{}}; Object.keys(SEED).forEach(function(p){ st.docs[p] = {ver:1, data:SEED[p]}; }); }
+  if(!st){ st = {ver:1, session:null, docs:{}, devices:[], otp:null}; Object.keys(SEED).forEach(function(p){ st.docs[p] = {ver:1, data:SEED[p]}; }); }
   function save(){ try{ sessionStorage.setItem(KEY, JSON.stringify(st)); }catch(e){} }
   function get(p){ return st.docs[p] ? st.docs[p].data : null; }
   function put(p, data){ st.ver++; st.docs[p] = {ver:st.ver, data:data}; save(); return st.ver; }
@@ -58,6 +58,19 @@ window.HR_SERVER = true;
     u.people = ps; u.vacations = {}; u.name = [ps[u.pid].name, ps[u.pid].surname].filter(Boolean).join(' ');
     return u;
   }
+  /* письмо с кодом: в демо почты нет — показываем, что пришло бы на рабочую почту */
+  function mail(t, kind){
+    var code = String(Math.floor(Math.random() * 1e6)).padStart(6, '0'), to = norm(t.email || t.login), ticket = 't' + Date.now();
+    st.otp = {ticket:ticket, kind:kind, login:norm(t.login), code:code}; save();
+    var box = document.getElementById('demoMail') || document.body.appendChild(Object.assign(document.createElement('div'), {id:'demoMail', className:'demo-mail', role:'status'}));
+    box.textContent = 'Письмо на ' + to + ' (в демо показываем здесь): код ' + (kind === 'reset' ? 'восстановления пароля' : 'входа') + ' ' + code;
+    return {ticket:ticket, to:to.replace(/^(.).*?@/, '$1•••@')};
+  }
+  function checkOtp(b, kind){
+    var o = st.otp; if(!o || o.ticket !== b.ticket || o.kind !== kind) return 'Код устарел — запросите новый.';
+    if(String(b.code || '').trim() !== o.code) return 'Неверный код.';
+    st.otp = null; var d = document.getElementById('demoMail'); if(d) d.remove(); return o;
+  }
   function hash(salt, pw){
     return crypto.subtle.digest('SHA-256', new TextEncoder().encode(salt + '::' + pw)).then(function(b){
       return Array.prototype.map.call(new Uint8Array(b), function(x){ return ('0' + x.toString(16)).slice(-2); }).join('');
@@ -75,7 +88,26 @@ window.HR_SERVER = true;
       }
       return hash((t && t.salt) || '', b.password || '').then(function(h){
         if(!t || !t.hash || h !== t.hash) return [401, {error:'Неверный логин или пароль.'}];
+        if(pid && st.devices.indexOf(sess) < 0){ var m = mail(t, 'login'); return [200, {need:'code', ticket:m.ticket, to:m.to}]; }
         st.session = sess; save(); return [200, {ok:true}];
+      });
+    }
+    if(path === '/api/plogin-code'){
+      var o = checkOtp(b, 'login'); if(typeof o === 'string') return [401, {error:o}];
+      st.session = o.login; st.devices.push(o.login); save(); return [200, {ok:true}];
+    }
+    if(path === '/api/reset-start'){
+      var rl = norm(b.login), rp = Object.keys(ps).filter(function(p){ return norm(ps[p].login) === rl || norm(ps[p].email) === rl; })[0];
+      return [200, {ok:true, ticket:rp ? mail(ps[rp], 'reset').ticket : 'none'}];
+    }
+    if(path === '/api/reset-finish'){
+      if(String(b.password || '').length < 8) return [400, {error:'Пароль — от 8 до 128 символов.'}];
+      var ro = checkOtp(b, 'reset'); if(typeof ro === 'string') return [401, {error:ro}];
+      var salt = 'r' + Date.now();
+      return hash(salt, b.password).then(function(hh){
+        var team = JSON.parse(JSON.stringify(get('config/team'))), rid = Object.keys(team.people).filter(function(p){ return norm(team.people[p].login) === ro.login; })[0];
+        team.people[rid].salt = salt; team.people[rid].hash = hh; put('config/team', team);
+        st.session = ro.login; st.devices.push(ro.login); save(); return [200, {ok:true}];
       });
     }
     if(path === '/api/logout'){ st.session = null; save(); return [200, {ok:true}]; }
@@ -121,7 +153,8 @@ mock = mock.replace('ACL', acl).replace('MERGE', merge).replace('DOCS', json.dum
 
 hint = """
     <div class="demo-acc" id="demoAcc">
-      <b>Демо: как это будет на iteamboard.ru.</b> Данные выдуманные, пароль у всех <code>demo</code>.
+      <span><b>Демо: как это будет на iteamboard.ru.</b> Данные выдуманные, пароль у всех <code>demo</code>.
+      Юле и Анне при первом входе с устройства придёт код на почту — в демо он появится внизу экрана.</span>
       <div class="demo-row">
         <button type="button" class="btn ghost" data-l="yulia">Юлия · администратор</button>
         <button type="button" class="btn ghost" data-l="shua@iway.ru">Анна · HR-менеджер</button>
@@ -134,6 +167,7 @@ css = """
   .demo-acc b{color:var(--ink);}
   .demo-row{display:flex; flex-wrap:wrap; gap:8px;}
   .demo-row .btn{font-size:13px;}
+  .demo-mail{position:fixed; right:max(16px, env(safe-area-inset-right, 0px)); bottom:calc(16px + env(safe-area-inset-bottom, 0px)); left:max(16px, env(safe-area-inset-left, 0px)); max-width:420px; margin-left:auto; padding:14px 16px; border-radius:12px; background:var(--ink); color:var(--paper); font-size:14px; z-index:50;}
   .demo-reset{align-self:flex-start; background:none; border:0; padding:0; color:var(--ink-3); text-decoration:underline; cursor:pointer; font:inherit;}
 </style>"""
 wire = """
@@ -149,7 +183,7 @@ def rep(s, a, b, n=1):
 page = rep(page, "window.HR_SERVER ? '/metrics' :", "'https://claude.ai/artifact/LT73wVkVx9bYcwANYwPVt1' ||")
 page = rep(page, "ext:!window.HR_SERVER,", "ext:true,")
 # после входа сервер перезагружает страницу по адресу; у артефакта адрес с параметрами — перезагружаем как есть
-page = rep(page, "location.replace(location.pathname);", "location.reload();")
+page = rep(page, "location.replace(location.pathname);", "location.reload();", 3)
 page = rep(page, '<p class="gate-foot" id="gateFoot">', hint + '\n    <p class="gate-foot" id="gateFoot">')
 page = re.sub(r'</style>', css, page, count=1)
 page = rep(page, '<title>Корпоративный портал i’way</title>', '<title>Демо портала i’way</title>')

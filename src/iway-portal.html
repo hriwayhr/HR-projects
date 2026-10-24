@@ -502,7 +502,9 @@
   #gateLogin{letter-spacing:.06em; font-weight:600;}
   .gate-err{color:#B3261E; font-weight:600; font-size:14px;}
   .gate-foot{margin-top:22px; padding-top:18px; border-top:1px solid var(--line); font-size:13.5px;}
-  .gate-foot a{color:var(--blue-deep); font-weight:600;}
+  .gate-foot a, .link-btn{color:var(--blue-deep); font-weight:600;}
+  .link-btn{background:none; border:0; padding:0; font:inherit; cursor:pointer; text-decoration:underline; align-self:flex-start;}
+  .gate-lead{margin:0; font-size:14px; color:var(--ink-2);}
 
   /* ——— панель HR ——— */
   .admin{padding-block:28px 64px;}
@@ -769,6 +771,38 @@
         <input id="gatePass" name="password" type="password" autocomplete="current-password" maxlength="64" required>
       </div>
       <button class="btn" type="submit">Войти</button>
+    </form>
+    <form class="gate-form" id="codeForm" hidden>
+      <p class="gate-lead" id="codeLead"></p>
+      <div class="field">
+        <label for="codeInput">Код из письма</label>
+        <input id="codeInput" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required>
+      </div>
+      <button class="btn" type="submit">Войти</button>
+      <button class="link-btn" type="button" id="codeBack">← Назад</button>
+    </form>
+    <form class="gate-form" id="resetForm" hidden>
+      <p class="gate-lead" id="resetLead">Пришлём код на рабочую почту — по нему зададите новый пароль.</p>
+      <div class="field">
+        <label for="resetLogin">Почта или логин</label>
+        <input id="resetLogin" autocomplete="username" maxlength="80" required>
+      </div>
+      <div class="gate-form" id="resetStep2" hidden>
+        <div class="field">
+          <label for="resetCode">Код из письма</label>
+          <input id="resetCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}">
+        </div>
+        <div class="field">
+          <label for="resetPass">Новый пароль, от 8 символов</label>
+          <input id="resetPass" type="password" autocomplete="new-password" minlength="8" maxlength="128">
+        </div>
+        <div class="field">
+          <label for="resetPass2">Новый пароль ещё раз</label>
+          <input id="resetPass2" type="password" autocomplete="new-password" maxlength="128">
+        </div>
+      </div>
+      <button class="btn" type="submit" id="resetBtn">Отправить код</button>
+      <button class="link-btn" type="button" id="resetBack">← Ко входу</button>
     </form>
     <p class="gate-err" id="gateErr" hidden></p>
     <p class="gate-foot" id="gateFoot">Потерял пароль? Напиши на <a href="mailto:hr@iway.ru">hr@iway.ru</a> — HR выдаст новый.</p>
@@ -1862,8 +1896,54 @@
   }
 
   /* ——— вход ——— */
+  function gateStep(id){
+    ['gateForm', 'codeForm', 'resetForm'].forEach(function(f){ $(f).hidden = f !== id; });
+    $('gateErr').hidden = true;
+  }
+  function gateMsg(text){ $('gateErr').textContent = text; $('gateErr').hidden = !text; }
+  function postJson(url, body){
+    return fetch(url, {method:'POST', credentials:'same-origin', headers:{'X-HR':'1', 'Content-Type':'application/json'}, body:JSON.stringify(body)})
+      .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); }, function(){ return {ok:false, j:{error:'Сервер не отвечает — попробуй через минуту.'}}; });
+  }
+  /* Код на почту: при первом входе HR и администратора с нового устройства и при восстановлении пароля */
+  var otp = null;
+  if(window.HR_SERVER){
+    $('gateFoot').innerHTML = 'Забыли пароль? HR и администратор — <button class="link-btn" type="button" id="resetOpen">восстановить по коду на почту</button>. ' +
+      'Новичкам новый пароль выдаёт HR: <a href="mailto:hr@iway.ru">hr@iway.ru</a>.';
+    $('resetOpen').addEventListener('click', function(){
+      gateStep('resetForm'); $('resetStep2').hidden = true; $('resetBtn').textContent = 'Отправить код';
+      $('resetLogin').value = $('gateLogin').value; $('resetLogin').focus();
+    });
+    $('codeBack').addEventListener('click', function(){ gateStep('gateForm'); });
+    $('resetBack').addEventListener('click', function(){ gateStep('gateForm'); });
+    $('codeForm').addEventListener('submit', function(e){
+      e.preventDefault();
+      postJson('/api/plogin-code', {ticket:otp, code:$('codeInput').value.trim()}).then(function(r){
+        if(r.ok){ location.replace(location.pathname); return; }
+        gateMsg(r.j.error || 'Не получилось войти.');
+        if(/устарел|5 раз/.test(r.j.error || '')){ gateStep('gateForm'); gateMsg(r.j.error); }
+      });
+    });
+    $('resetForm').addEventListener('submit', function(e){
+      e.preventDefault();
+      var btn = $('resetBtn'); btn.disabled = true;
+      var step2 = !$('resetStep2').hidden;
+      if(step2 && $('resetPass').value !== $('resetPass2').value){ btn.disabled = false; gateMsg('Пароли не совпадают.'); return; }
+      (step2 ? postJson('/api/reset-finish', {ticket:otp, code:$('resetCode').value.trim(), password:$('resetPass').value})
+             : postJson('/api/reset-start', {login:$('resetLogin').value.trim().toLowerCase()})).then(function(r){
+        btn.disabled = false;
+        if(!r.ok){ gateMsg(r.j.error || 'Не получилось.'); return; }
+        if(step2){ location.replace(location.pathname); return; }
+        otp = r.j.ticket; gateMsg('');
+        $('resetLead').textContent = 'Если такой логин есть в команде, код уже на рабочей почте. Он действует 10 минут.';
+        $('resetStep2').hidden = false; $('resetCode').required = $('resetPass').required = $('resetPass2').required = true;
+        btn.textContent = 'Сохранить пароль и войти'; $('resetCode').focus();
+      });
+    });
+  }
   function openGate(err){
     show('gate');
+    gateStep('gateForm');
     $('gateErr').hidden = !err;
     if(err) $('gateErr').textContent = err;
     $('gatePass').value = '';
@@ -1881,6 +1961,12 @@
     if(window.HR_SERVER){
       fetch('/api/plogin', {method:'POST', credentials:'same-origin', headers:{'X-HR':'1', 'Content-Type':'application/json'}, body:JSON.stringify({login:v, password:pass})})
         .then(function(r){ return r.json().then(function(j){
+          if(r.ok && j.need === 'code'){
+            done(); otp = j.ticket; gateStep('codeForm');
+            $('codeLead').textContent = 'Вы входите с этого устройства впервые. Мы отправили код на ' + j.to + ' — он действует 10 минут.';
+            $('codeInput').value = ''; $('codeInput').focus();
+            return;
+          }
           if(r.ok){ location.replace(location.pathname); return; }
           done(); openGate(j.error || 'Не получилось войти.');
         }); }, function(){ done(); openGate('Сервер не отвечает — попробуй через минуту.'); });

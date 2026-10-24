@@ -22,6 +22,9 @@ function config(env = process.env) {
     domains: list(env.ALLOWED_DOMAINS), admins: list(env.ADMIN_EMAILS), bucket: env.BACKUP_BUCKET,
     local: env.LOCAL === '1',   // локальная версия: сервер на этом ПК, вход по логину и паролю из «Команды»
     webImport: env.LOCAL === '1' && env.WEB_IMPORT !== '0',   // загрузка данных со страницы — только на своём ПК; на открытом сервере — из файла (server.js)
+    // почта для кодов входа (Яндекс 360: smtp.yandex.ru:465, пароль приложения); не задана — вход только по паролю, как раньше
+    smtp: env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS
+      ? { host: env.SMTP_HOST, port: +env.SMTP_PORT || 465, user: env.SMTP_USER, pass: env.SMTP_PASS, from: env.SMTP_FROM || env.SMTP_USER } : null,
   };
 }
 
@@ -179,6 +182,113 @@ async function backup(cfg, store, context, fetchFn = fetch) {
   return { statusCode: 200, body: key + ': ' + Object.keys(docs).length };
 }
 
+// ---------- письмо с кодом: SMTP по TLS (порт 465) без сторонних библиотек ----------
+// shortcut: только неявный TLS (465), без STARTTLS (587) — Яндекс 360 и большинство почтовых сервисов 465 принимают
+function smtpSend(smtp, to, subject, text, connect = opts => require('tls').connect(opts)) {
+  const b64 = s => Buffer.from(s).toString('base64');
+  const body = b64(text).replace(/.{76}/g, '$&\r\n');
+  const msg = ['From: ' + smtp.from, 'To: ' + to, 'Subject: =?UTF-8?B?' + b64(subject) + '?=', 'Date: ' + new Date().toUTCString(),
+    'Message-ID: <' + crypto.randomBytes(12).toString('hex') + '@' + smtp.from.split('@')[1] + '>', 'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=utf-8', 'Content-Transfer-Encoding: base64', '', body].join('\r\n');
+  // команда → ожидаемый код ответа сервера
+  const steps = [[null, 220], ['EHLO portal', 250], ['AUTH PLAIN ' + b64('\0' + smtp.user + '\0' + smtp.pass), 235],
+    ['MAIL FROM:<' + smtp.from + '>', 250], ['RCPT TO:<' + to + '>', 250], ['DATA', 354], [msg + '\r\n.', 250], ['QUIT', 221]];
+  return new Promise((ok, fail) => {
+    const sock = connect({ host: smtp.host, port: smtp.port, servername: smtp.host });
+    let buf = '', i = 0;
+    const stop = e => { sock.destroy(); fail(e); };
+    sock.setTimeout(15000, () => stop(new Error('SMTP: нет ответа')));
+    sock.on('error', stop);
+    sock.on('data', d => {
+      buf += d;
+      const last = buf.split('\r\n').filter(Boolean).pop() || '';
+      if (!buf.endsWith('\n') || !/^\d{3} /.test(last)) return;   // многострочный ответ ещё не закончился
+      buf = '';
+      if (+last.slice(0, 3) !== steps[i][1]) return stop(new Error('SMTP ' + (steps[i][0] || 'приветствие').split(' ')[0] + ': ' + last.slice(0, 120)));
+      if (++i === steps.length) { sock.end(); return ok(); }
+      sock.write(steps[i][0] + '\r\n');
+    });
+  });
+}
+
+// Код на почту: при входе с нового устройства и при восстановлении пароля — только для команды и только если почта настроена.
+// Знакомые устройства — в подписанной cookie (до 5 человек на браузер); смена пароля их сбрасывает (в записи — отпечаток пароля).
+const DEV_COOKIE = 'hr_d', DEV_DAYS = 365, OTP = new Map(), SENT = new Map(), OTP_MS = 10 * 60e3, OTP_TRIES = 5;
+const devList = (cfg, headers) => { const p = auth.verify(cfg.sessionSecret, auth.cookies(headers)[DEV_COOKIE]); return p ? p.e.split(',') : []; };
+function devCookie(cfg, headers, pid, hash) {
+  const list = [pid + ':' + pwMark(hash)].concat(devList(cfg, headers).filter(x => x.split(':')[0] !== pid)).slice(0, 5);
+  return auth.setCookie(DEV_COOKIE, auth.sign(cfg.sessionSecret, { e: list.join(','), x: Date.now() + DEV_DAYS * 864e5 }), DEV_DAYS * 86400);
+}
+const mailOf = t => [t.email, t.login].map(acl.norm).find(e => /^[^\s<>@,]+@[^\s<>@,]+\.[^\s<>@,]+$/.test(e)) || '';
+const twoFactor = (cfg, t) => !!(cfg.smtp || cfg.mailer) && portalOn(cfg) && !!mailOf(t);
+// Отправить код: не чаще раза в минуту и 5 раз в час на человека. Возвращает номер заявки или текст ошибки.
+async function sendCode(cfg, pid, t, kind, ip) {
+  const now = Date.now(), sent = (SENT.get(pid) || []).filter(x => now - x < 3600e3);
+  if (sent.length >= 5 || now - (sent[sent.length - 1] || 0) < 60e3) return 'Код уже отправлен — подождите минуту и проверьте почту.';
+  const code = String(crypto.randomInt(0, 1e6)).padStart(6, '0'), ticket = crypto.randomBytes(16).toString('hex');
+  const what = kind === 'reset' ? 'восстановления пароля' : 'входа';
+  const text = 'Код ' + what + ' в портал i’way: ' + code + '\n\nДействует 10 минут. Запрос с адреса ' + (ip || 'неизвестен') + '.\n' +
+    'Если это были не вы — никому не сообщайте код и смените пароль: кто-то знает ваш пароль или пытается его сменить.';
+  try { await (cfg.mailer || ((to, s, x) => smtpSend(cfg.smtp, to, s, x)))(mailOf(t), 'Код ' + what + ': ' + code, text); }
+  catch (e) { console.error('код не отправлен:', e.message); return 'Не удалось отправить код на почту — попробуйте позже или обратитесь к администратору.'; }
+  SENT.set(pid, sent.concat(now));
+  if (OTP.size > 10000) prune(OTP, now, 0, v => v.exp);
+  OTP.set(ticket, { pid, kind, mark: pwMark(t.hash), hash: crypto.createHash('sha256').update(code).digest('hex'), tries: 0, exp: now + OTP_MS });
+  return { ticket, to: mailOf(t).replace(/^(.).*?@/, '$1•••@') };
+}
+// Проверить код: заявка одноразовая, 5 попыток, 10 минут; пароль за это время не менялся. Возвращает {pid, t} или текст ошибки.
+async function checkCode(store, b, kind) {
+  const o = OTP.get(String(b.ticket || '')), now = Date.now();
+  if (o && now > o.exp) OTP.delete(String(b.ticket));
+  if (!o || o.kind !== kind || now > o.exp) return 'Код устарел — запросите новый.';
+  const got = crypto.createHash('sha256').update(String(b.code || '').replace(/\s/g, '')).digest('hex');
+  if (!crypto.timingSafeEqual(Buffer.from(got), Buffer.from(o.hash))) {
+    if (++o.tries >= OTP_TRIES) { OTP.delete(b.ticket); return 'Код введён неверно 5 раз — запросите новый.'; }
+    await new Promise(r => setTimeout(r, 400));
+    return 'Неверный код.';
+  }
+  OTP.delete(b.ticket);
+  const t = (((await store.get('config/team')) || {}).people || {})[o.pid];
+  if (!t || t.archived || pwMark(t.hash) !== o.mark) return 'Код устарел — запросите новый.';
+  return { pid: o.pid, t };
+}
+const sessionFor = (cfg, t) => auth.sessionCookie(cfg.sessionSecret, acl.norm(t.login) + '|' + pwMark(t.hash));
+async function codeLogin(cfg, store, b, headers) {
+  const r = await checkCode(store, b, 'login');
+  if (typeof r === 'string') return json(401, { error: r });
+  return respond(200, { ok: true }, {}, { multiValueHeaders: { 'Set-Cookie': [sessionFor(cfg, r.t), devCookie(cfg, headers, r.pid, r.t.hash)] } });
+}
+// Восстановление пароля (только команда): ответ одинаковый, есть такой человек или нет — по нему не узнать, чьи логины существуют
+async function resetStart(cfg, store, b, ip) {
+  if (!cfg.smtp && !cfg.mailer) return json(503, { error: 'Восстановление по почте не настроено — обратитесь к администратору.' });
+  const now = Date.now(), key = 'rs:' + ip;
+  if (failsOf(key, now) >= IP_MAX) return json(429, { error: 'Слишком много запросов — подождите 15 минут.' });
+  addFail(key, now);
+  const people = ((await store.get('config/team')) || {}).people || {}, login = acl.norm(b.login).slice(0, 200);
+  const pid = Object.keys(people).find(p => people[p].login && (acl.norm(people[p].login) === login || acl.norm(people[p].email) === login));
+  const t = pid && people[pid];
+  if (t && !t.archived && twoFactor(cfg, t)) {
+    const r = await sendCode(cfg, pid, t, 'reset', ip);
+    if (typeof r === 'string') return json(r.startsWith('Не удалось') ? 502 : 429, { error: r });
+    return json(200, { ok: true, ticket: r.ticket });
+  }
+  return json(200, { ok: true, ticket: crypto.randomBytes(16).toString('hex') });
+}
+async function resetFinish(cfg, store, b, headers) {
+  const pw = String(b.password || '');
+  if (pw.length < 8 || pw.length > 128) return json(400, { error: 'Пароль — от 8 до 128 символов.' });
+  const r = await checkCode(store, b, 'reset');
+  if (typeof r === 'string') return json(401, { error: r });
+  const salt = crypto.randomBytes(8).toString('hex'), hash = crypto.createHash('sha256').update(salt + '::' + pw).digest('hex');
+  await store.tx('config/team', prev => {
+    const next = JSON.parse(JSON.stringify(prev));
+    next.people[r.pid] = Object.assign(next.people[r.pid], { salt, hash });
+    return next;
+  }, 'reset:' + r.pid);
+  const t = Object.assign({}, r.t, { salt, hash });
+  return respond(200, { ok: true }, {}, { multiValueHeaders: { 'Set-Cookie': [sessionFor(cfg, t), devCookie(cfg, headers, r.pid, hash)] } });
+}
+
 // ---------- локальная версия: вход по паролю и первичная загрузка данных ----------
 // Пароль — тот же SHA-256(salt + '::' + пароль), что выдаёт «Команда»; проверяет сервер, страница хешей не получает.
 // Перебор (окно 15 минут):
@@ -203,7 +313,7 @@ function clientIp(event) {
 }
 // В сессии — отпечаток пароля: сменили пароль — прежние входы (в том числе украденная cookie) больше не действуют
 const pwMark = hash => crypto.createHash('sha256').update('session::' + String(hash || '')).digest('hex').slice(0, 16);
-async function passwordLogin(cfg, store, b, ip) {
+async function passwordLogin(cfg, store, b, ip, headers) {
   const people = ((await store.get('config/team')) || {}).people || {}, login = acl.norm(b.login).slice(0, 200);
   const now = Date.now(), ipKey = 'ip:' + ip, loginKey = 'l:' + login, pairKey = 'p:' + login + '|' + ip, known = now - (GOOD.get(pairKey) || 0) < GOOD_MS;
   if (failsOf(pairKey, now) >= PAIR_MAX || (!known && (failsOf(ipKey, now) >= IP_MAX || failsOf(loginKey, now) >= LOGIN_MAX)))
@@ -227,6 +337,11 @@ async function passwordLogin(cfg, store, b, ip) {
   if (GOOD.size >= KEYS_MAX) prune(GOOD, now, GOOD_MS, v => v);
   if (GOOD.size < KEYS_MAX) GOOD.set(pairKey, now);
   if (t.archived) return json(403, { error: 'Учётная запись в архиве — обратитесь к администратору.' });
+  if (pid && twoFactor(cfg, t) && !devList(cfg, headers).includes(pid + ':' + pwMark(t.hash))) {
+    const r = await sendCode(cfg, pid, t, 'login', ip);
+    if (typeof r === 'string') return json(r.startsWith('Не удалось') ? 502 : 429, { error: r });
+    return json(200, { need: 'code', ticket: r.ticket, to: r.to });
+  }
   return respond(200, { ok: true }, {}, { multiValueHeaders: { 'Set-Cookie': [auth.sessionCookie(cfg.sessionSecret, session + '|' + pwMark(t.hash))] } });
 }
 // Только в пустую базу: данные из версии для ПК или резервной копии; нужен администратор с паролем
@@ -302,7 +417,10 @@ function makeHandler(store, cfg, fetchFn) {
       // запись — только со своей страницы: свой заголовок кросс-доменный сайт без разрешения CORS не пошлёт
       if (method !== 'GET' && auth.headerOf(headers, 'x-hr') !== '1') return json(403, { error: 'Запрос не со страницы приложения.' });
       const body = () => { try { return JSON.parse(event.isBase64Encoded ? Buffer.from(event.body || '', 'base64').toString() : event.body || ''); } catch (e) { return null; } };
-      if (cfg.local && method === 'POST' && url === '/api/plogin') return await passwordLogin(cfg, store, body() || {}, clientIp(event));
+      if (cfg.local && method === 'POST' && url === '/api/plogin') return await passwordLogin(cfg, store, body() || {}, clientIp(event), headers);
+      if (portalOn(cfg) && method === 'POST' && url === '/api/plogin-code') return await codeLogin(cfg, store, body() || {}, headers);
+      if (portalOn(cfg) && method === 'POST' && url === '/api/reset-start') return await resetStart(cfg, store, body() || {}, clientIp(event));
+      if (portalOn(cfg) && method === 'POST' && url === '/api/reset-finish') return await resetFinish(cfg, store, body() || {}, headers);
       if (cfg.webImport && method === 'POST' && url === '/api/import-initial') return await importInitial(store, body() || {});
       const user = await currentUser(cfg, store, headers);
       if (!user) return json(401, { error: 'Нужно войти.', empty: cfg.webImport ? (await store.count()) === 0 : undefined });
@@ -346,4 +464,4 @@ module.exports.create = (store, cfg, f) => withLogout(makeHandler(store, cfg, f)
 module.exports.config = config;
 module.exports.importDocs = importDocs;
 module.exports.docsFromFile = docsFromFile;
-module.exports.forTests = { makeHandler: (store, cfg, f) => withLogout(makeHandler(store, cfg, f)), config, memoryStore, pwMark };
+module.exports.forTests = { makeHandler: (store, cfg, f) => withLogout(makeHandler(store, cfg, f)), config, memoryStore, pwMark, smtpSend, resetLimits: () => [FAILS, GOOD, OTP, SENT].forEach(m => m.clear()) };
