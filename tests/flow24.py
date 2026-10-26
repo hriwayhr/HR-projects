@@ -43,13 +43,15 @@ with sync_playwright() as p:
     assert 'Юлия Немчинова' not in pg.inner_text('#dTable')   # администратор без метрик — не в таблице рекрутеров
 
     # 2. дашборд дня по команде
-    pg.fill('#dDate', '2026-10-01'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
+    pg.evaluate("setPeriod('day', '2026-10-01')"); pg.wait_for_timeout(100)
     tiles = pg.inner_text('#dTiles')
     for want in ('3 из 4', '+25 п.п.', 'Вакансии в работе\n14', '+11', 'Чаты\n3'): assert want in tiles, (want, tiles)
 
     # 2a. пропуски: будни с 28.09 без цифр подсвечены, клик ведёт в форму на этот день
     todo = pg.inner_text('#dTodo')
-    assert 'Нужно внести' in todo and '28.09 пн' in todo and '30.09 ср' in todo, todo
+    assert 'Нужно сделать' in todo and 'внести день' in todo.lower() and 'ещё' in todo, todo   # свежие пропуски — первыми, остальные под «ещё»
+    pg.click('#dTodo details summary'); assert '28.09, пн' in pg.inner_text('#dTodo')
+    assert pg.query_selector('#dTodo button.miss[data-p=anna][data-d="2026-09-30"]') and 'todo-col' in pg.get_attribute('#dTodo', 'class') and 'calm' not in pg.get_attribute('#dTodo', 'class')
     assert pg.evaluate("dayStatus('yulia', '2026-09-30')") == 'ok' and pg.evaluate("dayStatus('yulia', '2026-09-25')") == 'vac'   # до недели перехода — отпуск
     assert pg.evaluate("dayStatus('yulia', '2026-09-27')") == 'off'   # воскресенье
     pg.click('#dTodo button.miss[data-p=anna][data-d="2026-09-28"]'); pg.wait_for_timeout(200)
@@ -89,7 +91,7 @@ with sync_playwright() as p:
     custom = pg.get_attribute('#fGroups input[id^=m_c_]', 'data-k')
     pg.fill('#m_int_planned', '2'); pg.fill('#m_int_done', '2'); pg.fill('#m_' + custom, '7'); pg.click('#fSave'); pg.wait_for_timeout(300)
     day = pg.evaluate("window.__store['months/anna_2026-10'].days['2026-10-02']")
-    assert day == {'vac_start': 5, 'int_planned': 2, 'int_done': 2, custom: 7}, day
+    assert day.pop('savedAt') and day == {'vac_start': 5, 'int_planned': 2, 'int_done': 2, custom: 7}, day   # плюс время ввода дня
     # 5a. сводка: блок месяца по неделям, неделя 28.09–2.10 — в октябре (четверг 1.10), sum и CV %
     pg.click('#tab_sum'); pg.wait_for_timeout(100)
     blk = pg.inner_text('#sBlocks')
@@ -213,9 +215,9 @@ with sync_playwright() as p:
     pg.click('#tab_entry'); assert not pg.is_visible('#fPerson')
     pg.fill('#fDate', '2026-10-05'); pg.dispatch_event('#fDate', 'change'); pg.fill('#m_int_planned', '1'); pg.click('#fSave'); pg.wait_for_timeout(300)
     assert pg.evaluate("window.__store['months/anna_2026-10'].days['2026-10-05'].int_planned") == 1
-    pg.click('#tab_day'); pg.fill('#dDate', '2026-10-01'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
+    pg.click('#tab_day'); pg.evaluate("setPeriod('day', '2026-10-01')"); pg.wait_for_timeout(100)
     t = pg.inner_text('#dTiles'); assert 'Вакансии в работе\n5' in t, t   # только Анна, без Юли
-    assert pg.inner_text('#dChips') == ''
+    assert pg.inner_text('#dTable thead').count('дней') + pg.inner_text('#dTable thead').count('внесено') + pg.inner_text('#dTable thead').count('нужно') <= 2 and 'Юлия' not in pg.inner_text('#dTable')   # у рекрутера — только свой столбец
     pg.click('#tab_vac'); pg.wait_for_timeout(100)
     assert 'Вакансий нет' in pg.inner_text('#vTable')
     # «Мой отпуск»: отпуск убирает дни из пропусков и ставит статус
@@ -224,7 +226,7 @@ with sync_playwright() as p:
     vl = pg.evaluate("window.__store['vacations/anna'].list"); assert len(vl) == 1 and vl[0]['from'] == '2026-09-28' and vl[0]['to'] == '2030-01-01' and vl[0].get('sub') != 'anna', vl   # вакансии — коллеге
     assert 'в отпуске' in pg.inner_text('#meRole') and 'идёт' in pg.inner_text('#oTable')
     pg.click('#tab_day'); pg.wait_for_timeout(100)
-    assert 'Все рабочие дни внесены' in pg.inner_text('#dTodo'), pg.inner_text('#dTodo')
+    assert 'Всё сделано' in pg.inner_text('#dTodo') and 'calm' in pg.get_attribute('#dTodo', 'class'), pg.inner_text('#dTodo')
     pg.click('#tab_vacation'); pg.click('#oTable button[data-i="0"]'); pg.wait_for_timeout(300)
     assert pg.evaluate("window.__store['vacations/anna'].list") == []   # у Анны нет фамилии — в «Ответственном» её нет
 
@@ -233,11 +235,11 @@ with sync_playwright() as p:
     pg.click('#tab_settings'); pg.click('#sub_team'); pg.click('#tUsers button[data-act=archive][data-p=anna]'); pg.wait_for_timeout(300)
     assert 'Анна' in pg.inner_text('#tArchive') and 'Анна' not in pg.inner_text('#tUsers')
     assert pg.evaluate("window.__store['config/team'].people.anna.archivedAt")
-    pg.click('#tab_day'); pg.fill('#dDate', '2026-10-01'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
+    pg.click('#tab_day'); pg.evaluate("setPeriod('day', '2026-10-01')"); pg.wait_for_timeout(100)
     t = pg.inner_text('#dTable'); assert 'Анна (архив)' in t, t
     assert 'Вакансии в работе\n14' in pg.inner_text('#dTiles')   # её цифры в итогах команды
-    pg.fill('#dDate', pg.evaluate('today()')); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
-    assert 'Анна' not in pg.inner_text('#dTable') and 'Анна' not in pg.inner_text('#dChips')   # с дня архивации её нет
+    pg.evaluate("setPeriod('day', today())"); pg.wait_for_timeout(100)
+    assert 'Анна' not in pg.inner_text('#dTable')   # с дня архивации её нет
     pg.click('#tab_sum'); assert 'Анна (архив)' in pg.inner_text('#sPerson')
     pg.select_option('#sPerson', 'anna'); pg.wait_for_timeout(100); assert 'Пока нет' not in pg.inner_text('#sBlocks')
     pg.click('#tab_entry'); assert 'Анна (архив)' in pg.inner_text('#fPerson')

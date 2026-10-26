@@ -87,7 +87,8 @@ with sync_playwright() as p:
     # указали 2 мес.: Петрова (вышла 3.08) — срок закончился 3.10, Иванов (20.08) — до 20.10
     pr = txt(pg, '#dProb')
     assert 'Сейчас на испытательном\n1' in pr and 'ждут итога: 1' in pr and 'закончился 4 дня назад' in pr and 'осталось 13 дней' in pr, pr
-    assert pr.index('Петрова') < pr.index('Иванов Иван') and 'Сидоров' not in pr and 'Увольнения\n1' in pr
+    assert pr.index('Петрова') < pr.index('Иванов Иван') and 'Сидоров' not in pr and 'Увольнения' not in pr   # увольнения — строкой в «По рекрутерам»
+    assert '1' in pg.inner_text('#dTable tr:has-text("Увольнения")'), pg.inner_text('#dTable tr:has-text("Увольнения")')
     pg.click('#dProb tr:has-text("Петрова") [data-prob=passed]'); pg.wait_for_timeout(300)
     c = pg.evaluate("window.__store['vacancies/c']")
     assert c['seats'][0]['probation'] == {'result': 'passed', 'at': '2026-10-03'} and 'probation' not in c['seats'][1], c
@@ -112,7 +113,7 @@ with sync_playwright() as p:
     assert 'Юлия Немчинова\t2\t3\t36\t36\t1' in ld and ld.split('Юлия Немчинова')[1].split('\n')[0].endswith('\t1'), ld
     assert 'Октябрь по вакансиям: 1 выход (вышли 0, ожидаются 1)' in ld and 'В метриках дня: 1' in ld and '20.10.26\tСидоров\tМенеджер' in ld, ld
     # сроки по этапам — за год: Диспетчер (4 + 15 = 19 дн.), Петрова (7 + 2 = 9 дн.)
-    pg.select_option('#dMode', 'year'); pg.wait_for_timeout(100)
+    pg.click('#dModes [data-mode=year]'); pg.keyboard.press('Escape'); pg.wait_for_timeout(100)
     st = txt(pg, '#dStages')
     # выходы — в августе, а сроки считаем с 01.10.26 (раньше их не фиксировали): закрытых за период нет
     assert 'За период закрытых вакансий нет' in st, st
@@ -121,7 +122,7 @@ with sync_playwright() as p:
     assert 'Логистика\t1\t4 дн.\t15 дн.\t19 дн.' in st and 'Продажи\t1\t7 дн.\t2 дн.\t9 дн.' in st and 'Все\t2\t6 дн.\t9 дн.\t14 дн.' in st, st
     pg.select_option('#dStageBy', 'owner'); pg.wait_for_timeout(100)
     assert 'Анна Шулятицкая\t1' in txt(pg, '#dStages') and pg.input_value('#dStageBy') == 'owner'
-    pg.select_option('#dMode', 'month'); pg.wait_for_timeout(100)
+    pg.click('#dModes [data-mode=month]'); pg.keyboard.press('Escape'); pg.wait_for_timeout(100)
     # причины отказов: пусто → загрузка CSV → дашборд
     assert 'Настройки → Talantix' in txt(pg, '#dReasons')
     pg.click('#tab_settings'); pg.click('#sub_talantix'); assert 'Пока ничего не загружено' in txt(pg, '#tTable')

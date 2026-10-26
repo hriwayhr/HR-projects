@@ -189,6 +189,95 @@
   .link-row label.f{font-size:11px;}
   input[readonly]{background:var(--paper); color:var(--ink-2);}
   .dis-names{display:contents;}
+  /* дашборд: период — вкладки от года к дню, ‹ период ▾ ›, окошко выбора */
+  .dperiod{display:flex; flex-direction:column; gap:10px; margin-block:4px 18px;}
+  .ptabs{display:flex; gap:22px; border-bottom:1px solid var(--line); overflow-x:auto;}
+  .ptabs button{font:inherit; color:var(--ink-3); border:0; background:none; padding:8px 0; font-weight:600; white-space:nowrap; border-bottom:2px solid transparent; margin-bottom:-1px; cursor:pointer;}
+  .ptabs button[aria-pressed="true"]{color:var(--accent-deep); border-bottom-color:var(--accent);}
+  .dstep{position:relative; display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px;}
+  .dstep .sub{color:var(--ink-3); font-size:14px;}
+  .dcur{font:inherit; color:inherit; border:0; background:none; padding:2px 6px; border-radius:8px; display:inline-flex; align-items:center; gap:6px; cursor:pointer;}
+  .dcur b{font-size:24px; letter-spacing:-.01em;} .dcur span{font-size:13px; color:var(--ink-3);}
+  .dcur:hover{background:var(--tint);}
+  .dpop{position:absolute; top:calc(100% + 8px); left:0; z-index:40; width:min(350px, calc(100vw - 32px)); background:var(--surface); border:1px solid var(--line); border-radius:14px; box-shadow:0 12px 32px rgba(0,0,0,.14); padding:12px; display:flex; flex-direction:column; gap:10px;}
+  .dpop button{font:inherit; color:inherit; cursor:pointer;}
+  .pph{display:flex; align-items:center; justify-content:space-between; font-weight:700;}
+  .pph button{border:0; background:none; width:30px; height:30px; border-radius:50%; font-size:16px; color:var(--ink-2);}
+  .pph button:disabled{opacity:.3; cursor:default;}
+  .pgrid{display:grid; gap:6px;}
+  .pgrid button, .pcal button{border:1px solid var(--line); background:var(--surface); border-radius:8px; padding:8px 4px;}
+  .pgrid button:hover:not(:disabled), .pcal button:hover:not(:disabled), .pweeks button:hover:not(:disabled){border-color:var(--accent);}
+  .pgrid button[aria-pressed="true"], .pcal button[aria-pressed="true"]{background:var(--accent); border-color:var(--accent); color:var(--accent-ink); font-weight:600;}
+  .pgrid button:disabled, .pcal button:disabled, .pweeks button:disabled{opacity:.35; cursor:default;}
+  .pyr{font-size:12px; color:var(--ink-3); font-weight:600; align-self:center;}
+  .pcal{display:grid; grid-template-columns:repeat(7, 1fr); gap:3px; font-size:13px;}
+  .pcal .h{text-align:center; color:var(--ink-3); font-size:11px; padding:2px 0;}
+  .pcal button{padding:6px 0; border-color:transparent;}
+  .pweeks{display:flex; flex-direction:column; gap:3px; font-size:13px;}
+  .pweeks button{display:grid; grid-template-columns:40px repeat(7, 1fr); border:1px solid transparent; background:none; border-radius:8px; padding:5px 0; text-align:center;}
+  .pweeks button[aria-pressed="true"]{background:var(--accent); color:var(--accent-ink);}
+  .pweeks .wn{color:var(--ink-3); font-size:11px; align-self:center;}
+  .pweeks button[aria-pressed="true"] .wn{color:var(--accent-ink);}
+  .pweeks .h{display:grid; grid-template-columns:40px repeat(7, 1fr); text-align:center; color:var(--ink-3); font-size:11px;}
+  .dcustom{display:flex; flex-wrap:wrap; align-items:center; gap:6px; border-top:1px solid var(--line); padding-top:10px; font-size:13px; color:var(--ink-3);}
+  .dcustom span{width:100%;} .dcustom input{flex:1; min-width:0;}
+  /* дашборд: слева люди и график, справа — что сделать и главное за период */
+  .dmain{display:grid; grid-template-columns:minmax(0, 1fr) 300px; gap:16px; align-items:start;}
+  .dleft{display:flex; flex-direction:column; gap:16px; min-width:0;}
+  .dside{display:flex; flex-direction:column; gap:16px; position:sticky; top:12px;}
+  @media (max-width:900px){ .dmain{grid-template-columns:minmax(0, 1fr);} .dside{position:static; order:-1;} }
+  .dt-head{display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; margin-bottom:12px;}
+  .dt-head h3{margin:0;} .dt-head .sub{color:var(--ink-3); font-size:13px;}
+  .todo-col{border-radius:12px; padding:14px 16px; display:flex; flex-direction:column; gap:10px; background:var(--warn-bg); border:2px solid var(--warn-ink);}
+  .todo-col header{display:flex; align-items:center; gap:8px;}
+  .todo-col h3{margin:0; font-size:16px; color:var(--warn-ink);}
+  .todo-col .badge{min-width:24px; height:24px; border-radius:12px; background:var(--warn-ink); color:var(--warn-bg); font-weight:700; font-size:13px; display:grid; place-items:center; padding:0 7px;}
+  .todo-col h4{margin:0; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--warn-ink);}
+  .todo-col .it{display:flex; justify-content:space-between; align-items:center; gap:8px; background:var(--surface); border-radius:10px; padding:7px 10px; font-size:14px;}
+  .todo-col .it button{font:inherit; font-size:12.5px; font-weight:700; color:var(--accent-ink); background:var(--accent-deep); border:0; border-radius:8px; padding:4px 10px; white-space:nowrap; cursor:pointer;}
+  .todo-col details{font-size:13px; color:var(--warn-ink);} .todo-col details summary{cursor:pointer;} .todo-col details .it{margin-top:6px;}
+  .todo-col.calm{background:var(--tint); border:1px solid var(--line);} .todo-col.calm h3{color:var(--good);} .todo-col.calm p{margin:0; font-size:13px; color:var(--ink-2);}
+  #dNow h3{margin-bottom:8px;}
+  #dNow .s{display:flex; flex-direction:column; padding:6px 0 6px 12px; border-left:3px solid var(--line); font-size:14px; margin-top:6px;}
+  #dNow .s b{font-weight:600;} #dNow .s span{color:var(--ink-3); font-size:13px;}
+  #dNow .s.down{border-left-color:var(--bad);} #dNow .s.down b{color:var(--bad);}
+  #dNow .s.up{border-left-color:var(--good);} #dNow .s.up b{color:var(--good);}
+  #dNow .s.warn{border-left-color:var(--warn-ink);}
+  /* «По рекрутерам»: строки — показатели, столбцы — люди; дни человека — в боковой панели */
+  #dTable td{vertical-align:top;}
+  #dTable td .v{font-weight:600;}
+  #dTable td .s{display:block; font-size:11px; color:var(--ink-3); font-weight:400;}
+  #dTable td .s.man{color:var(--warn-ink);}
+  #dTable td .dl{font-size:12px; font-weight:600; margin-left:5px;}
+  #dTable td.z .v{color:var(--ink-3); font-weight:400;}
+  #dTable td.good{background:color-mix(in srgb, var(--good) 11%, transparent);} #dTable td.bad{background:color-mix(in srgb, var(--bad) 11%, transparent);}
+  #dTable tr.grp td{background:var(--off-bg); font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-3); font-weight:600; padding-block:5px;}
+  #dTable thead .who{all:unset; cursor:pointer; color:var(--accent-deep); border-bottom:1px dashed currentColor; text-transform:none; letter-spacing:0; font-size:13px;}
+  #dTable thead .who:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+  #dTable thead .st{display:block; margin-top:3px; text-transform:none; letter-spacing:0;}
+  #dTable thead .st .chip{font-size:11px; padding:1px 8px;}
+  #dTable .odd{color:var(--bad); font-size:10px; margin-left:4px;}
+  #dTable td .pill.leaver{margin-top:3px;}
+  #dTable details{font-size:12px; color:var(--warn-ink); margin-top:3px;} #dTable details summary{cursor:pointer;}
+  .tiles.t3{grid-template-columns:repeat(3,minmax(0,1fr));}
+  .ddrawer{position:fixed; top:0; right:0; bottom:0; width:min(920px, 100%); background:var(--surface); border-left:1px solid var(--line); box-shadow:-12px 0 40px rgba(0,0,0,.14); z-index:60;
+    display:flex; flex-direction:column; gap:10px; padding:calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) 20px;}
+  .ddrawer header{display:flex; justify-content:space-between; gap:10px; align-items:flex-start;}
+  .ddrawer .scroll{flex:1; overflow:auto;}
+  .ddrawer table{font-size:13.5px; width:auto;}
+  .ddrawer th,.ddrawer td{text-align:center; padding:6px 7px;}
+  .ddrawer thead th{position:sticky; top:0; background:var(--surface); z-index:1; text-transform:none; letter-spacing:0; font-size:12px;}
+  .ddrawer thead th small{display:block; font-weight:400; color:var(--ink-3);}
+  .ddrawer .lab{position:sticky; left:0; background:var(--surface); text-align:left; z-index:2; box-shadow:1px 0 0 var(--line);}
+  .ddrawer thead .lab{z-index:3;}
+  .ddrawer .miss{background:var(--warn-bg); color:var(--warn-ink);}
+  .ddrawer .vacd{background:var(--off-bg); color:var(--ink-3);}
+  .ddrawer td.out{color:var(--bad); font-weight:700;} .ddrawer td.man{color:var(--warn-ink); font-weight:600;} .ddrawer td.auto{color:var(--ink-3);}
+  .ddrawer td.nm{white-space:normal; min-width:110px; font-size:12px;}
+  .ddrawer .ed{all:unset; cursor:pointer; color:var(--accent-deep); font-weight:600; padding:2px 4px;}
+  .ddrawer .ed:focus-visible,.ddrawer .x:focus-visible{outline:2px solid var(--accent);}
+  .ddrawer .x{all:unset; cursor:pointer; font-size:24px; line-height:1; padding:2px 8px; color:var(--ink-2);}
+  .dscrim{position:fixed; inset:0; background:rgba(0,0,0,.25); z-index:59;}
   .pill.leaver{background:var(--warn-bg); color:var(--warn-ink);}
   #fGroups input.manual{background:var(--warn-bg); border-color:var(--warn-ink); color:var(--warn-ink);}
   .link-row input{flex:1;}
@@ -222,9 +311,6 @@
   .cv div{display:flex; justify-content:space-between; gap:12px; border-bottom:1px solid var(--line); padding-bottom:6px;}
   .cv b{font-size:18px;}
   .cv .lbl{font-size:12px; color:var(--ink-3); text-transform:uppercase; letter-spacing:.04em; border:0; padding:0;}
-  .wk-tot{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px 12px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line);}
-  .wk-tot div{display:flex; justify-content:space-between; gap:8px; font-size:13px; color:var(--ink-3);}
-  .wk-tot b{color:var(--ink); font-size:15px;}
   .todo{margin-bottom:18px;}
   .todo.done{background:var(--tint); border-color:var(--tint); color:var(--good);}
   .todo-row{display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; padding-block:6px; border-bottom:1px solid var(--line);}
@@ -232,17 +318,6 @@
   .todo-row b{min-width:150px;}
   .miss{border:1px solid var(--warn-ink); background:var(--warn-bg); color:var(--warn-ink); border-radius:999px; padding:2px 10px; font-size:13px; font-weight:600;}
   .chip.vac{background:var(--off-bg); color:var(--ink-2);}
-  .cal{border-collapse:separate; border-spacing:3px; width:auto; margin-top:10px;}
-  .cal th,.cal td{border:0; padding:0; text-align:center;}
-  .cal thead th{font-size:10px; letter-spacing:0; text-transform:none; min-width:26px;}
-  .cal td.n{text-align:left; padding-right:8px; font-size:13px; white-space:nowrap;}
-  .cal button{width:26px; height:24px; border-radius:6px; border:0; padding:0; font-size:11px; font-weight:700; background:var(--off-bg); color:var(--ink-3);}
-  .cal .ok{background:var(--accent); color:var(--accent-ink);}
-  .cal .missing{background:var(--warn-bg); color:var(--warn-ink); box-shadow:inset 0 0 0 1.5px var(--warn-ink);}
-  .cal .today{background:var(--surface); box-shadow:inset 0 0 0 1.5px var(--ink-3);}
-  .cal .vac{background:var(--off-bg); color:var(--ink-2);}
-  .cal .off{background:none;}
-  .cal .cur{outline:2px solid var(--ink); outline-offset:1px;}
 </style>
 
 <div class="wrap">
@@ -296,34 +371,34 @@
 
   <!-- Дашборд дня -->
   <section id="viewDay" hidden>
-    <div class="bar">
-      <h2 id="dayTitle">—</h2>
-      <span class="sub" id="dayPrev"></span>
-      <div class="datenav">
-        <select id="dMode" aria-label="Период"><option value="day">День</option><option value="week">Неделя</option><option value="month">Месяц</option><option value="quarter">Квартал</option><option value="year">Год</option><option value="custom">Свой период</option></select>
+    <div class="dperiod">
+      <div class="ptabs" id="dModes" role="group" aria-label="Период"></div>
+      <div class="dstep">
         <button class="icon" id="dPrev" aria-label="Предыдущий период">‹</button>
-        <input type="date" id="dDate" aria-label="Дата">
-        <input type="month" id="dMonth" aria-label="Месяц" hidden>
-        <select id="dQuarter" aria-label="Квартал" hidden></select>
-        <span id="dCustom" hidden><input type="date" id="dFrom" aria-label="С"> — <input type="date" id="dTo" aria-label="По"></span>
+        <button type="button" class="dcur" id="dCur" aria-haspopup="dialog" aria-expanded="false"><b id="dayTitle">—</b><span aria-hidden="true">▾</span></button>
         <button class="icon" id="dNext" aria-label="Следующий период">›</button>
+        <span class="sub" id="dayPrev"></span>
+        <div class="dpop" id="dPop" role="dialog" aria-label="Выбрать период" hidden>
+          <div id="dPopGrid"></div>
+          <div class="dcustom"><span>Свой период</span><input type="date" id="dFrom" aria-label="С"> — <input type="date" id="dTo" aria-label="По"></div>
+        </div>
       </div>
     </div>
-    <div id="dRemind"></div>
-    <div class="panel todo" id="dTodo"></div>
-    <div class="chips" id="dChips"></div>
     <div class="tiles" id="dTiles"></div>
     <div id="dDetail"></div>
-    <div class="grid2">
-      <div class="panel">
-        <h3 id="dTableTitle">По рекрутерам</h3>
-        <div class="scroll"><table id="dTable"></table></div>
+    <div class="dmain">
+      <div class="dleft">
+        <div class="panel">
+          <div class="dt-head"><h3 id="dTableTitle">По рекрутерам</h3><span class="sub">команда — в плитках выше · нажмите на имя — все дни</span></div>
+          <div class="scroll"><table id="dTable"></table></div>
+        </div>
+        <div class="panel">
+          <h3 id="dChartTitle">Рабочая неделя</h3>
+          <div id="dChart"></div>
+          <div class="legend"><span><i style="background:var(--muted-bar)"></i>назначено</span><span><i style="background:var(--accent)"></i>прошло</span></div>
+        </div>
       </div>
-      <div class="panel">
-        <h3 id="dChartTitle">Рабочая неделя</h3>
-        <div id="dChart"></div>
-        <div class="legend"><span><i style="background:var(--muted-bar)"></i>назначено</span><span><i style="background:var(--accent)"></i>прошло</span></div>
-      </div>
+      <aside class="dside"><div id="dTodo"></div><div class="panel" id="dNow"></div></aside>
     </div>
     <div class="grid2 mt">
       <div class="panel" id="dFunnel"></div>
@@ -752,31 +827,60 @@ function extendFromReminder(e){
   db.doc('vacancies/' + id).set(next).catch(function(err){ b.disabled = false; alertStatus(writeError(err)); });
 }
 function alertStatus(msg){ var s = document.querySelector('#vCopyStat'); if(s){ s.className = 'status err'; s.textContent = msg; } }
+// «Нужно сделать»: внести дни, продлить публикации, подвести итог испытательного срока — подсвечено, пока что-то есть
 function renderTodo(){
-  var ps = scope() ? [scope()] : activePeople(), box = $('dTodo');
-  var miss = ps.map(function(p){ return [p, missingDays(p)]; }).filter(function(x){ return x[1].length; });
-  var head = miss.length
-    ? '<h3>Нужно внести: ' + miss.reduce(function(s, x){ return s + x[1].length; }, 0) + ' ' + plural(miss.reduce(function(s, x){ return s + x[1].length; }, 0), 'день', 'дня', 'дней') + '</h3>' +
-      miss.map(function(x){
-        return '<div class="todo-row"><b>'+esc(label(x[0]))+'</b>' + x[1].map(function(d){
-          var p = parse(d); return '<button class="miss" data-p="'+x[0]+'" data-d="'+d+'" title="Внести '+human(d)+'">'+p.getDate()+'.'+String(p.getMonth()+1).padStart(2,'0')+' '+WD[p.getDay()]+'</button>';
-        }).join('') + '</div>';
-      }).join('')
-    : '<h3>Все рабочие дни внесены</h3><p class="hint">Проверяются будни с ' + human(CHECK_FROM) + '; отпуск и выходные не в счёт.</p>';
-  // сетка последних 15 рабочих дней: видно, что внесено, что нет, где отпуск
-  var days = [], d = today();
-  while(days.length < 15){ if(!isWeekend(d)) days.unshift(d); d = addDays(d, -1); }
-  var grid = '<div class="scroll"><table class="cal"><thead><tr><th></th>' + days.map(function(x){ var p = parse(x); return '<th>'+WD[p.getDay()]+'<br>'+p.getDate()+'</th>'; }).join('') + '</tr></thead><tbody>' +
-    ps.map(function(p){
-      return '<tr><td class="n">'+esc(label(p))+'</td>' + days.map(function(x){
-        var st = dayStatus(p, x);
-        return '<td><button class="'+st+(x === state.date ? ' cur' : '')+'" data-p="'+p+'" data-d="'+x+'" data-st="'+st+'" title="'+esc(team[p].name)+', '+human(x)+': '+STATUS_TEXT[st]+'">'+(st === 'vac' ? 'О' : st === 'missing' ? '!' : '')+'</button></td>';
-      }).join('') + '</tr>';
-    }).join('') + '</tbody></table></div>' +
-    '<div class="legend"><span><i style="background:var(--accent)"></i>внесено</span><span><i style="background:var(--warn-bg);box-shadow:inset 0 0 0 1.5px var(--warn-ink)"></i>нужно внести</span><span><i style="background:var(--off-bg)"></i>О — отпуск</span></div>';
-  box.className = 'panel todo' + (miss.length ? '' : ' done');
-  box.innerHTML = head + (ps.length ? grid : '');
-  $('dRemind').innerHTML = remindersHtml();
+  var ps = scope() ? [scope()] : activePeople(), box = $('dTodo'), n = 0, html = '';
+  function it(text, btn){ return '<div class="it"><span>'+text+'</span>'+btn+'</div>'; }
+  function grp(title, items, more){
+    if(!items.length) return '';
+    n += items.length;
+    return '<h4>'+title+'</h4>' + items.slice(0, 4).join('') + (items.length > 4 ? '<details><summary>ещё '+(items.length - 4)+'</summary>'+items.slice(4).join('')+'</details>' : '');
+  }
+  var miss = [];
+  ps.forEach(function(p){ missingDays(p).forEach(function(d){ miss.push([p, d]); }); });
+  miss.sort(function(a, b){ return a[1] < b[1] ? 1 : -1; });   // свежие пропуски — первыми
+  html += grp('Внести день', miss.map(function(x){ var q = parse(x[1]);
+    return it(esc(scope() ? '' : team[x[0]].name + ' · ') + q.getDate() + '.' + String(q.getMonth() + 1).padStart(2, '0') + ', ' + WD[q.getDay()],
+      '<button class="miss" data-p="'+x[0]+'" data-d="'+x[1]+'" title="Внести '+human(x[1])+'">Внести</button>'); }));
+  html += grp('Продлить публикацию', pubReminders().map(function(r){
+    return it('<a href="'+esc(r.l.url)+'" target="_blank" rel="noopener">'+esc(r.v.title)+'</a> · '+esc(linkNote(r.l)),
+      r.st === 'nodate' ? '<button data-open-vac="'+r.id+'">Указать дату</button>' : '<button data-extend="'+r.id+'" data-i="'+r.i+'">Продлить</button>'); }));
+  html += grp('Итог испытательного срока', hireUnits().filter(function(u){ return probState(u) === 'due' && (!scope() || ownerOn(u.v, today()) === scope()); }).map(function(u){
+    return it(esc(u.person || u.v.title) + ' · с ' + shortDate(u.end).slice(0, 5), '<button data-goprob>Открыть</button>'); }));
+  box.className = 'todo-col' + (n ? '' : ' calm');
+  box.innerHTML = n ? '<header><h3>Нужно сделать</h3><span class="badge">'+n+'</span></header>' + html
+    : '<header><h3>Всё сделано</h3><span aria-hidden="true">✓</span></header><p>Рабочие дни внесены, публикации продлены, итогов испытательного срока не ждём.</p>';
+}
+// «Главное за период»: что заметно изменилось к прошлому периоду и что проверить в данных
+function convOf(r, ps){ var dn = rSum(r, ps, 'int_done'), pl = rSum(r, ps, 'int_planned'); return num(dn) && pl ? Math.round(dn / pl * 100) : null; }
+function renderNow(mode, r, prev, ps){
+  var out = [], than = mode === 'day' ? 'чем в прошлый день' : 'чем в прошлом периоде';
+  if(prev && !rDates(prev).some(function(d){ return hasData(d, ps); })) prev = null;   // за прошлый период ничего не внесено — сравнивать не с чем
+  if(prev){
+    ps.forEach(function(p){
+      var a = convOf(r, [p]), b = convOf(prev, [p]);
+      if(a !== null && b !== null && Math.abs(a - b) >= 10) out.push({k:a < b ? 'down' : 'up', t:team[p].name + ': доходимость ' + a + '%', s:(a < b ? 'ниже' : 'выше') + ' на ' + Math.abs(a - b) + ' п.п.: было ' + b + '%'});
+    });
+    [['hires', 'Выходов', false], ['dismissals', 'Увольнений', true]].forEach(function(x){
+      var a = rVal(r, ps, x[0]), b = rVal(prev, ps, x[0]);
+      if(num(a) && num(b) && a !== b) out.push({k:(a > b) !== x[2] ? 'up' : 'down', t:x[1] + ' ' + a, s:'на ' + Math.abs(a - b) + (a > b ? ' больше, ' : ' меньше, ') + than});
+    });
+  }
+  // данные: необычные дни — вдвое выше или ниже обычного для человека (пропуски — в «Нужно сделать»)
+  var check = [];
+  ps.forEach(function(p){
+    var ds = rDates(r);
+    [['звонков', function(m){ return val(m, 'calls'); }], ['чатов', chats], ['собеседований', function(m){ return val(m, 'int_done'); }]].forEach(function(x){
+      var odd = oddOf(dayVals(p, ds, x[1]));
+      ds.forEach(function(d){ var m = (byDate[d] || {})[p], v = m ? x[1](m) : null; if(odd(v)) check.push(team[p].name + ', ' + shortDate(d).slice(0, 5) + ': ' + v + ' ' + x[0]); });
+    });
+  });
+  if(check.length) out.push({k:'warn', t:'Проверьте данные', s:check.slice(0, 3).join('; ') + (check.length > 3 ? ' и ещё ' + (check.length - 3) : '')});
+  var order = {down:0, warn:1, up:2};
+  out.sort(function(a, b){ return order[a.k] - order[b.k]; });
+  var word = mode === 'month' ? MONTHS[parse(r.from).getMonth()].toLowerCase() : {day:'день', week:'неделю', quarter:'квартал', year:'год', custom:'период'}[mode];
+  $('dNow').innerHTML = '<h3>Главное за ' + word + '</h3>' + (out.length ? out.slice(0, 4).map(function(x){ return '<div class="s '+x.k+'"><b>'+esc(x.t)+'</b><span>'+esc(x.s)+'</span></div>'; }).join('')
+    : '<p class="hint">' + (prev ? 'Заметных изменений к прошлому периоду нет.' : 'Сравнивать не с чем — за прошлый период данных нет.') + '</p>');
 }
 function todoClick(e){
   var b = e.target.closest('button[data-d]'); if(!b) return;
@@ -908,29 +1012,15 @@ function renderDay(){
   // период ещё идёт — сравниваем с тем же сроком прошлого (1–3 октября с 1–3 сентября), а не с целым периодом
   var partial = !isDay && r.from <= today() && r.to > today();
   if(partial){ var cut = addDays(prev.from, daysBetween(r.from, today())); if(cut < prev.to) prev = {from:prev.from, to:cut}; }
-  $('dDate').value = day; $('dMonth').value = day.slice(0, 7); $('dFrom').value = state.from; $('dTo').value = state.to;
-  $('dDate').hidden = !(isDay || mode === 'week'); $('dMonth').hidden = mode !== 'month'; $('dQuarter').hidden = mode !== 'quarter';
-  if(mode === 'quarter'){   // кварталы с начала учёта по текущий, новые сверху
-    var qs = []; for(var q = periodOf('quarter', today()).from; q >= COLLECT_START; q = addMonths(q, -3)) qs.push(q);
-    if(qs.indexOf(r.from) < 0) qs.push(r.from);
-    $('dQuarter').innerHTML = qs.map(function(f){ return '<option value="'+f+'">'+rangeLabel('quarter', {from:f, to:f})+'</option>'; }).join('');
-    $('dQuarter').value = r.from;
-  } $('dCustom').hidden = mode !== 'custom';
+  $('dFrom').value = state.from || ''; $('dTo').value = state.to || '';
+  renderModes(); if(!$('dPop').hidden) renderPicker();
   $('dayTitle').textContent = rangeLabel(mode, r) + (isDay && day === today() ? ' · сегодня' : '');
-  $('dayPrev').textContent = prev ? (isDay ? 'сравнение с ' + human(prev.from) : 'сравнение: ' + rangeLabel(mode, shiftPeriod(mode, r, -1)).replace(/^./, function(c){ return c.toLowerCase(); }) + (partial ? ' по ' + shortDate(prev.to).slice(0, 5) : '')) : '';
+  $('dPrev').disabled = isDay ? !prevDate(day, ps) : shiftPeriod(mode, r, -1).to < COLLECT_START;
+  $('dayPrev').textContent = (partial ? 'идёт — по ' + shortDate(today()).slice(0, 5) + ' · ' : '') + (prev ? (isDay ? 'сравнение с ' + human(prev.from) : 'сравнение: ' + rangeLabel(mode, shiftPeriod(mode, r, -1)).replace(/^./, function(c){ return c.toLowerCase(); }) + (partial ? ' по ' + shortDate(prev.to).slice(0, 5) : '')) : '');
   $('dNext').disabled = isDay ? (!nextDate(day, ps) && day >= today()) : shiftPeriod(mode, r, 1).from > today();
 
   var rows = isDay ? dayPeople(day) : visiblePeople().filter(function(p){ return !team[p].archived || rDates(r).some(function(d){ return hasDay(p, d); }); });
   renderTodo();
-  $('dChips').innerHTML = scope() ? '' : rows.map(function(p){
-    if(isDay){
-      var st = dayStatus(p, day), cls = st === 'ok' ? ' ok' : st === 'vac' || st === 'off' ? ' vac' : '';
-      return '<span class="chip'+cls+'">'+esc(label(p))+' — '+STATUS_TEXT[st]+'</span>';
-    }
-    var need = 0, got = 0;
-    for(var d = r.from; d <= r.to && d <= today(); d = addDays(d, 1)){ var st2 = dayStatus(p, d); if(st2 === 'ok'){ need++; got++; } else if(st2 === 'missing') need++; }   // сегодняшний ещё не внесённый — не пропуск
-    return '<span class="chip'+(got >= need ? ' ok' : '')+'">'+esc(label(p))+' — внесено '+got+' из '+need+' '+plural(need, 'рабочего дня', 'рабочих дней', 'рабочих дней')+'</span>';
-  }).join('');
 
   var vs = isDay ? 'к предыдущему дню' : partial ? 'к тому же сроку прошлого периода' : 'к прошлому периоду';
   function V(k){ return rVal(r, ps, k); }
@@ -948,20 +1038,212 @@ function renderDay(){
     tile('Отказы', V('rejections'), null, {noDelta:true, note: isDay ? 'кандидатам за день' : 'кандидатам за период'}) +
     tile('Выходы новых сотрудников', V('hires'), P('hires'), isDay ? {noDelta:true, note:'с начала недели: ' + hiresWeek} : {vs:vs});
 
-  var cols = [['Вакансии', vacStock], ['Вакантные ставки', candStock], ['Собес. назнач.', 'int_planned'], ['Собес. факт', 'int_done'],
-    ['Звонки', 'calls'], ['Чаты', chats], ['Отказы', 'rejections'], ['Новые вакансии', 'vac_published'], ['Выходы', 'hires']]
-    .concat(customMetrics().map(function(m){ return [m.t, m.k]; }));
-  function cell(v){ return '<td'+(v === null ? ' class="empty"' : '')+'>'+(v === null ? '—' : v)+'</td>'; }
-  $('dTableTitle').textContent = (scope() ? 'Мои показатели' : 'По рекрутерам') + (isDay ? '' : ' · ' + rangeLabel(mode, r));
-  var body = rows.map(function(p){ return '<tr><td>'+nameHtml(p)+'</td>'+cols.map(function(c){ return cell(rVal(r, [p], c[1])); }).join('')+'</tr>'; }).join('');
-  var foot = rows.length > 1 ? '<tfoot><tr><td>Команда</td>'+cols.map(function(c){ return cell(rVal(r, ps, c[1])); }).join('')+'</tr></tfoot>' : '';
-  $('dTable').innerHTML = '<thead><tr><th>Рекрутер</th>'+cols.map(function(c){ return '<th>'+esc(c[0])+'</th>'; }).join('')+'</tr></thead><tbody>'+body+'</tbody>'+foot;
+  $('dTable').innerHTML = peopleTable(mode, r, prev, ps, rows);
+  renderNow(mode, r, prev, ps);
   renderChart(mode, r, ps);
   renderDetail(mode, r, prev, ps);
   var w = aRange(mode, r), wp = aPrev(mode, w, prev), wl = aLabel(mode, r, w);
   renderFunnel(w, wp, wl, ps); renderReasons(w, wp, wl); renderTrend(r, ps); renderProb(w, wp, wl, ps); renderLoad(); renderStages(w, wl);
   renderPeak(mode, r, ps);
 }
+// ---------- «По рекрутерам»: строки — показатели в порядке формы, столбцы — люди (команда — в плитках) ----------
+// Потоки — сумма за период (и в среднем за внесённый день), остатки — на конец периода (с начала → конец),
+// у цифры — изменение к прошлому периоду; заметное (от 10%) — подкрашено; за день — что из «Вакансий», что вручную.
+function dtRows(){
+  var on = {}; activeMetrics().forEach(function(m){ on[m.k] = 1; });
+  var custom = function(g){ return customMetrics().filter(function(m){ return m.g === g || (g === 'end' && m.g === 'start'); }).map(function(m){ return {t:m.t, k:m.k}; }); };
+  return [{g:'work'}].concat([
+    on.int_done || on.int_planned ? {t:'Собеседования: прошли из назначенных', int:1} : null,
+    on.calls ? {t:'Звонки (удачные)', k:'calls', avg:1} : null,
+    on.chats || on.chats_first ? {t:'Чаты · из них первичные', chats:1} : null,
+    on.rejections ? {t:'Отказы кандидатам', k:'rejections'} : null
+  ], custom('work'), [{g:'end'},
+    on.vac_end || on.vac_start ? {t:'Вакансии в работе', stock:'vac'} : null,
+    on.cand_end || on.cand_start ? {t:'Вакантные ставки', stock:'cand'} : null,
+    on.vac_published ? {t:'Новые публикации', k:'vac_published'} : null,
+    on.hires ? {t:'Выходы новых сотрудников', k:'hires'} : null,
+    on.dismissals ? {t:'Увольнения', k:'dismissals', names:1, lower:1} : null
+  ], custom('end')).filter(Boolean);
+}
+function stockStart(r, ps, k){   // остаток на начало периода: начало первого внесённого дня
+  var s = null;
+  ps.forEach(function(p){
+    var d = rDates(r).filter(function(x){ return (byDate[x] || {})[p]; })[0], m = d && byDate[d][p];
+    var v = m ? (num(m[k + '_start']) ? m[k + '_start'] : stock(m, k)) : null;
+    if(v !== null) s = (s || 0) + v;
+  });
+  return s;
+}
+// изменение: за день и при малых числах (до 10) — в штуках, за период — в процентах
+function dtDiff(a, b, isDay){ return !num(a) || !num(b) ? null : isDay || b < 10 ? {n:a - b} : {n:Math.round((a - b) / b * 100), pct:1}; }
+function dtDelta(x, lower){
+  if(!x) return '';
+  if(!x.n) return '<span class="dl" style="color:var(--ink-3)">=</span>';
+  return '<span class="dl '+((lower ? x.n < 0 : x.n > 0) ? 'up' : 'down')+'">'+(x.n > 0 ? '+' : '−')+Math.abs(x.n)+(x.pct ? '%' : '')+'</span>';
+}
+function dtHeat(x, lower){ return x && x.pct && Math.abs(x.n) >= 10 ? ((lower ? x.n < 0 : x.n > 0) ? ' good' : ' bad') : ''; }
+// необычные дни человека: вдвое выше или ниже его медианы за период (для потоков от 5 в день)
+function dayVals(p, ds, f){ return ds.map(function(d){ var m = (byDate[d] || {})[p]; return m ? f(m) : null; }); }
+function oddOf(vals){
+  var x = vals.filter(num).sort(function(a, b){ return a - b; }), med = x.length ? x[Math.floor(x.length / 2)] : 0;
+  return function(v){ return med >= 5 && num(v) && (v >= med * 2 || v <= med / 2); };
+}
+function dtFlow(row){ return row.int ? function(m){ return val(m, 'int_done'); } : row.chats ? chats : row.k && !row.names ? function(m){ return val(m, row.k); } : null; }
+function peopleTable(mode, r, prev, ps, rows){
+  var isDay = mode === 'day', last = r.to < today() ? r.to : today();
+  function cell(row, p){
+    var list = [p], V = function(k){ return rVal(r, list, k); }, P = function(k){ return prev ? rVal(prev, list, k) : null; };
+    var v = null, sub = '', x = null, extra = '', lower = row.lower;
+    if(row.int){
+      var dn = V('int_done'), pl = V('int_planned');
+      v = dn === null && pl === null ? null : (dn || 0) + (num(pl) ? ' из ' + pl : '');
+      sub = num(dn) && pl ? Math.round(dn / pl * 100) + '%' : ''; x = dtDiff(dn, P('int_done'), isDay);
+    } else if(row.chats){
+      var c = V(chats), f = V('chats_first'); v = c === null ? null : c + (num(f) ? ' · ' + f : ''); x = dtDiff(c, P(chats), isDay);
+    } else if(row.stock){
+      var fs = row.stock === 'vac' ? vacStock : candStock; v = V(fs);
+      if(isDay){
+        x = dtDiff(v, P(fs), true);
+        if(isSynced(r.from, p)){   // за день: откуда цифра — из «Вакансий» или поправлена вручную
+          var key = row.stock + '_end', own = (entered[r.from] || {})[p];
+          sub = own && num(own[key]) ? '<span class="s man">вручную · расчёт '+registryDay(p, r.from)[key]+'</span>' : '<span class="s">из «Вакансий»</span>';
+        }
+      } else { var st = stockStart(r, list, row.stock); if(num(st) && num(v)) sub = 'с ' + shortDate(r.from).slice(0, 5) + ': ' + st + ' → ' + v; }
+    } else {
+      v = V(row.k); if(!row.names) x = dtDiff(v, P(row.k), isDay);
+      if(row.k === 'vac_published' && isDay && isSynced(r.from, p)){ var o2 = (entered[r.from] || {})[p]; sub = o2 && num(o2.vac_published) ? '<span class="s man">вручную</span>' : '<span class="s">из «Вакансий»</span>'; }
+      if(row.avg && !isDay && num(v)){ var n = rDates(r).filter(function(d){ return hasDay(p, d); }).length; if(n) sub = '≈ ' + Math.round(v / n) + ' в день'; }
+      if(row.names){
+        var names = dismissedIn(r, list);
+        if(names.length) extra = '<br>' + names.slice(0, 3).map(function(nm){ return '<span class="pill leaver">'+esc(nm)+'</span>'; }).join('<br>') +
+          (names.length > 3 ? '<details><summary>ещё ' + (names.length - 3) + '</summary>' + names.slice(3).map(function(nm){ return '<span class="pill leaver">'+esc(nm)+'</span>'; }).join('<br>') + '</details>' : '');
+        x = dtDiff(v, P(row.k), isDay);
+      }
+    }
+    if(!isDay && dtFlow(row)){ var vals = dayVals(p, rDates(r), dtFlow(row)), odd = oddOf(vals); if(vals.some(odd)) extra += '<span class="odd" title="Есть необычные дни — нажмите на имя, чтобы посмотреть по дням">●</span>'; }
+    if(sub && sub.charAt(0) !== '<') sub = '<span class="s">' + sub + '</span>';
+    return '<td class="'+(v === 0 || v === '0' ? 'z' : '')+(row.stock ? '' : dtHeat(x, lower))+'">' + (v === null ? '<span class="v" style="color:var(--ink-3)">—</span>' : '<span class="v">'+v+'</span>') + dtDelta(x, lower) + sub + extra + '</td>';
+  }
+  function status(p){
+    if(isDay){
+      var stt = dayStatus(p, r.from), at = ((entered[r.from] || {})[p] || {}).savedAt;
+      var txt = stt === 'ok' && at ? 'внесено в ' + new Date(at).toTimeString().slice(0, 5) : STATUS_TEXT[stt];
+      return '<span class="chip'+(stt === 'ok' || stt === 'vac' || stt === 'off' ? ' ok' : '')+'">'+esc(txt)+'</span>';
+    }
+    var got = 0, need = 0, vac = 0;
+    for(var d = r.from; d <= last; d = addDays(d, 1)){ var y = dayStatus(p, d); if(y === 'ok'){ got++; need++; } else if(y === 'missing') need++; else if(y === 'vac' && !isWeekend(d) && vacationOf(p, d)) vac++; }   // до начала учёта — не отпуск
+    return '<span class="chip'+(got >= need ? ' ok' : '')+'">'+got+' из '+need+' '+plural(need, 'дня', 'дней', 'дней')+(vac ? ' · ' + vac + ' дн. отпуск' : '')+'</span>';
+  }
+  if(!rows.length) return '<tbody><tr><td class="empty">За период никто не вносил данные.</td></tr></tbody>';
+  var head = '<thead><tr><th>Показатель</th>' + rows.map(function(p){
+    return '<th><button type="button" class="who" data-days="'+p+'" title="Все дни за период">'+nameHtml(p)+'</button><span class="st">'+status(p)+'</span></th>';
+  }).join('') + '</tr></thead>';
+  var body = dtRows().map(function(row){
+    if(row.g) return '<tr class="grp"><td colspan="'+(rows.length + 1)+'">'+(row.g === 'work' ? (isDay ? 'Работа за день' : 'Работа за период') : (isDay ? 'Итоги дня' : 'Итоги на ' + human(last).split(',')[0]))+'</td></tr>';
+    return '<tr><td style="white-space:normal">'+esc(row.t)+'</td>' + rows.map(function(p){ return cell(row, p); }).join('') + '</tr>';
+  }).join('');
+  return head + '<tbody>' + body + '</tbody>';
+}
+// Боковая панель: все дни человека за период — строки показатели, столбцы даты; ✎ — открыть «Внести день»
+function openDays(p, opener){
+  var mode = state.mode, r = periodOf(mode, state.date);
+  if(mode === 'day') r = periodOf('week', state.date);   // за день — его неделя
+  var last = r.to < today() ? r.to : today(), ds = [];
+  for(var d = r.from; d <= last; d = addDays(d, 1)){ var st = dayStatus(p, d); if(st !== 'off' && !(st === 'vac' && isWeekend(d))) ds.push({d:d, st:st}); }
+  var head = '<thead><tr><th class="lab">Показатель</th>' + ds.map(function(x){ var q = parse(x.d);
+    return '<th class="'+(x.st === 'missing' || x.st === 'today' ? 'miss' : x.st === 'vac' ? 'vacd' : '')+'">'+String(q.getDate()).padStart(2, '0')+'.'+String(q.getMonth() + 1).padStart(2, '0')+'<small>'+WD[q.getDay()]+'</small></th>'; }).join('') + '</tr></thead>';
+  var body = dtRows().filter(function(x){ return !x.g; }).map(function(row){
+    var f = dtFlow(row), odd = f ? oddOf(dayVals(p, ds.map(function(x){ return x.d; }), f)) : function(){ return false; };
+    return '<tr><td class="lab">'+esc(row.t.split(':')[0])+'</td>' + ds.map(function(x){
+      if(x.st === 'vac') return '<td class="vacd">отп.</td>';
+      var m = (byDate[x.d] || {})[p];
+      if(!m || x.st !== 'ok') return '<td class="miss">—</td>';
+      var v, cls = '', own = (entered[x.d] || {})[p] || {}, syn = isSynced(x.d, p);
+      if(row.int) v = num(m.int_done) || num(m.int_planned) ? (m.int_done || 0) + '/' + (m.int_planned || 0) : '·';
+      else if(row.chats) v = chats(m) === null ? '·' : chats(m) + (num(m.chats_first) ? ' · ' + m.chats_first : '');
+      else if(row.stock){ v = (row.stock === 'vac' ? vacStock : candStock)(m); v = v === null ? '·' : v; if(syn) cls = num(own[row.stock + '_end']) ? 'man' : 'auto'; }
+      else if(row.names){ var nm = namesOf(m); v = num(m.dismissals) ? m.dismissals + (nm.length ? ' — ' + nm.join(', ') : '') : '·'; if(nm.length) cls = 'nm'; }
+      else { v = num(m[row.k]) ? m[row.k] : f ? 0 : '·'; if(row.k === 'vac_published' && syn) cls = num(own.vac_published) ? 'man' : 'auto'; }
+      if(f && odd(f(m))) cls = 'out';
+      var tip = cls === 'out' ? ' title="Необычно для этого человека — проверьте"' : cls === 'man' ? ' title="Исправлено вручную"' : cls === 'auto' ? ' title="Из «Вакансий»"' : '';
+      return '<td class="'+cls+'"'+tip+'>'+esc(String(v))+'</td>';
+    }).join('') + '</tr>';
+  }).join('') + '<tr><td class="lab"></td>' + ds.map(function(x){
+    if(x.st === 'vac') return '<td class="vacd"></td>';
+    var miss = x.st !== 'ok';
+    return '<td class="'+(miss ? 'miss' : '')+'"><button type="button" class="ed" data-ed="'+x.d+'" aria-label="'+(miss ? 'Внести ' : 'Исправить ')+human(x.d)+'">'+(miss ? 'Внести' : '✎')+'</button></td>';
+  }).join('') + '</tr>';
+  var miss = ds.filter(function(x){ return x.st === 'missing'; }).map(function(x){ return shortDate(x.d).slice(0, 5); });
+  closeDaysPanel();
+  var box = document.createElement('div'); box.id = 'dDays';
+  box.innerHTML = '<div class="dscrim" data-close></div><aside class="ddrawer" role="dialog" aria-modal="true" aria-label="'+esc(label(p))+' по дням">' +
+    '<header><div><h3>'+esc(label(p))+' · '+esc(rangeLabel(mode === 'day' ? 'week' : mode, r))+' по дням</h3>' +
+    '<p class="hint">'+(miss.length ? '<span class="down">не внесено: '+miss.join(', ')+'</span> · ' : '')+'красным — необычно для человека, жёлтым — исправлено вручную, серым — из «Вакансий»; ✎ — открыть «Внести день»</p></div>' +
+    '<button type="button" class="x" data-close aria-label="Закрыть">×</button></header>' +
+    (ds.length ? '<div class="scroll"><table>' + head + '<tbody>' + body + '</tbody></table></div>' : '<p class="hint">За период рабочих дней нет.</p>') + '</aside>';
+  document.body.appendChild(box);
+  box.onclick = function(e){
+    var ed = e.target.closest('[data-ed]');
+    if(ed){ closeDaysPanel(); openEntry(p, ed.dataset.ed); return; }
+    if(e.target.closest('[data-close]')){ closeDaysPanel(); if(opener) opener.focus(); }
+  };
+  box.querySelector('.x').focus();
+}
+function closeDaysPanel(){ var b = $('dDays'); if(b) b.remove(); }
+
+// ---------- выбор периода: вкладки от года к дню, ‹ период ▾ ›, окошко выбора ----------
+var MODES = [['year', 'Год'], ['quarter', 'Квартал'], ['month', 'Месяц'], ['week', 'Неделя'], ['day', 'День']];
+function setPeriod(mode, d){
+  state.mode = mode; store('hrMode', mode === 'custom' ? 'day' : mode);   // свой период не запоминаем — его даты не хранятся
+  if(d) state.date = d;
+  if(mode === 'custom' && !state.from){ state.from = state.date.slice(0, 7) + '-01'; state.to = state.date; }
+  renderDay();
+}
+function renderModes(){
+  $('dModes').innerHTML = MODES.map(function(m){ return '<button type="button" data-mode="'+m[0]+'" aria-pressed="'+(state.mode === m[0])+'">'+m[1]+'</button>'; }).join('');
+}
+var pview = null;   // какой год / месяц открыт в окошке выбора
+function pickerOpen(show){
+  $('dPop').hidden = !show; $('dCur').setAttribute('aria-expanded', String(show));
+  if(!show) return;
+  pview = state.date; renderPicker();
+  var f = $('dPopGrid').querySelector('[aria-pressed="true"]') || $('dPopGrid').querySelector('button:not(:disabled)'); if(f) f.focus();
+}
+function renderPicker(){
+  var m = state.mode === 'custom' ? 'day' : state.mode, cur = periodOf(m, state.date).from, t = today(), first = COLLECT_START, html = '';
+  function btn(from, text, extra){
+    var r = periodOf(m, from), off = r.from > t || r.to < first;
+    return '<button type="button" data-pick="'+from+'" aria-pressed="'+(r.from === cur && state.mode !== 'custom')+'"'+(off ? ' disabled' : '')+(extra || '')+'>'+text+'</button>';
+  }
+  function head(text, back, fwd){ return '<div class="pph"><button type="button" data-pview="'+back+'" aria-label="Назад"'+(back ? '' : ' disabled')+'>‹</button><span>'+text+'</span><button type="button" data-pview="'+fwd+'" aria-label="Вперёд"'+(fwd ? '' : ' disabled')+'>›</button></div>'; }
+  var y0 = +first.slice(0, 4), y1 = +t.slice(0, 4), y;
+  if(m === 'year'){ html = '<div class="pgrid" style="grid-template-columns:repeat(3,1fr)">'; for(y = y0; y <= y1; y++) html += btn(y + '-01-01', y); html += '</div>'; }
+  else if(m === 'quarter'){ html = '<div class="pgrid" style="grid-template-columns:48px repeat(4,1fr)">'; for(y = y1; y >= y0; y--){ html += '<span class="pyr">'+y+'</span>'; for(var q = 0; q < 4; q++) html += btn(y + '-' + String(q * 3 + 1).padStart(2, '0') + '-01', (q + 1) + ' кв.'); } html += '</div>'; }
+  else if(m === 'month'){ y = +pview.slice(0, 4);
+    html = head(y, y > y0 ? (y - 1) + '-01-01' : '', y < y1 ? (y + 1) + '-01-01' : '') + '<div class="pgrid" style="grid-template-columns:repeat(4,1fr)">';
+    for(var mo = 1; mo <= 12; mo++) html += btn(y + '-' + String(mo).padStart(2, '0') + '-01', MONTHS_SHORT[mo - 1]);
+    html += '</div>'; }
+  else {
+    var m0 = pview.slice(0, 7) + '-01', prevM = addMonths(m0, -1), nextM = addMonths(m0, 1), dd;
+    html = head(MONTHS[parse(m0).getMonth()] + ' ' + m0.slice(0, 4), monthEnd(prevM) >= first ? prevM : '', nextM <= t ? nextM : '');
+    var hd = ['пн','вт','ср','чт','пт','сб','вс'];
+    if(m === 'week'){
+      html += '<div class="pweeks"><div class="h"><span>нед.</span>' + hd.map(function(x){ return '<span>'+x+'</span>'; }).join('') + '</div>';
+      for(var w = weekKey(m0); w <= monthEnd(m0); w = addDays(w, 7)){
+        var cells = ''; for(var i = 0; i < 7; i++){ dd = addDays(w, i); cells += '<span'+(dd.slice(0, 7) !== m0.slice(0, 7) ? ' style="opacity:.5"' : '')+'>'+parse(dd).getDate()+'</span>'; }
+        html += btn(w, '<span class="wn">'+isoWeekNo(w)+'</span>' + cells, ' aria-label="Неделя '+isoWeekNo(w)+'"');
+      }
+      html += '</div>';
+    } else {
+      html += '<div class="pcal">' + hd.map(function(x){ return '<span class="h">'+x+'</span>'; }).join('');
+      for(dd = weekKey(m0); dd <= monthEnd(m0) || parse(dd).getDay() !== 1; dd = addDays(dd, 1))
+        html += isWeekend(dd) || dd.slice(0, 7) !== m0.slice(0, 7) ? '<button type="button" disabled>'+parse(dd).getDate()+'</button>' : btn(dd, parse(dd).getDate(), ' aria-label="'+human(dd)+'"');
+      html += '</div>';
+    }
+  }
+  $('dPopGrid').innerHTML = html;
+}
+
 // ---------- пиковые дни недели: среднее за внесённый день по каждому дню пн–пт ----------
 var WD_FULL = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
 function renderPeak(mode, r, ps){
@@ -1105,14 +1387,12 @@ function renderProb(w, wp, wl, ps){
   var us = hireUnits(), t = today();
   function cnt(r, res){ return r ? us.filter(function(u){ return u.prob && u.prob.result === res && u.prob.at >= r.from && u.prob.at <= r.to; }).length : null; }
   var pass = cnt(w, 'passed'), fail = cnt(w, 'failed'), open = us.filter(function(u){ var s = probState(u); return s === 'on' || s === 'due'; });
-  var due = open.filter(function(u){ return u.end <= t; }).length, dis = rSum(w, ps, 'dismissals');
+  var due = open.filter(function(u){ return u.end <= t; }).length;
   var nom = us.filter(function(u){ return probState(u) === 'nomonths'; });
   var vs = 'к прошлому периоду';
-  var tiles = '<div class="tiles">' + tile('Прошли испытательный срок', pass, cnt(wp, 'passed'), {vs:vs}) +
+  var tiles = '<div class="tiles t3">' + tile('Прошли испытательный срок', pass, cnt(wp, 'passed'), {vs:vs}) +
     tile('Не прошли', fail, cnt(wp, 'failed'), {vs:vs, lowerIsBetter:true, note: pass + fail ? 'прошли ' + Math.round(pass / (pass + fail) * 100) + '% из закончивших' : ''}) +
-    tile('Сейчас на испытательном', open.length - due, null, {noDelta:true, note: [due ? '<span class="down">ждут итога: '+due+'</span>' : '', nom.length ? 'срок не указан: ' + nom.length : ''].filter(Boolean).join(' · ')}) +
-    tile('Увольнения', dis, wp ? rSum(wp, ps, 'dismissals') : null, {vs:vs, lowerIsBetter:true, note: dismissedIn(w, ps).length ?
-      dismissedIn(w, ps).map(function(n){ return '<span class="pill leaver">'+esc(n)+'</span>'; }).join(' ') : 'из метрик дня'}) + '</div>';
+    tile('Сейчас на испытательном', open.length - due, null, {noDelta:true, note: [due ? '<span class="down">ждут итога: '+due+'</span>' : '', nom.length ? 'срок не указан: ' + nom.length : ''].filter(Boolean).join(' · ')}) + '</div>';
   function row(u, done){
     var key0 = ' data-id="'+esc(u.v.id)+'" data-i="'+(u.i === null ? '' : u.i)+'"';
     if(!u.end) return '<tr><td class="l">'+(u.person ? esc(u.person) : '<span class="sub">имя — в карточке вакансии</span>')+'</td><td class="l">'+esc(u.v.title || '')+'</td><td class="l">'+esc(managerLabel(u.v))+'</td><td>'+shortDate(u.startAt)+'</td>' +
@@ -1335,10 +1615,7 @@ function renderChart(mode, r, ps){
     if(labels || i % Math.ceil(n / 8) === 0) s += '<text x="'+cx+'" y="'+(H - 16)+'" text-anchor="middle"'+bold+'>'+x.l1+'</text><text x="'+cx+'" y="'+(H - 3)+'" text-anchor="middle"'+bold+'>'+x.l2+'</text>';
   });
   s += '</svg>';
-  var past = {from:bk.length ? bk[0].from : r.from, to:(bk.length ? bk[bk.length - 1].to : r.to) > t ? t : (bk.length ? bk[bk.length - 1].to : r.to)};
-  var pl = rSum(past, ps, 'int_planned'), dn = rSum(past, ps, 'int_done');
-  var items = [['Назначено', pl], ['Прошло', dn], ['Доходимость', num(dn) && pl ? Math.round(dn / pl * 100) + '%' : null], ['Выходы', rSum(past, ps, 'hires')], ['Звонки', rSum(past, ps, 'calls')], ['Отказы', rSum(past, ps, 'rejections')]];
-  $('dChart').innerHTML = s + '<div class="wk-tot">' + items.map(function(x){ return '<div><span>'+x[0]+'</span><b>'+(x[1] === null ? '—' : x[1])+'</b></div>'; }).join('') + '</div>';
+  $('dChart').innerHTML = s;   // итоги — в плитках и таблице «По рекрутерам»
 }
 
 // ---------- ввод дня ----------
@@ -1429,6 +1706,8 @@ function saveDay(e){
     var reg = registryDay(p, d);
     SYNCED.forEach(function(k){ if(vals[k] === reg[k]) delete vals[k]; });
   }
+  delete vals.savedAt;
+  if(Object.keys(vals).length) vals.savedAt = new Date().toISOString();   // когда внесён день — видно в шапке «По рекрутерам»
   var days = Object.assign({}, doc.days); days[d] = vals;
   $('fSave').disabled = true; st.className = 'status'; st.textContent = 'Сохраняю…';
   db.doc('months/' + id).set({person:p, month:d.slice(0, 7), days:days}).then(function(){
@@ -2578,8 +2857,8 @@ $('bPreview').onclick = function(e){
 // ---------- запуск ----------
 session = CLOUD ? null : load('hrSession');
 $('sGroup').value = load('hrSumGroup') || 'week';
-state.mode = load('hrMode') || 'day'; $('dMode').value = state.mode;
-if(state.mode === 'custom'){ state.mode = 'day'; $('dMode').value = 'day'; }   // свой период не запоминаем — его даты не хранятся
+state.mode = load('hrMode') || 'day';
+if(state.mode === 'custom') state.mode = 'day';   // свой период не запоминаем — его даты не хранятся
 $('fDate').value = today();
 $('vStatus').innerHTML = VAC_STATUSES.map(function(s){ return '<label><input type="checkbox" value="'+s+'"> '+s+'</label>'; }).join('');
 // Статусы в списке вакансий: можно несколько; ничего не отмечено — все. По умолчанию — только в работе
@@ -2612,19 +2891,33 @@ $('lImportFile').onchange = function(){
   }).then(function(){ location.reload(); }, function(e){ err.textContent = e.message && e.message !== 'bad' && e.name !== 'SyntaxError' ? e.message : 'Это не файл HR-метрик.'; });
 };
 $('bootForm').onsubmit = bootstrap;
-$('dDate').onchange = function(){ if(this.value){ state.date = this.value; renderDay(); } };
 $('dTrend').onclick = function(e){ var b = e.target.closest('[data-trend]'); if(b){ state.trend = +b.dataset.trend; renderDay(); } };
 $('dStages').onchange = function(e){ if(e.target.id === 'dStageBy'){ state.stageBy = e.target.value; renderDay(); } };
 $('dProb').onclick = markProb; $('dProb').onchange = setProbMonths;
-$('dQuarter').onchange = function(){ state.date = this.value; renderDay(); };
-$('dMonth').onchange = function(){ if(this.value){ state.date = this.value + '-01'; renderDay(); } };
-$('dFrom').onchange = function(){ if(!this.value) return; state.from = this.value; if(state.to < state.from) state.to = state.from; renderDay(); };
-$('dTo').onchange = function(){ if(!this.value) return; state.to = this.value; if(state.from > state.to) state.from = state.to; renderDay(); };
-$('dMode').onchange = function(){
-  state.mode = this.value; store('hrMode', state.mode);
-  if(state.mode === 'custom' && !state.from){ state.from = state.date.slice(0, 7) + '-01'; state.to = state.date; }
-  renderDay();
+$('dFrom').onchange = function(){ if(!this.value) return; state.from = this.value; if(!state.to || state.to < state.from) state.to = state.from; setPeriod('custom'); };
+$('dTo').onchange = function(){ if(!this.value) return; state.to = this.value; if(!state.from || state.from > state.to) state.from = state.to; setPeriod('custom'); };
+$('dModes').onclick = function(e){
+  var b = e.target.closest('[data-mode]'); if(!b) return;
+  e.stopPropagation();   // вкладки перерисовываются — иначе щелчок сочли бы щелчком мимо окошка и закрыли его
+  var m = b.dataset.mode, d = state.mode === 'custom' ? state.to : state.date;
+  if(m === 'day' && isWeekend(d)) d = addDays(d, parse(d).getDay() === 6 ? -1 : -2);
+  setPeriod(m, d); pickerOpen(true);
 };
+$('dCur').onclick = function(e){ e.stopPropagation(); pickerOpen($('dPop').hidden); };
+$('dPop').onclick = function(e){
+  e.stopPropagation();   // окошко перерисовывается — без этого щелчок «снаружи» его бы закрыл
+  var pk = e.target.closest('[data-pick]'), vw = e.target.closest('[data-pview]');
+  if(pk && !pk.disabled){ pickerOpen(false); setPeriod(state.mode === 'custom' ? 'day' : state.mode, pk.dataset.pick); $('dCur').focus(); }
+  if(vw && !vw.disabled && vw.dataset.pview){ pview = vw.dataset.pview; renderPicker(); }
+};
+document.addEventListener('click', function(e){
+  if(!$('dPop').hidden && !e.target.closest('.dstep') && !e.target.closest('#dModes')) pickerOpen(false);
+  var b = e.target.closest('#dTable [data-days]'); if(b) openDays(b.dataset.days, b);
+});
+document.addEventListener('keydown', function(e){
+  if(e.key !== 'Escape') return;
+  if(!$('dPop').hidden){ pickerOpen(false); $('dCur').focus(); } else closeDaysPanel();
+});
 function stepPeriod(n){
   if(state.mode === 'day'){
     var d = n < 0 ? prevDate(state.date, visiblePeople()) : (nextDate(state.date, visiblePeople()) || today());
@@ -2701,10 +2994,14 @@ $('mSince').onchange = function(e){
   saveMetrics(metricList(), 'Считаем с ' + (v ? shortDate(v) : 'первой записи') + ': ' + e.target.closest('tr').firstChild.textContent + '.');
 };
 $('mForm').onsubmit = addMetric;
-$('dTodo').onclick = todoClick;
+$('dTodo').onclick = function(e){
+  if(e.target.closest('[data-goprob]')){ $('dProb').scrollIntoView({behavior:'smooth', block:'start'}); return; }
+  if(e.target.closest('[data-extend],[data-open-vac]')){ extendFromReminder(e); return; }
+  todoClick(e);
+};
 $('dTiles').onclick = $('dTiles').onkeydown = toggleDetail;
 $('dDetail').onclick = function(e){ if(e.target.id === 'dDetailClose'){ state.detail = null; renderDay(); } };
-$('dRemind').onclick = extendFromReminder; $('vRemind').onclick = extendFromReminder;
+$('vRemind').onclick = extendFromReminder;
 $('oForm').onsubmit = addVacation; $('oTable').onclick = removeVacation; $('oTable').onchange = coverEdit;
 
 function offline(){ $('offline').hidden = false; teamLoaded = true; route(); }

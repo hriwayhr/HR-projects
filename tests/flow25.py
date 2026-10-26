@@ -39,45 +39,53 @@ with sync_playwright() as p:
     assert not pg.evaluate("$('m_vac_end').readOnly") and pg.get_attribute('#m_vac_end', 'placeholder') == '3'
     assert 'из «Вакансий»' in pg.inner_text('#fStatus')
     pg.fill('#m_int_planned', '3'); pg.click('#fSave'); pg.wait_for_timeout(300)
-    assert pg.evaluate("window.__store['months/yulia_2026-10'].days['2026-10-06']") == {'int_planned': 3}
+    # в дне хранится и время ввода (для «внесено в 18:05» на дашборде) — в сравнениях его не учитываем
+    stored = lambda: pg.evaluate("(function(x){ x = Object.assign({}, x); delete x.savedAt; return x; })(window.__store['months/yulia_2026-10'].days['2026-10-06'])")
+    assert pg.evaluate("window.__store['months/yulia_2026-10'].days['2026-10-06'].savedAt").startswith('2026-10-07')
+    assert stored() == {'int_planned': 3}
     # ручная правка: «вакансий в работе» на конец дня 5 вместо 3 — хранится и важнее расчёта; очистили — снова расчёт
     pg.fill('#m_vac_end', '5'); pg.click('#fSave'); pg.wait_for_timeout(300)
-    assert pg.evaluate("window.__store['months/yulia_2026-10'].days['2026-10-06']") == {'int_planned': 3, 'vac_end': 5}
+    assert stored() == {'int_planned': 3, 'vac_end': 5}
     assert pg.evaluate("byDate['2026-10-06'].yulia.vac_end") == 5 and pg.evaluate("byDate['2026-10-06'].yulia.vac_start") == 3
     pg.dispatch_event('#fDate', 'change'); pg.wait_for_timeout(100)
     assert pg.input_value('#m_vac_end') == '5' and 'manual' in pg.get_attribute('#m_vac_end', 'class') and 'Исправлено вручную' in pg.inner_text('#fStatus')
     pg.fill('#m_vac_end', ''); pg.click('#fSave'); pg.wait_for_timeout(300)
-    assert pg.evaluate("window.__store['months/yulia_2026-10'].days['2026-10-06']") == {'int_planned': 3}
+    assert stored() == {'int_planned': 3}
     assert pg.evaluate("byDate['2026-10-06'].yulia.vac_end") == 3
-    pg.click('#tab_day'); pg.fill('#dDate', '2026-10-06'); pg.dispatch_event('#dDate', 'change'); pg.wait_for_timeout(100)
+    pg.click('#tab_day'); pg.evaluate("setPeriod('day', '2026-10-06')"); pg.wait_for_timeout(100)
     t = pg.inner_text('#dTiles'); assert 'Вакансии в работе\n3' in t and 'Вакантные ставки\n3' in t, t
     # инфографика недели: 5–9 октября, среда и дальше — «впереди», понедельник без данных — «не внесено»
     assert pg.inner_text('#dChartTitle') == 'Неделя 41 · 5–9 октября'
     svg = pg.inner_html('#dChart svg')
     assert svg.count('впереди') == 2 and 'не внесено' in svg, svg[:300]
-    assert 'Назначено\n3' in pg.inner_text('#dChart .wk-tot'), pg.inner_text('#dChart .wk-tot')
+    assert not pg.query_selector('#dChart .wk-tot')   # итоги под графиком — в плитках и таблице
     assert not pg.query_selector('#dHero')   # блока прогресса недели нет
     # периоды: неделя / месяц / квартал / год / свой; назначено 1 (2.10) + 3 (6.10)
+    def setmode(m):   # вкладка периода открывает окошко выбора — закрываем его, остаёмся на текущем периоде
+        pg.click('#dModes [data-mode=%s]' % m); assert pg.is_visible('#dPop'); pg.keyboard.press('Escape'); pg.wait_for_timeout(100)
     def mode(m):
-        pg.select_option('#dMode', m); pg.wait_for_timeout(100)
-        return pg.inner_text('#dayTitle'), pg.inner_text('#dTable tfoot') if pg.query_selector('#dTable tfoot') else pg.inner_text('#dTable tbody')
-    t, row = mode('week'); assert t == 'Неделя 41 · 5–9 октября' and '\t3\t' in row, (t, row)
-    assert 'сравнение: неделя 40' in pg.inner_text('#dayPrev') and 'по 30.09' in pg.inner_text('#dayPrev') and 'внесено 1 из 2' in pg.inner_text('#dChips'), pg.inner_text('#dChips')
-    t, row = mode('month'); assert t == 'Октябрь 2026' and '\t4\t' in row and pg.is_visible('#dMonth'), (t, row)
+        setmode(m)
+        return pg.inner_text('#dayTitle'), pg.inner_text('#dTable tbody')
+    t, row = mode('week'); assert t == 'Неделя 41 · 5–9 октября' and 'из 3' in row, (t, row)
+    assert 'сравнение: неделя 40' in pg.inner_text('#dayPrev') and 'по 30.09' in pg.inner_text('#dayPrev') and '1 из 2 дней' in pg.inner_text('#dTable thead'), pg.inner_text('#dTable thead')
+    t, row = mode('month'); assert t == 'Октябрь 2026' and 'из 4' in row and pg.get_attribute('#dModes [data-mode=month]', 'aria-pressed') == 'true', (t, row)
     assert 'нед. 40' in pg.inner_html('#dChart svg') and 'нед. 41' in pg.inner_html('#dChart svg')
     pg.click('#dPrev'); pg.wait_for_timeout(100); assert pg.inner_text('#dayTitle') == 'Сентябрь 2026'
     pg.click('#dNext'); pg.wait_for_timeout(100); assert pg.inner_text('#dayTitle') == 'Октябрь 2026' and pg.is_disabled('#dNext')
-    t, row = mode('quarter'); assert t == '4 квартал 2026' and '\t4\t' in row, (t, row)
-    assert pg.is_visible('#dQuarter') and pg.input_value('#dQuarter') == '2026-10-01' and pg.inner_text('#dQuarter').endswith('3 квартал 2024')
-    pg.select_option('#dQuarter', '2025-04-01'); pg.wait_for_timeout(100); assert pg.inner_text('#dayTitle') == '2 квартал 2025'
-    pg.select_option('#dQuarter', '2026-10-01'); pg.wait_for_timeout(100)
+    t, row = mode('quarter'); assert t == '4 квартал 2026' and 'из 4' in row, (t, row)
+    # окошко выбора: кварталы с начала учёта по текущий, будущие недоступны
+    pg.click('#dCur'); assert pg.get_attribute('#dPopGrid [data-pick="2026-10-01"]', 'aria-pressed') == 'true'
+    assert pg.is_enabled('#dPopGrid [data-pick="2024-07-01"]') and pg.is_disabled('#dPopGrid [data-pick="2024-04-01"]') and pg.is_disabled('#dPopGrid [data-pick="2027-01-01"]') if pg.query_selector('#dPopGrid [data-pick="2027-01-01"]') else True
+    pg.click('#dPopGrid [data-pick="2025-04-01"]'); pg.wait_for_timeout(100); assert pg.inner_text('#dayTitle') == '2 квартал 2025' and pg.is_hidden('#dPop')
+    pg.click('#dCur'); pg.click('#dPopGrid [data-pick="2026-10-01"]'); pg.wait_for_timeout(100)
     t, row = mode('year'); assert t == '2026 год' and pg.inner_html('#dChart svg').count('<rect') == 2, (t, pg.inner_html('#dChart svg').count('<rect'))   # данные только за октябрь: 2 столбика
-    t, row = mode('custom'); assert pg.is_visible('#dFrom') and pg.is_visible('#dTo')
+    t, row = mode('year'); pg.click('#dCur'); assert pg.is_visible('#dFrom') and pg.is_visible('#dTo')   # свой период — внизу окошка выбора
     pg.fill('#dFrom', '2026-10-03'); pg.dispatch_event('#dFrom', 'change'); pg.fill('#dTo', '2026-10-06'); pg.dispatch_event('#dTo', 'change'); pg.wait_for_timeout(100)
-    assert pg.inner_text('#dayTitle') == '3 октября – 6 октября 2026' and '\t3\t' in pg.inner_text('#dTable tbody'), pg.inner_text('#dTable tbody')
+    pg.keyboard.press('Escape')
+    assert pg.inner_text('#dayTitle') == '3 октября – 6 октября 2026' and 'из 3' in pg.inner_text('#dTable tbody'), pg.inner_text('#dTable tbody')
     pg.click('#dPrev'); pg.wait_for_timeout(100); assert pg.inner_text('#dayTitle') == '29 сентября – 2 октября 2026'
     # подробности по плитке: открывается по клику, график по неделям месяца и разбивка по людям, закрывается повторным кликом и «×»
-    pg.select_option('#dMode', 'month'); pg.wait_for_timeout(100)
+    setmode('month')
     pg.click('#dTiles [data-detail="Вакантные ставки"]'); pg.wait_for_timeout(100)
     det = pg.inner_text('#dDetail')
     assert det.startswith('Вакантные ставки · Октябрь 2026') and 'Прошлый период' in det and 'Юлия Немчинова' in det, det
@@ -89,7 +97,7 @@ with sync_playwright() as p:
     pk = pg.inner_text('#dPeak')
     assert pk.startswith('Пиковые дни недели · Октябрь 2026') and 'Собеседования — четверг' in pk and pk.index('Чаты') < pk.index('Собеседования') < pk.index('Выходы') and 'Доходимость\t—' in pk and 'Чаты — четверг' in pk and 'Выходы — четверг' in pk, pk
     assert pg.query_selector_all('#dPeak td.peak').__len__() == 3
-    pg.select_option('#dMode', 'day'); pg.wait_for_timeout(100)
+    setmode('day')
     assert pg.inner_text('#dPeak').startswith('Пиковые дни недели · 06.07.26 – 04.10.26'), pg.inner_text('#dPeak')
     # новая вакансия сегодня — сразу в ячейках сегодняшнего дня
     pg.click('#tab_vac'); pg.click('#vAdd'); pg.fill('#v_title', 'D'); pg.fill('#v_manager', 'Юлия Немчинова')
@@ -118,7 +126,8 @@ with sync_playwright() as p:
     pg.click('#tab_vac'); pg.wait_for_timeout(100)
     rem = pg.inner_text('#vRemind')
     assert 'в архиве с 05.10.26' in rem and 'осталось 3 дня' in rem and rem.index('F') < rem.index('E'), rem
-    pg.click('#tab_day'); pg.wait_for_timeout(100); assert 'осталось 3 дня' in pg.inner_text('#dRemind')
+    pg.click('#tab_day'); pg.wait_for_timeout(100); todo = pg.inner_text('#dTodo')
+    assert 'Нужно сделать' in todo and 'продлить публикацию' in todo.lower() and 'осталось 3 дня' in todo, todo   # публикации — в колонке дел
     pg.evaluate("""Object.defineProperty(navigator, 'clipboard', {configurable: true, value: {write: function(items){
       return Promise.all(['text/html', 'text/plain'].map(function(t){ return items[0].getType(t).then(function(b){ return b.text(); }); }))
         .then(function(v){ window.__clip = v; }); }}});""")

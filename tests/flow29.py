@@ -63,7 +63,8 @@ with sync_playwright() as p:
     B.evaluate("claude.use('db').then(db => db.doc('vacancies/b1').set({title: 'От Анны', manager: 'Шулятицкая', status: 'активна'}))")
     A.wait_for_timeout(1500); settle(A, B)
     d = on_disk()
-    assert d['months/anna_2026-10']['days'] == {'2026-10-01': {'calls': 4}, '2026-10-06': {'calls': 9}, '2026-10-07': {'calls': 5}}, d['months/anna_2026-10']
+    days = {k: {f: v for f, v in x.items() if f != 'savedAt'} for k, x in d['months/anna_2026-10']['days'].items()}   # время ввода дня не сравниваем
+    assert days == {'2026-10-01': {'calls': 4}, '2026-10-06': {'calls': 9}, '2026-10-07': {'calls': 5}}, d['months/anna_2026-10']
     assert d['vacancies/v1']['status'] == 'выход сотрудника' and d['vacancies/v1']['comment'] == 'новый', d['vacancies/v1']
     assert d['vacancies/a1']['title'] == 'От Юлии' and d['vacancies/b1']['title'] == 'От Анны'
     # у каждого на экране — правки коллеги, без перезагрузки

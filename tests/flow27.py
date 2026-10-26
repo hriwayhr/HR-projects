@@ -66,7 +66,7 @@ try:
     assert store()['config/team']['people']['anna']['email'] == 'ann@iway.ru' and store()['config/team']['people']['yulia']['yid'] == 'yid-boss@iway.ru'
     assert pg.is_disabled('#tUsers input[data-p=yulia][data-f=email]')   # свою почту не сменить
     # 4. дашборд считает загруженное
-    pg.click('#tab_day'); pg.select_option('#dMode', 'month'); pg.wait_for_timeout(300)
+    pg.click('#tab_day'); pg.click('#dModes [data-mode=month]'); pg.keyboard.press('Escape'); pg.wait_for_timeout(300)
     assert 'Собеседования прошли\n4' in pg.inner_text('#dTiles'), pg.inner_text('#dTiles')
     # 5. резервная копия скачивается без паролей
     pg.click('#tab_settings'); pg.click('#sub_backup')
