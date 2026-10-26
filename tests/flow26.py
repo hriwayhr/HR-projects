@@ -87,8 +87,8 @@ with sync_playwright() as p:
     # указали 2 мес.: Петрова (вышла 3.08) — срок закончился 3.10, Иванов (20.08) — до 20.10
     pr = txt(pg, '#dProb')
     assert 'Сейчас на испытательном\n1' in pr and 'ждут итога: 1' in pr and 'закончился 4 дня назад' in pr and 'осталось 13 дней' in pr, pr
-    assert pr.index('Петрова') < pr.index('Иванов Иван') and 'Сидоров' not in pr and 'Увольнения' not in pr   # увольнения — строкой в «По рекрутерам»
-    assert '1' in pg.inner_text('#dTable tr:has-text("Увольнения")'), pg.inner_text('#dTable tr:has-text("Увольнения")')
+    assert pr.index('Петрова') < pr.index('Иванов Иван') and 'Сидоров' not in pr and 'Увольнения\n1' in pr   # увольнения — командой, не по рекрутерам
+    assert 'Увольнения' not in pg.inner_text('#dTable')
     pg.click('#dProb tr:has-text("Петрова") [data-prob=passed]'); pg.wait_for_timeout(300)
     c = pg.evaluate("window.__store['vacancies/c']")
     assert c['seats'][0]['probation'] == {'result': 'passed', 'at': '2026-10-03'} and 'probation' not in c['seats'][1], c
@@ -119,7 +119,7 @@ with sync_playwright() as p:
     assert 'За период закрытых вакансий нет' in st, st
     pg.evaluate("sinceOver = Object.assign({}, sinceOver, {close: '2026-01-01'}); render()"); pg.wait_for_timeout(100)
     st = txt(pg, '#dStages')
-    assert 'Логистика\t1\t4 дн.\t15 дн.\t19 дн.' in st and 'Продажи\t1\t7 дн.\t2 дн.\t9 дн.' in st and 'Все\t2\t6 дн.\t9 дн.\t14 дн.' in st, st
+    assert 'Логистика\t1\t4 дн.\t15 дн.\t—\t19 дн.' in st and 'Продажи\t1\t7 дн.\t2 дн.\t—\t9 дн.' in st and 'Все\t2\t6 дн.\t9 дн.\t—\t14 дн.' in st, st
     pg.select_option('#dStageBy', 'owner'); pg.wait_for_timeout(100)
     assert 'Анна Шулятицкая\t1' in txt(pg, '#dStages') and pg.input_value('#dStageBy') == 'owner'
     pg.click('#dModes [data-mode=month]'); pg.keyboard.press('Escape'); pg.wait_for_timeout(100)

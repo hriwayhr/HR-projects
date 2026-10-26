@@ -98,7 +98,7 @@ with sync_playwright() as p:
     assert blk.startswith('Октябрь 2026') and '40\n28.09–2.10' in blk, blk[:200]
     assert 'Назначенных собеседований\t8\t' in blk and 'Собеседований (факт)\t6\t' in blk, blk
     assert 'Вакантных мест (на пятницу)\t—' in blk and 'Отклики hh\t7\t' in blk, blk
-    assert '75%' in blk and '16,7%' in blk, blk
+    assert '75%' in blk and '33,3%' in blk, blk   # выход Ивановой из карточки (неделя 42) — теперь и в метриках дня
     assert 'Отказов' not in blk   # отказы в сводке не нужны
     # разбивка года: по месяцам и по кварталам — один блок на год, столбцы-периоды и sum
     pg.select_option('#sGroup', 'month'); pg.wait_for_timeout(100)
@@ -125,7 +125,7 @@ with sync_playwright() as p:
     # старые вакансии из таблицы — учёт ставок, не выходов: скорость считаем только с 01.10.26
     pg.click('#tab_vac'); pg.wait_for_timeout(200)
     vt = pg.inner_text('#vTiles')
-    assert 'вакансий в работе: 1' in vt and 'План найма\n2' in vt and 'Скорость закрытия\n—' in vt and 'выходов с датой запроса пока нет' in vt and 'публикация' not in vt, vt
+    assert 'вакансий в работе: 1' in vt and 'План найма\n2' in vt and 'Time to Offer\n—' in vt and 'Time to Hire\n—' in vt and 'выходов с датой запроса пока нет' in vt and 'публикация' not in vt, vt
     pg.click('#vAdd'); pg.fill('#v_title', 'Тестировщик'); pg.fill('#v_manager', 'Шулятицкая'); pg.click('#vSave'); pg.wait_for_timeout(300)
     assert 'вакансий в работе: 2' in pg.inner_text('#vTiles')
     # «Шулятицкая» и «Катя Шулятицкая» — один ответственный: строка по пользователю, а не по тексту
@@ -192,7 +192,7 @@ with sync_playwright() as p:
     row = pg.inner_text('#vTable tr[data-id=%s]' % vid.split('/')[1]); assert '1 из 2' in row, row
     vt = pg.inner_text('#vTiles')
     # единица: запрос 30 дн. назад → выход 10 дн. назад = 20, одна — «мало данных»
-    assert 'Скорость закрытия\n20' in vt and 'по 1 выходу — мало данных' in vt, vt
+    assert 'Time to Hire\n20' in vt and 'по 1 выходу — мало данных' in vt, vt
     # вторая единица закрыта — вакансия сама уходит в «выход сотрудника»; новая «+1» — снова «активна»
     s2 = '#vSeats .seat:nth-child(2) '; pg.click(s2 + '[data-add-offer]'); pg.select_option(s2 + '.o-res', 'accepted'); pg.check(s2 + '.o-started')   # без даты — сегодня
     pg.click('#vSave'); pg.wait_for_timeout(300)

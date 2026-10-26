@@ -81,7 +81,7 @@
   .chip::before{content:''; width:7px; height:7px; border-radius:50%; background:currentColor;}
 
   .tiles{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:22px;}
-  #vTiles{grid-template-columns:repeat(5,minmax(0,1fr));}
+  #vTiles{grid-template-columns:repeat(3,minmax(0,1fr));}
   @media (max-width:900px){ #vTiles{grid-template-columns:repeat(2,minmax(0,1fr));} }
   @media (max-width:720px){ .tiles{grid-template-columns:repeat(2,minmax(0,1fr));} }
   .tile{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:14px 16px; min-width:0;}
@@ -259,7 +259,6 @@
   #dTable .odd{color:var(--bad); font-size:10px; margin-left:4px;}
   #dTable td .pill.leaver{margin-top:3px;}
   #dTable details{font-size:12px; color:var(--warn-ink); margin-top:3px;} #dTable details summary{cursor:pointer;}
-  .tiles.t3{grid-template-columns:repeat(3,minmax(0,1fr));}
   .ddrawer{position:fixed; top:0; right:0; bottom:0; width:min(920px, 100%); background:var(--surface); border-left:1px solid var(--line); box-shadow:-12px 0 40px rgba(0,0,0,.14); z-index:60;
     display:flex; flex-direction:column; gap:10px; padding:calc(16px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) 20px;}
   .ddrawer header{display:flex; justify-content:space-between; gap:10px; align-items:flex-start;}
@@ -672,7 +671,7 @@ var entered = {};                  // только внесённое рукам
 var vacanciesLoaded = false;
 // С этого дня «вакансии», «кандидаты» и «новые вакансии» считаются из реестра вакансий; раньше — как вносили
 var SYNC_FROM = '2026-10-05';
-var SYNCED = ['vac_start', 'vac_end', 'cand_start', 'cand_end', 'vac_published'];
+var SYNCED = ['vac_start', 'vac_end', 'cand_start', 'cand_end', 'vac_published', 'hires'];   // hires — выходы по дате выхода в карточке
 var months = {};                   // id документа → документ
 var session = null;                // {id} — id пользователя в config/team
 var state = {view:null, date:null, mode:'day', from:null, to:null};
@@ -739,6 +738,7 @@ function val(m, k){ return m && num(m[k]) ? m[k] : null; }
 function stock(m, k){ return num(m[k+'_end']) ? m[k+'_end'] : num(m[k+'_start']) ? m[k+'_start'] : null; }  // конец дня, иначе начало
 function vacStock(m){ return stock(m, 'vac'); }
 function candStock(m){ return stock(m, 'cand'); }
+// shortcut: «Чаты» и «Первичные чаты» складываются — сейчас вносят только первичные; когда станут вносить оба, проверить, не входят ли первичные в «Чаты»
 function chats(m){ return num(m.chats) || num(m.chats_first) ? (m.chats||0) + (m.chats_first||0) : null; }
 function fn(k){ return typeof k === 'function' ? k : function(m){ return val(m, k); }; }
 // Сумма по людям за день; null — никто не внёс
@@ -859,7 +859,9 @@ function renderNow(mode, r, prev, ps){
   if(prev){
     ps.forEach(function(p){
       var a = convOf(r, [p]), b = convOf(prev, [p]);
-      if(a !== null && b !== null && Math.abs(a - b) >= 10) out.push({k:a < b ? 'down' : 'up', t:team[p].name + ': доходимость ' + a + '%', s:(a < b ? 'ниже' : 'выше') + ' на ' + Math.abs(a - b) + ' п.п.: было ' + b + '%'});
+      // от 10 назначенных в обоих периодах и не за один день: иначе «2 из 2 → 3 из 5» выглядело бы падением
+      var enough = mode !== 'day' && rSum(r, [p], 'int_planned') >= 10 && rSum(prev, [p], 'int_planned') >= 10;
+      if(enough && a !== null && b !== null && Math.abs(a - b) >= 10) out.push({k:a < b ? 'down' : 'up', t:team[p].name + ': доходимость ' + a + '%', s:(a < b ? 'ниже' : 'выше') + ' на ' + Math.abs(a - b) + ' п.п.: было ' + b + '%'});
     });
     [['hires', 'Выходов', false], ['dismissals', 'Увольнений', true]].forEach(function(x){
       var a = rVal(r, ps, x[0]), b = rVal(prev, ps, x[0]);
@@ -967,7 +969,7 @@ function tile(k, v, prev, opts){
   var d = '';
   if(num(v) && num(prev) && !opts.noDelta){
     var diff = v - prev, good = opts.lowerIsBetter ? diff < 0 : diff > 0;
-    d = diff === 0 ? 'как накануне' : '<span class="'+(good ? 'up' : 'down')+'">'+(diff > 0 ? '+' : '−')+Math.abs(diff)+(opts.unit||'')+'</span> ' + (opts.vs || 'к предыдущему дню');
+    d = diff === 0 ? 'как накануне' : '<span class="'+(opts.neutral ? '' : good ? 'up' : 'down')+'">'+(diff > 0 ? '+' : '−')+Math.abs(diff)+(opts.unit||'')+'</span> ' + (opts.vs || 'к предыдущему дню');
   }
   var dk = DETAIL[k] ? ' data-detail="'+esc(k)+'" role="button" tabindex="0" aria-expanded="'+(state.detail === k)+'" title="Подробнее"' : '';
   return '<div class="tile'+(opts.hero ? ' hero' : '')+(state.detail === k ? ' sel' : '')+'"'+dk+'><div class="k">'+k+'</div><div class="v">'+(opts.text != null ? opts.text : num(v) ? v + (opts.suffix||'') : '—')+'</div><div class="d">'+(opts.note || d || '&nbsp;')+'</div></div>';
@@ -1005,6 +1007,10 @@ function rStock(r, ps, f){
   ps.forEach(function(p){ var v = null; ds.forEach(function(d){ var m = (byDate[d] || {})[p]; if(m){ var x = f(m); if(x !== null) v = x; } }); if(v !== null) s = (s || 0) + v; });
   return s;
 }
+// человеко-дни с внесёнными цифрами за период
+function enteredDays(r, ps){ var n = 0; rDates(r).forEach(function(d){ ps.forEach(function(p){ if(hasDay(p, d)) n++; }); }); return n; }
+// прошлый период — в масштабе текущего по числу внесённых дней: 10 дней по 9 звонков против 9 дней по 9 — не падение
+function scaledPrev(b, r, prev, ps){ if(!num(b) || !prev) return b; var a = enteredDays(r, ps), c = enteredDays(prev, ps); return a && c && a !== c ? Math.round(b * a / c) : b; }
 function rVal(r, ps, k){ return k === vacStock || k === candStock ? rStock(r, ps, k) : rSum(r, ps, k); }
 function renderDay(){
   var ps = visiblePeople(), mode = state.mode, day = state.date, r = periodOf(mode, day), isDay = mode === 'day';
@@ -1025,16 +1031,18 @@ function renderDay(){
   var vs = isDay ? 'к предыдущему дню' : partial ? 'к тому же сроку прошлого периода' : 'к прошлому периоду';
   function V(k){ return rVal(r, ps, k); }
   function P(k){ return prev ? rVal(prev, ps, k) : null; }
+  function PF(k){ return isDay ? P(k) : scaledPrev(P(k), r, prev, ps); }   // поток: прошлый период — на то же число внесённых дней
   var pl = V('int_planned'), dn = V('int_done'), pPl = P('int_planned'), pDn = P('int_done');
+  if(!isDay && prev && enteredDays(r, ps) !== enteredDays(prev, ps)) vs += ', на то же число внесённых дней';
   var hiresWeek = 0;
   if(isDay) dates().forEach(function(d){ if(d <= day && weekKey(d) === weekKey(day)) hiresWeek += sum(d, ps, 'hires') || 0; });
   $('dTiles').innerHTML =
-    tile('Собеседования прошли', dn, pDn, {hero:true, vs:vs, suffix: num(pl) ? ' <small>из '+pl+'</small>' : ''}) +
+    tile('Собеседования прошли', dn, isDay ? pDn : scaledPrev(pDn, r, prev, ps), {hero:true, vs:vs, suffix: num(pl) ? ' <small>из '+pl+'</small>' : ''}) +
     tile('Доходимость', num(dn) && pl ? Math.round(dn/pl*100) : null, num(pDn) && pPl ? Math.round(pDn/pPl*100) : null, {vs:vs, suffix:'<small>%</small>', unit:' п.п.'}) +
-    tile('Вакансии в работе', V(vacStock), P(vacStock), {vs:vs, lowerIsBetter:true, note: isDay ? '' : 'на конец периода'}) +
-    tile('Вакантные ставки', V(candStock), P(candStock), {vs:vs, note: isDay ? '' : 'на конец периода'}) +
-    tile('Звонки', V('calls'), P('calls'), {vs:vs}) +
-    tile('Чаты', V(chats), P(chats), {vs:vs}) +
+    tile('Вакансии в работе', V(vacStock), P(vacStock), {vs:vs, neutral:true, note: isDay ? '' : 'на конец периода'}) +
+    tile('Вакантные ставки', V(candStock), P(candStock), {vs:vs, neutral:true, note: isDay ? '' : 'на конец периода'}) +
+    tile('Звонки', V('calls'), PF('calls'), {vs:vs}) +
+    tile('Чаты', V(chats), PF(chats), {vs:vs}) +
     tile('Отказы', V('rejections'), null, {noDelta:true, note: isDay ? 'кандидатам за день' : 'кандидатам за период'}) +
     tile('Выходы новых сотрудников', V('hires'), P('hires'), isDay ? {noDelta:true, note:'с начала недели: ' + hiresWeek} : {vs:vs});
 
@@ -1056,13 +1064,13 @@ function dtRows(){
     on.int_done || on.int_planned ? {t:'Собеседования: прошли из назначенных', int:1} : null,
     on.calls ? {t:'Звонки (удачные)', k:'calls', avg:1} : null,
     on.chats || on.chats_first ? {t:'Чаты · из них первичные', chats:1} : null,
-    on.rejections ? {t:'Отказы кандидатам', k:'rejections'} : null
+    on.rejections ? {t:'Отказы кандидатам', k:'rejections', neutral:1} : null
   ], custom('work'), [{g:'end'},
     on.vac_end || on.vac_start ? {t:'Вакансии в работе', stock:'vac'} : null,
     on.cand_end || on.cand_start ? {t:'Вакантные ставки', stock:'cand'} : null,
     on.vac_published ? {t:'Новые публикации', k:'vac_published'} : null,
     on.hires ? {t:'Выходы новых сотрудников', k:'hires'} : null,
-    on.dismissals ? {t:'Увольнения', k:'dismissals', names:1, lower:1} : null
+    on.dismissals ? {t:'Увольнения', k:'dismissals', names:1, lower:1, team:1} : null
   ], custom('end')).filter(Boolean);
 }
 function stockStart(r, ps, k){   // остаток на начало периода: начало первого внесённого дня
@@ -1076,10 +1084,10 @@ function stockStart(r, ps, k){   // остаток на начало перио�
 }
 // изменение: за день и при малых числах (до 10) — в штуках, за период — в процентах
 function dtDiff(a, b, isDay){ return !num(a) || !num(b) ? null : isDay || b < 10 ? {n:a - b} : {n:Math.round((a - b) / b * 100), pct:1}; }
-function dtDelta(x, lower){
+function dtDelta(x, lower, neutral){
   if(!x) return '';
   if(!x.n) return '<span class="dl" style="color:var(--ink-3)">=</span>';
-  return '<span class="dl '+((lower ? x.n < 0 : x.n > 0) ? 'up' : 'down')+'">'+(x.n > 0 ? '+' : '−')+Math.abs(x.n)+(x.pct ? '%' : '')+'</span>';
+  return '<span class="dl '+(neutral ? '' : (lower ? x.n < 0 : x.n > 0) ? 'up' : 'down')+'"'+(neutral ? ' style="color:var(--ink-3)"' : '')+'>'+(x.n > 0 ? '+' : '−')+Math.abs(x.n)+(x.pct ? '%' : '')+'</span>';
 }
 function dtHeat(x, lower){ return x && x.pct && Math.abs(x.n) >= 10 ? ((lower ? x.n < 0 : x.n > 0) ? ' good' : ' bad') : ''; }
 // необычные дни человека: вдвое выше или ниже его медианы за период (для потоков от 5 в день)
@@ -1093,13 +1101,14 @@ function peopleTable(mode, r, prev, ps, rows){
   var isDay = mode === 'day', last = r.to < today() ? r.to : today();
   function cell(row, p){
     var list = [p], V = function(k){ return rVal(r, list, k); }, P = function(k){ return prev ? rVal(prev, list, k) : null; };
+    var PF = function(k){ return isDay ? P(k) : scaledPrev(P(k), r, prev, list); };   // поток — на то же число внесённых дней
     var v = null, sub = '', x = null, extra = '', lower = row.lower;
     if(row.int){
       var dn = V('int_done'), pl = V('int_planned');
       v = dn === null && pl === null ? null : (dn || 0) + (num(pl) ? ' из ' + pl : '');
-      sub = num(dn) && pl ? Math.round(dn / pl * 100) + '%' : ''; x = dtDiff(dn, P('int_done'), isDay);
+      sub = num(dn) && pl ? Math.round(dn / pl * 100) + '%' : ''; x = dtDiff(dn, PF('int_done'), isDay);
     } else if(row.chats){
-      var c = V(chats), f = V('chats_first'); v = c === null ? null : c + (num(f) ? ' · ' + f : ''); x = dtDiff(c, P(chats), isDay);
+      var c = V(chats), f = V('chats_first'); v = c === null ? null : c + (num(f) ? ' · ' + f : ''); x = dtDiff(c, PF(chats), isDay);
     } else if(row.stock){
       var fs = row.stock === 'vac' ? vacStock : candStock; v = V(fs);
       if(isDay){
@@ -1110,7 +1119,7 @@ function peopleTable(mode, r, prev, ps, rows){
         }
       } else { var st = stockStart(r, list, row.stock); if(num(st) && num(v)) sub = 'с ' + shortDate(r.from).slice(0, 5) + ': ' + st + ' → ' + v; }
     } else {
-      v = V(row.k); if(!row.names) x = dtDiff(v, P(row.k), isDay);
+      v = V(row.k); if(!row.names) x = dtDiff(v, row.k === 'hires' || row.k === 'vac_published' ? P(row.k) : PF(row.k), isDay);
       if(row.k === 'vac_published' && isDay && isSynced(r.from, p)){ var o2 = (entered[r.from] || {})[p]; sub = o2 && num(o2.vac_published) ? '<span class="s man">вручную</span>' : '<span class="s">из «Вакансий»</span>'; }
       if(row.avg && !isDay && num(v)){ var n = rDates(r).filter(function(d){ return hasDay(p, d); }).length; if(n) sub = '≈ ' + Math.round(v / n) + ' в день'; }
       if(row.names){
@@ -1122,7 +1131,8 @@ function peopleTable(mode, r, prev, ps, rows){
     }
     if(!isDay && dtFlow(row)){ var vals = dayVals(p, rDates(r), dtFlow(row)), odd = oddOf(vals); if(vals.some(odd)) extra += '<span class="odd" title="Есть необычные дни — нажмите на имя, чтобы посмотреть по дням">●</span>'; }
     if(sub && sub.charAt(0) !== '<') sub = '<span class="s">' + sub + '</span>';
-    return '<td class="'+(v === 0 || v === '0' ? 'z' : '')+(row.stock ? '' : dtHeat(x, lower))+'">' + (v === null ? '<span class="v" style="color:var(--ink-3)">—</span>' : '<span class="v">'+v+'</span>') + dtDelta(x, lower) + sub + extra + '</td>';
+    var neutral = row.stock || row.neutral;
+    return '<td class="'+(v === 0 || v === '0' ? 'z' : '')+(neutral ? '' : dtHeat(x, lower))+'">' + (v === null ? '<span class="v" style="color:var(--ink-3)">—</span>' : '<span class="v">'+v+'</span>') + dtDelta(x, lower, neutral) + sub + extra + '</td>';
   }
   function status(p){
     if(isDay){
@@ -1138,7 +1148,7 @@ function peopleTable(mode, r, prev, ps, rows){
   var head = '<thead><tr><th>Показатель</th>' + rows.map(function(p){
     return '<th><button type="button" class="who" data-days="'+p+'" title="Все дни за период">'+nameHtml(p)+'</button><span class="st">'+status(p)+'</span></th>';
   }).join('') + '</tr></thead>';
-  var body = dtRows().map(function(row){
+  var body = dtRows().filter(function(row){ return !row.team; }).map(function(row){   // увольнения — командная цифра, в «Испытательном сроке»
     if(row.g) return '<tr class="grp"><td colspan="'+(rows.length + 1)+'">'+(row.g === 'work' ? (isDay ? 'Работа за день' : 'Работа за период') : (isDay ? 'Итоги дня' : 'Итоги на ' + human(last).split(',')[0]))+'</td></tr>';
     return '<tr><td style="white-space:normal">'+esc(row.t)+'</td>' + rows.map(function(p){ return cell(row, p); }).join('') + '</tr>';
   }).join('');
@@ -1255,20 +1265,20 @@ function renderPeak(mode, r, ps){
     rDates(w).forEach(function(d){ var v = sum(d, ps, k), i = parse(d).getDay() - 1; if(v !== null && by[i]){ by[i].s = (by[i].s || 0) + v; by[i].n++; } });
     return by;
   }
-  // цифры — сумма за период по дню недели; доходимость — прошло / назначено по этому дню
+  // цифры — в среднем за день с данными (праздники и пропуски не делают день недели «слабее»); доходимость — прошло / назначено по этому дню
   var pl = tot('int_planned'), dn = tot('int_done');
   var stat = [['Чаты', tot(chats)], ['Собеседования', dn], ['Доходимость', dn.map(function(x, i){ return {s:num(x.s) && pl[i].s ? Math.round(x.s / pl[i].s * 100) : null, n:x.n, pct:true}; })], ['Выходы', tot('hires')]]
-    .map(function(m){ var avg = m[1].map(function(x){ return x.s; }); return {t:m[0], avg:avg, by:m[1], top:Math.max.apply(null, avg.map(function(v){ return v || 0; })), pct:m[0] === 'Доходимость'}; });
+    .map(function(m){ var pct = m[0] === 'Доходимость', avg = m[1].map(function(x){ return x.s === null ? null : pct ? x.s : Math.round(x.s / x.n * 10) / 10; }); return {t:m[0], avg:avg, by:m[1], top:Math.max.apply(null, avg.map(function(v){ return v || 0; })), pct:m[0] === 'Доходимость'}; });
   function f(v){ return String(v).replace('.', ','); }
   var lead = stat.filter(function(x){ return x.top > 0; }).map(function(x){
     return x.t + ' — ' + x.avg.map(function(v, i){ return v === x.top ? WD_FULL[wds[i]] : null; }).filter(Boolean).join(', ');
   });
   $('dPeak').innerHTML = '<h3>Пиковые дни недели · ' + esc(aLabel(mode, r, w)) + '</h3>' +
     (lead.length ? '<div class="detail-sum">' + lead.map(function(x){ return '<span><b>' + esc(x) + '</b></span>'; }).join('') + '</div>' +
-    '<div class="scroll"><table><thead><tr><th>Всего за период</th>' + wds.map(function(d){ return '<th>' + WD[d] + '</th>'; }).join('') + '</tr></thead><tbody>' +
+    '<div class="scroll"><table><thead><tr><th>В среднем за день</th>' + wds.map(function(d){ return '<th>' + WD[d] + '</th>'; }).join('') + '</tr></thead><tbody>' +
     stat.map(function(x){ return '<tr><td>' + x.t + '</td>' + x.avg.map(function(v, i){
       var h = v && x.top ? Math.round(v / x.top * 45) : 0;
-      return '<td class="heat' + (v && v === x.top ? ' peak' : '') + '" style="--h:' + h + '%" title="' + WD_FULL[wds[i]] + ': ' + (v === null ? 'нет данных' : x.pct ? v + '% (прошло / назначено)' : 'всего ' + v + ' за ' + x.by[i].n + ' дн., в среднем ' + f(Math.round(v / x.by[i].n * 10) / 10)) + '">' + (v === null ? '—' : v + (x.pct ? '%' : '')) + '</td>';
+      return '<td class="heat' + (v && v === x.top ? ' peak' : '') + '" style="--h:' + h + '%" title="' + WD_FULL[wds[i]] + ': ' + (v === null ? 'нет данных' : x.pct ? v + '% (прошло / назначено)' : 'в среднем ' + f(v) + ' — всего ' + x.by[i].s + ' за ' + x.by[i].n + ' дн.') + '">' + (v === null ? '—' : f(v) + (x.pct ? '%' : '')) + '</td>';
     }).join('') + '</tr>'; }).join('') + '</tbody></table></div>' : '<p class="sub">За период нет внесённых данных.</p>');
 }
 // ---------- аналитика под таблицей: для дня и недели — 13 недель по выбранную (за неделю закономерностей не видно) ----------
@@ -1387,12 +1397,14 @@ function renderProb(w, wp, wl, ps){
   var us = hireUnits(), t = today();
   function cnt(r, res){ return r ? us.filter(function(u){ return u.prob && u.prob.result === res && u.prob.at >= r.from && u.prob.at <= r.to; }).length : null; }
   var pass = cnt(w, 'passed'), fail = cnt(w, 'failed'), open = us.filter(function(u){ var s = probState(u); return s === 'on' || s === 'due'; });
-  var due = open.filter(function(u){ return u.end <= t; }).length;
+  var due = open.filter(function(u){ return u.end <= t; }).length, dis = rSum(w, ps, 'dismissals');
   var nom = us.filter(function(u){ return probState(u) === 'nomonths'; });
   var vs = 'к прошлому периоду';
-  var tiles = '<div class="tiles t3">' + tile('Прошли испытательный срок', pass, cnt(wp, 'passed'), {vs:vs}) +
+  var tiles = '<div class="tiles">' + tile('Прошли испытательный срок', pass, cnt(wp, 'passed'), {vs:vs}) +
     tile('Не прошли', fail, cnt(wp, 'failed'), {vs:vs, lowerIsBetter:true, note: pass + fail ? 'прошли ' + Math.round(pass / (pass + fail) * 100) + '% из закончивших' : ''}) +
-    tile('Сейчас на испытательном', open.length - due, null, {noDelta:true, note: [due ? '<span class="down">ждут итога: '+due+'</span>' : '', nom.length ? 'срок не указан: ' + nom.length : ''].filter(Boolean).join(' · ')}) + '</div>';
+    tile('Сейчас на испытательном', open.length - due, null, {noDelta:true, note: [due ? '<span class="down">ждут итога: '+due+'</span>' : '', nom.length ? 'срок не указан: ' + nom.length : ''].filter(Boolean).join(' · ')}) +
+    tile('Увольнения', dis, wp ? rSum(wp, ps, 'dismissals') : null, {vs:vs, lowerIsBetter:true, note: dismissedIn(w, ps).length ?
+      dismissedIn(w, ps).map(function(n){ return '<span class="pill leaver">'+esc(n)+'</span>'; }).join(' ') : 'по команде, из метрик дня'}) + '</div>';
   function row(u, done){
     var key0 = ' data-id="'+esc(u.v.id)+'" data-i="'+(u.i === null ? '' : u.i)+'"';
     if(!u.end) return '<tr><td class="l">'+(u.person ? esc(u.person) : '<span class="sub">имя — в карточке вакансии</span>')+'</td><td class="l">'+esc(u.v.title || '')+'</td><td class="l">'+esc(managerLabel(u.v))+'</td><td>'+shortDate(u.startAt)+'</td>' +
@@ -1483,6 +1495,8 @@ function stageUnits(){
     u.s1 = ok ? u.s1 : null;
     u.s2 = ok ? eff(from) : null;
     u.all = ok ? eff(u.req) : null;
+    var o = (isMulti(u.v) ? u.v.seats.filter(function(x){ return x.startAt === u.end; }) : [u.v]).map(function(x){ return seatOffers(x).filter(function(z){ return z.result === 'accepted' && z.sentAt; }).pop(); }).filter(Boolean)[0];
+    u.tto = ok && o && u.req && o.sentAt >= u.req && o.sentAt >= sinceOf('offers') ? eff(u.req) - eff(o.sentAt) : null;   // запрос → оффер, без пауз
     return u;
   });
 }
@@ -1491,11 +1505,11 @@ function renderStages(w, wl){
   var by = state.stageBy || 'dept', g = STAGE_BY[by][1], us = stageUnits().filter(function(u){ return u.end >= w.from && u.end <= w.to && u.end >= sinceOf('close'); }), groups = {};
   us.forEach(function(u){ var k = g(u.v); (groups[k] || (groups[k] = [])).push(u); });
   function med(list, f){ var m = median(list.map(function(u){ return u[f]; }).filter(num)); return m === null ? '—' : m + ' дн.'; }
-  function line(name, list){ return '<tr><td class="l">'+esc(name)+'</td><td>'+list.length+'</td><td>'+med(list, 's1')+'</td><td>'+med(list, 's2')+'</td><td><b>'+med(list, 'all')+'</b></td></tr>'; }
+  function line(name, list){ return '<tr><td class="l">'+esc(name)+'</td><td>'+list.length+'</td><td>'+med(list, 's1')+'</td><td>'+med(list, 's2')+'</td><td>'+med(list, 'tto')+'</td><td><b>'+med(list, 'all')+'</b></td></tr>'; }
   var keys = Object.keys(groups).sort(function(a, b){ return groups[b].length - groups[a].length || a.localeCompare(b); });
   $('dStages').innerHTML = '<div class="detail-head"><h3>Сроки закрытия · '+esc(wl)+'</h3><select id="dStageBy" aria-label="Разбивка">' +
     Object.keys(STAGE_BY).map(function(k){ return '<option value="'+k+'"'+(k === by ? ' selected' : '')+'>'+STAGE_BY[k][0]+'</option>'; }).join('') + '</select></div>' +
-    (us.length ? '<div class="scroll"><table><thead><tr><th class="l">'+STAGE_BY[by][0]+'</th><th>Закрыто</th><th>Запрос → публикация</th><th>Публикация → выход</th><th>Всего</th></tr></thead><tbody>' +
+    (us.length ? '<div class="scroll"><table><thead><tr><th class="l">'+STAGE_BY[by][0]+'</th><th>Закрыто</th><th>Запрос → публикация</th><th>Публикация → выход</th><th>Time to Offer</th><th>Time to Hire</th></tr></thead><tbody>' +
       keys.map(function(k){ return line(k, groups[k]); }).join('') + '</tbody>'+(keys.length > 1 ? '<tfoot>'+line('Все', us)+'</tfoot>' : '')+'</table></div>' :
       '<p class="sub">За период закрытых вакансий нет.</p>') +
     '<p class="hint">Медианы по вышедшим за период сотрудникам (у многоставочных — по единицам), без архива. Считаем выходы с ' + shortDate(sinceOf('close')) + ': раньше выходы и сроки не фиксировали. Дни паузы на время отпуска менеджера не считаются.</p>';
@@ -1660,7 +1674,7 @@ function loadForm(){
       if(mine) manual.push(i.closest('label').firstChild.textContent.trim() + ' (расчёт: ' + reg[k] + ')');
     });
     $('fStatus').className = 'status';
-    $('fStatus').textContent = (own ? 'День уже внесён — сохранение заменит значения. ' : '') + 'Вакансии и кандидаты подтягиваются из «Вакансий». Если цифра неверна — исправьте её здесь: это заменит расчёт только за этот день; очистите поле — снова будет считаться само.' +
+    $('fStatus').textContent = (own ? 'День уже внесён — сохранение заменит значения. ' : '') + 'Вакансии, ставки и выходы подтягиваются из «Вакансий». Если цифра неверна — исправьте её здесь: это заменит расчёт только за этот день; очистите поле — снова будет считаться само.' +
       (manual.length ? ' Исправлено вручную: ' + manual.join(', ') + '.' : '');
     return;
   }
@@ -1946,20 +1960,32 @@ function managerLabel(v){ var p = vacOwner(v); return p ? label(p) : (v.manager 
 function visibleVacancies(){ var p = scope(); return Object.keys(vacancies).map(function(id){ return Object.assign({id:id}, vacancies[id]); }).filter(function(v){ return !p || mine(v, p); }); }
 function vacCost(v){ return linkObjs(v).reduce(function(s, l){ return s + (num(l.cost) ? l.cost : 0); }, 0); }
 function rub(n){ return n ? n.toLocaleString('ru-RU') + '\u00a0₽' : '—'; }
+// Time to Offer: от запроса до оффера, который кандидат принял (по единицам; офферы ведём с даты учёта «offers»), без дней паузы
+function offerUnits(v){
+  return (isMulti(v) ? v.seats : [v]).map(function(x){
+    var o = seatOffers(x).filter(function(o){ return o.result === 'accepted' && o.sentAt; }).pop(), req = isMulti(v) ? x.requestedAt : v.requestedAt;
+    if(!o || !req || o.sentAt < req || o.sentAt < sinceOf('offers')) return null;
+    return {at:o.sentAt, days:Math.max(0, daysBetween(req, o.sentAt) - pauseDays(v, req, o.sentAt))};
+  }).filter(Boolean);
+}
 function vacStats(list){
   var active = list.filter(isActive), units = [].concat.apply([], list.map(closedUnits)).filter(function(u){ return u.end >= sinceOf('close'); }),
-      cd = units.map(function(u){ return u.days; }).filter(num);
+      cd = units.map(function(u){ return u.days; }).filter(num), to = [].concat.apply([], list.map(offerUnits)).map(function(u){ return u.days; });
   var since = new Date(); since.setDate(since.getDate() - 90); since = iso(since);
   return {active:active.length, need:active.reduce(function(s, v){ return s + needOf(v); }, 0),
-          mean:mean(cd), median:median(cd), closed:units.length, sample:cd.length,
+          mean:mean(cd), median:median(cd), closed:units.length, sample:cd.length, tto:median(to), ttoN:to.length,
           recent:units.filter(function(u){ return u.end >= since; }).length,
           oldest:active.reduce(function(m, v){ var d = daysInWork(v); return d !== null && d > m ? d : m; }, 0),
           spent:list.reduce(function(s, v){ return s + vacCost(v); }, 0), spentActive:active.reduce(function(s, v){ return s + vacCost(v); }, 0)};
 }
 // Подпись к скорости закрытия: медиана от запроса до выхода; мало закрытых — так и пишем; есть ориентир по прошлым годам
 var FEW = 5;
+function ttoNote(st){
+  return st.ttoN ? 'медиана от запроса до оффера, который приняли · по ' + st.ttoN + ' ' + plural(st.ttoN, 'офферу', 'офферам', 'офферам') + (st.ttoN < FEW ? ' — мало данных' : '')
+    : 'считаем с ' + shortDate(sinceOf('offers')) + ': принятых офферов с датой запроса пока нет';
+}
 function speedNote(st){
-  var t = st.sample ? 'медиана от запроса до выхода · по ' + st.sample + ' ' + plural(st.sample, 'выходу', 'выходам', 'выходам') + (st.sample < FEW ? ' — мало данных' : '') + (st.mean !== null && st.sample >= FEW ? ' · среднее ' + st.mean + ' дн.' : '')
+  var t = st.sample ? 'медиана от запроса до выхода сотрудника · по ' + st.sample + ' ' + plural(st.sample, 'выходу', 'выходам', 'выходам') + (st.sample < FEW ? ' — мало данных' : '') + (st.mean !== null && st.sample >= FEW ? ' · среднее ' + st.mean + ' дн.' : '')
     : 'считаем с ' + shortDate(sinceOf('close')) + ': выходов с датой запроса пока нет';
   return t + ' · без дней паузы (отпуск менеджера)';
 }
@@ -1972,7 +1998,8 @@ function renderVac(){
   $('vTiles').innerHTML =
     tile('План найма', st.need, null, {hero:true, note:'человек нужно по активным вакансиям'}) +
     tile('Публикаций в работе', livePubs(all).length, null, {note:'вакансий в работе: ' + st.active + (st.active ? ' · дольше всех — ' + st.oldest + ' дн.' : '')}) +
-    tile('Скорость закрытия', st.median, null, {suffix:' <small>дн.</small>', note: speedNote(st)}) +
+    tile('Time to Offer', st.tto, null, {suffix:' <small>дн.</small>', note: ttoNote(st)}) +
+    tile('Time to Hire', st.median, null, {suffix:' <small>дн.</small>', note: speedNote(st)}) +
     tile('Закрыто за 90 дней', st.recent, null, {note:'вышли сотрудники' + (addDays(today(), -90) < sinceOf('close') ? ' · считаем с ' + shortDate(sinceOf('close')) : '')}) +
     tile('Потрачено на hh.ru', null, null, {text:rub(st.spent), note:'на вакансии в работе: ' + rub(st.spentActive)});
 
@@ -2007,8 +2034,8 @@ function renderVac(){
   }
   function gtable(rows, title){
     // скорость — медиана от запроса до выхода без дней паузы; мало закрытых — помечаем; ориентир — от публикации
-    return '<thead><tr><th>'+title+'</th><th>В работе</th><th>Закрыто с '+shortDate(sinceOf('close'))+'</th><th>Скорость, дн.</th><th>Потрачено</th></tr></thead><tbody>' +
-      rows.map(function(s){ return '<tr><td>'+esc(s.k)+'</td><td>'+s.active+'</td><td>'+s.closed+'</td><td>'+(s.median === null ? '—' : s.median + (s.sample < FEW ? ' <span class="sub">мало данных</span>' : ''))+'</td>' +
+    return '<thead><tr><th>'+title+'</th><th>В работе</th><th>Закрыто с '+shortDate(sinceOf('close'))+'</th><th>Time to Offer, дн.</th><th>Time to Hire, дн.</th><th>Потрачено</th></tr></thead><tbody>' +
+      rows.map(function(s){ return '<tr><td>'+esc(s.k)+'</td><td>'+s.active+'</td><td>'+s.closed+'</td><td>'+(s.tto === null ? '—' : s.tto + (s.ttoN < FEW ? ' <span class="sub">мало данных</span>' : ''))+'</td><td>'+(s.median === null ? '—' : s.median + (s.sample < FEW ? ' <span class="sub">мало данных</span>' : ''))+'</td>' +
         '<td>'+rub(s.spent)+'</td></tr>'; }).join('') + '</tbody>';
   }
   $('vByMgr').innerHTML = gtable(group('manager'), 'Ответственный');
@@ -2231,7 +2258,7 @@ function vacSpan(v){
 // Цифры дня менеджера из реестра: вакансии в работе = его публикации на hh.ru (одна ссылка на несколько
 // вакансий — одна), вакантные ставки = единицы найма в поиске
 function registryDay(p, d){
-  var r = {vac_start:0, vac_end:0, cand_start:0, cand_end:0, vac_published:0}, seen = {_start:{}, _end:{}, pub:{}};
+  var r = {vac_start:0, vac_end:0, cand_start:0, cand_end:0, vac_published:0, hires:0}, seen = {_start:{}, _end:{}, pub:{}};
   Object.keys(vacancies).forEach(function(id){
     var v = vacancies[id]; if(ownerOn(v, d) !== p) return;
     var sp = vacSpan(v), links = linkObjs(v), paused = pausedOn(v, d);
@@ -2242,6 +2269,7 @@ function registryDay(p, d){
       if(!NOT_HIRING[v.status] && !paused) r['cand' + sfx] += isMulti(v) ? v.seats.filter(function(x){ return openOn(seatStart(v, x), x.startAt, d, eod); }).length : needOf(v);
     });
     links.forEach(function(l){ if((l.at || sp[0]) === d && !seen.pub[l.url]){ seen.pub[l.url] = 1; r.vac_published++; } });
+    closedUnits(v).forEach(function(u){ if(u.end === d) r.hires++; });   // выход — только в день выхода сотрудника
   });
   return r;
 }

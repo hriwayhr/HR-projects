@@ -29,8 +29,8 @@ with sync_playwright() as p:
     b = p.chromium.launch(executable_path='/opt/pw-browsers/chromium')
     pg = start(b, 'yulia')
     # метрики дня: Логист и Бухгалтер — у Юлии; ставки Бухгалтера на паузе не считаются, его публикация — считается
-    assert pg.evaluate("registryDay('yulia', '2026-10-21')") == {'vac_start': 2, 'vac_end': 2, 'cand_start': 2, 'cand_end': 2, 'vac_published': 0}
-    assert pg.evaluate("registryDay('anna', '2026-10-21')") == {'vac_start': 0, 'vac_end': 0, 'cand_start': 0, 'cand_end': 0, 'vac_published': 0}
+    assert pg.evaluate("registryDay('yulia', '2026-10-21')") == {'vac_start': 2, 'vac_end': 2, 'cand_start': 2, 'cand_end': 2, 'vac_published': 0, 'hires': 0}
+    assert pg.evaluate("registryDay('anna', '2026-10-21')") == {'vac_start': 0, 'vac_end': 0, 'cand_start': 0, 'cand_end': 0, 'vac_published': 0, 'hires': 0}
     assert pg.evaluate("registryDay('anna', '2026-10-19')")['cand_end'] == 3   # до отпуска — у Анны
     pg.click('#tab_vac'); pg.wait_for_timeout(200)
     assert 'План найма\n2' in pg.inner_text('#vTiles'), pg.inner_text('#vTiles')   # Логист 1 + Дизайнер 1; Бухгалтер на паузе

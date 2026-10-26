@@ -29,7 +29,7 @@ with sync_playwright() as p:
     pg.add_init_script('window.__store = ' + json.dumps(seed) + '; localStorage.setItem("hrSession", JSON.stringify({id: "yulia"}));')
     pg.goto('file://' + str(prev)); pg.wait_for_timeout(500)
     r = pg.evaluate("registryDay('yulia', '2026-10-06')")
-    assert r == {'vac_start': 3, 'cand_start': 4, 'vac_end': 3, 'cand_end': 3, 'vac_published': 1}, r
+    assert r == {'vac_start': 3, 'cand_start': 4, 'vac_end': 3, 'cand_end': 3, 'vac_published': 1, 'hires': 2}, r   # выходы 6.10 — B (единица) и C
     # до SYNC_FROM — как вносили; с него — из реестра, даже если день ещё не внесён
     assert pg.evaluate("byDate['2026-10-02'].yulia.vac_start") == 40
     assert pg.evaluate("byDate['2026-10-05'].yulia.vac_end") == 3 and pg.evaluate("dayStatus('yulia', '2026-10-05')") == 'missing'
@@ -95,7 +95,7 @@ with sync_playwright() as p:
     assert pg.inner_text('#dDetail').startswith('Звонки'); pg.click('#dDetailClose'); pg.wait_for_timeout(100); assert pg.inner_text('#dDetail') == ''
     # пиковые дни недели: сумма по дню недели, пик выделен; в режиме дня — 13 недель, подписаны датами
     pk = pg.inner_text('#dPeak')
-    assert pk.startswith('Пиковые дни недели · Октябрь 2026') and 'Собеседования — четверг' in pk and pk.index('Чаты') < pk.index('Собеседования') < pk.index('Выходы') and 'Доходимость\t—' in pk and 'Чаты — четверг' in pk and 'Выходы — четверг' in pk, pk
+    assert pk.startswith('Пиковые дни недели · Октябрь 2026') and 'Собеседования — четверг' in pk and pk.index('Чаты') < pk.index('Собеседования') < pk.index('Выходы') and 'Доходимость\t—' in pk and 'Чаты — четверг' in pk and 'Выходы — вторник' in pk, pk
     assert pg.query_selector_all('#dPeak td.peak').__len__() == 3
     setmode('day')
     assert pg.inner_text('#dPeak').startswith('Пиковые дни недели · 06.07.26 – 04.10.26'), pg.inner_text('#dPeak')
@@ -107,7 +107,7 @@ with sync_playwright() as p:
     d = [v for k, v in pg.evaluate('window.__store').items() if k.startswith('vacancies/') and v.get('title') == 'D'][0]
     assert d['seats'] == [{'requestedAt': '2026-10-07', 'reason': 'замена сотрудника (резерв)', 'search': 'поиск в резерв', 'published': True, 'publishedAt': '2026-10-07'}], d   # дата — первой публикации на hh.ru
     assert d['links'] == [{'url': 'https://hh.ru/5', 'at': '2026-10-07', 'closedAt': '2026-11-07'}] and d['archivedAt'] == '2026-11-07', d   # архивация через месяц
-    assert pg.evaluate("byDate['2026-10-07'].yulia") == {'vac_start': 3, 'cand_start': 3, 'vac_end': 4, 'cand_end': 4, 'vac_published': 1}, pg.evaluate("byDate['2026-10-07'].yulia")
+    assert pg.evaluate("byDate['2026-10-07'].yulia") == {'vac_start': 3, 'cand_start': 3, 'vac_end': 4, 'cand_end': 4, 'vac_published': 1, 'hires': 0}, pg.evaluate("byDate['2026-10-07'].yulia")
     # снятая публикация перестаёт считаться со дня снятия
     pg.click('#vTable tr[data-id=a] td:nth-child(2)'); pg.fill('#vLinks .link-row:nth-child(1) .v-link-closed', '2026-10-07'); pg.click('#vSave'); pg.wait_for_timeout(300)
     assert pg.evaluate("byDate['2026-10-07'].yulia.vac_end") == 3

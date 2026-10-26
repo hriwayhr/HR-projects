@@ -38,7 +38,7 @@ with sync_playwright() as p:
     assert 'вместо' not in pg.inner_text('#vTable tr[data-id=v1]')
     assert 'leaver' not in json.dumps(pg.evaluate("window.__store['vacancies/v1']"))
 
-    # метрики дня: «Кто уволился» рядом с числом увольнений → имена в строке «Увольнения» таблицы «По рекрутерам»
+    # метрики дня: «Кто уволился» рядом с числом увольнений → имена на командной плитке «Увольнения»
     pg.click('#tab_entry'); pg.wait_for_timeout(200)
     pg.select_option('#fPerson', 'anna'); pg.fill('#fDate', '2026-10-20'); pg.dispatch_event('#fDate', 'change'); pg.wait_for_timeout(100)
     assert pg.locator('#mDisNames input').count() == 0                      # нет увольнений — нет полей
@@ -59,8 +59,9 @@ with sync_playwright() as p:
     assert pg.input_value('#mDisNames label:nth-child(2) input') == 'Белова Вера'
     pg.click('#tab_day'); pg.wait_for_timeout(300)
     pg.click('#dModes [data-mode=month]'); pg.keyboard.press('Escape'); pg.wait_for_timeout(200)
-    row = pg.text_content('#dTable tr:has-text("Увольнения")')
-    assert pg.locator('#dTable .pill.leaver').count() == 4 and 'Иванова Диана' in row and 'Белова Вера' in row and 'ещё 1' in row, row   # три имени видно, остальные под «ещё»
+    prob = pg.inner_text('#dProb')
+    assert pg.locator('#dProb .pill.leaver').count() == 4 and 'Иванова Диана' in prob and 'Белова Вера' in prob, prob
+    assert 'Увольнения' not in pg.inner_text('#dTable')   # не по рекрутерам: это увольнения в компании, а не результат рекрутера
     b.close()
 assert not errs, errs
 print('flow36 ok')
