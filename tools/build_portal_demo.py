@@ -182,6 +182,8 @@ def rep(s, a, b, n=1):
 # метрики в демо — песочница метрик (на сервере они на /metrics в той же вкладке)
 page = rep(page, "window.HR_SERVER ? '/metrics' :", "'https://claude.ai/artifact/LT73wVkVx9bYcwANYwPVt1' ||")
 page = rep(page, "ext:!window.HR_SERVER,", "ext:true,")
+# демо-сотрудница Мария видит все этапы сразу, не дожидаясь дат (на сервере этапы открываются по сроку)
+page = rep(page, "if(st.key === 'pre' || st.always) return true;", "if(st.key === 'pre' || st.always || (rec && rec.code === 'IW-DEMO')) return true;")
 # после входа сервер перезагружает страницу по адресу; у артефакта адрес с параметрами — перезагружаем как есть
 page = rep(page, "location.replace(location.pathname);", "location.reload();", 3)
 page = rep(page, '<p class="gate-foot" id="gateFoot">', hint + '\n    <p class="gate-foot" id="gateFoot">')
