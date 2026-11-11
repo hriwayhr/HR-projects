@@ -1,3 +1,73 @@
+<!-- Производственный календарь РФ: XMLCalendar; встроенный резерв 2024–2027. -->
+<script>
+/* Russian five-day production calendar: https://github.com/xmlcalendar/data. Short days count as ordinary workdays. */
+(function(){
+'use strict';
+const bundled={"2026": {"year": 2026, "published": "2025.09.30", "days": {"2026-01-01": {"kind": "off", "title": "Новогодние каникулы"}, "2026-01-02": {"kind": "off", "title": "Новогодние каникулы"}, "2026-01-03": {"kind": "off", "title": "Новогодние каникулы"}, "2026-01-04": {"kind": "off", "title": "Новогодние каникулы"}, "2026-01-05": {"kind": "off", "title": "Новогодние каникулы"}, "2026-01-06": {"kind": "off", "title": "Новогодние каникулы"}, "2026-01-07": {"kind": "off", "title": "Рождество Христово"}, "2026-01-08": {"kind": "off", "title": "Новогодние каникулы"}, "2026-01-09": {"kind": "off", "title": "Перенесённый выходной"}, "2026-02-23": {"kind": "off", "title": "День защитника Отечества"}, "2026-03-08": {"kind": "off", "title": "Международный женский день"}, "2026-03-09": {"kind": "off", "title": "Перенесённый выходной"}, "2026-04-30": {"kind": "work", "title": "Рабочий день"}, "2026-05-01": {"kind": "off", "title": "Праздник Весны и Труда"}, "2026-05-08": {"kind": "work", "title": "Рабочий день"}, "2026-05-09": {"kind": "off", "title": "День Победы"}, "2026-05-11": {"kind": "off", "title": "Перенесённый выходной"}, "2026-06-11": {"kind": "work", "title": "Рабочий день"}, "2026-06-12": {"kind": "off", "title": "День России"}, "2026-11-03": {"kind": "work", "title": "Рабочий день"}, "2026-11-04": {"kind": "off", "title": "День народного единства"}, "2026-12-31": {"kind": "off", "title": "Перенесённый выходной"}}, "fetchedAt": 0}, "2025": {"year": 2025, "published": "2024.12.01", "days": {"2025-01-01": {"kind": "off", "title": "Новогодние каникулы"}, "2025-01-02": {"kind": "off", "title": "Новогодние каникулы"}, "2025-01-03": {"kind": "off", "title": "Новогодние каникулы"}, "2025-01-04": {"kind": "off", "title": "Новогодние каникулы"}, "2025-01-05": {"kind": "off", "title": "Новогодние каникулы"}, "2025-01-06": {"kind": "off", "title": "Новогодние каникулы"}, "2025-01-07": {"kind": "off", "title": "Рождество Христово"}, "2025-01-08": {"kind": "off", "title": "Новогодние каникулы"}, "2025-02-23": {"kind": "off", "title": "День защитника Отечества"}, "2025-03-07": {"kind": "work", "title": "Рабочий день"}, "2025-03-08": {"kind": "off", "title": "Международный женский день"}, "2025-04-30": {"kind": "work", "title": "Рабочий день"}, "2025-05-01": {"kind": "off", "title": "Праздник Весны и Труда"}, "2025-05-02": {"kind": "off", "title": "Перенесённый выходной"}, "2025-05-08": {"kind": "off", "title": "Перенесённый выходной"}, "2025-05-09": {"kind": "off", "title": "День Победы"}, "2025-06-11": {"kind": "work", "title": "Рабочий день"}, "2025-06-12": {"kind": "off", "title": "День России"}, "2025-06-13": {"kind": "off", "title": "Перенесённый выходной"}, "2025-11-01": {"kind": "work", "title": "Рабочий день"}, "2025-11-03": {"kind": "off", "title": "Перенесённый выходной"}, "2025-11-04": {"kind": "off", "title": "День народного единства"}, "2025-12-31": {"kind": "off", "title": "Перенесённый выходной"}}, "fetchedAt": 0}, "2027": {"year": 2027, "published": "2026.09.30", "days": {"2027-01-01": {"kind": "off", "title": "Новогодние каникулы"}, "2027-01-02": {"kind": "off", "title": "Новогодние каникулы"}, "2027-01-03": {"kind": "off", "title": "Новогодние каникулы"}, "2027-01-04": {"kind": "off", "title": "Новогодние каникулы"}, "2027-01-05": {"kind": "off", "title": "Новогодние каникулы"}, "2027-01-06": {"kind": "off", "title": "Новогодние каникулы"}, "2027-01-07": {"kind": "off", "title": "Рождество Христово"}, "2027-01-08": {"kind": "off", "title": "Новогодние каникулы"}, "2027-02-20": {"kind": "work", "title": "Рабочий день"}, "2027-02-22": {"kind": "off", "title": "Перенесённый выходной"}, "2027-02-23": {"kind": "off", "title": "День защитника Отечества"}, "2027-03-08": {"kind": "off", "title": "Международный женский день"}, "2027-04-30": {"kind": "work", "title": "Рабочий день"}, "2027-05-01": {"kind": "off", "title": "Праздник Весны и Труда"}, "2027-05-03": {"kind": "off", "title": "Перенесённый выходной"}, "2027-05-09": {"kind": "off", "title": "День Победы"}, "2027-05-10": {"kind": "off", "title": "Перенесённый выходной"}, "2027-06-11": {"kind": "work", "title": "Рабочий день"}, "2027-06-12": {"kind": "off", "title": "День России"}, "2027-06-14": {"kind": "off", "title": "Перенесённый выходной"}, "2027-11-03": {"kind": "work", "title": "Рабочий день"}, "2027-11-04": {"kind": "off", "title": "День народного единства"}, "2027-11-05": {"kind": "off", "title": "Перенесённый выходной"}, "2027-12-31": {"kind": "off", "title": "Перенесённый выходной"}}, "fetchedAt": 0}, "2024": {"year": 2024, "published": "2023.09.30", "days": {"2024-01-01": {"kind": "off", "title": "Новогодние каникулы"}, "2024-01-02": {"kind": "off", "title": "Новогодние каникулы"}, "2024-01-03": {"kind": "off", "title": "Новогодние каникулы"}, "2024-01-04": {"kind": "off", "title": "Новогодние каникулы"}, "2024-01-05": {"kind": "off", "title": "Новогодние каникулы"}, "2024-01-06": {"kind": "off", "title": "Новогодние каникулы"}, "2024-01-07": {"kind": "off", "title": "Рождество Христово"}, "2024-01-08": {"kind": "off", "title": "Новогодние каникулы"}, "2024-02-22": {"kind": "work", "title": "Рабочий день"}, "2024-02-23": {"kind": "off", "title": "День защитника Отечества"}, "2024-03-07": {"kind": "work", "title": "Рабочий день"}, "2024-03-08": {"kind": "off", "title": "Международный женский день"}, "2024-04-27": {"kind": "work", "title": "Рабочий день"}, "2024-04-29": {"kind": "off", "title": "Перенесённый выходной"}, "2024-04-30": {"kind": "off", "title": "Перенесённый выходной"}, "2024-05-01": {"kind": "off", "title": "Праздник Весны и Труда"}, "2024-05-08": {"kind": "work", "title": "Рабочий день"}, "2024-05-09": {"kind": "off", "title": "День Победы"}, "2024-05-10": {"kind": "off", "title": "Перенесённый выходной"}, "2024-06-11": {"kind": "work", "title": "Рабочий день"}, "2024-06-12": {"kind": "off", "title": "День России"}, "2024-11-02": {"kind": "work", "title": "Рабочий день"}, "2024-11-04": {"kind": "off", "title": "День народного единства"}, "2024-12-28": {"kind": "work", "title": "Рабочий день"}, "2024-12-30": {"kind": "off", "title": "Перенесённый выходной"}, "2024-12-31": {"kind": "off", "title": "Перенесённый выходной"}}, "fetchedAt": 0}}, records={}, pending={}, attempted={}, listeners=[];
+const PREFIX='iteamboard.ru-calendar.v1.',TTL=86400000,RETRY=3600000;
+function validDate(s){try{return /^\d{4}-\d{2}-\d{2}$/.test(s)&&new Date(s+'T12:00:00Z').toISOString().slice(0,10)===s;}catch(e){return false;}}
+function validRecord(r,year){
+ if(!r||r.year!==year||!r.days||typeof r.days!=='object'||Array.isArray(r.days)||Object.keys(r.days).length<8||Object.keys(r.days).length>366)return false;
+ if(!Number.isFinite(r.fetchedAt)||r.fetchedAt<0||r.fetchedAt>Date.now()+60000)return false;
+ if(typeof r.published!=='string'||!/^\d{4}\.\d{2}\.\d{2}$/.test(r.published))return false;
+ return Object.keys(r.days).every(d=>validDate(d)&&+d.slice(0,4)===year&&r.days[d]&&['off','work'].includes(r.days[d].kind)&&typeof r.days[d].title==='string'&&r.days[d].title.length<200);
+}
+function parseXML(text,year){
+ if(text.length>200000||/<!DOCTYPE/i.test(text))throw Error('Неверный формат календаря');
+ const doc=new DOMParser().parseFromString(text,'application/xml'),root=doc.documentElement;
+ if(doc.querySelector('parsererror')||root.tagName!=='calendar'||root.getAttribute('country')!=='ru'||+root.getAttribute('year')!==year)throw Error('Календарь другого года или страны');
+ const holidays={};doc.querySelectorAll('holidays > holiday').forEach(h=>holidays[h.getAttribute('id')]=h.getAttribute('title')||'');
+ const days={};doc.querySelectorAll('days > day').forEach(e=>{
+  const md=e.getAttribute('d'),type=e.getAttribute('t');
+  if(!/^\d{2}\.\d{2}$/.test(md||'')||!['1','2','3'].includes(type))throw Error('Неверный день календаря');
+  const date=year+'-'+md.replace('.','-'),kind=type==='1'?'off':'work';
+  if(!validDate(date)||days[date])throw Error('Повтор или неверная дата');
+  days[date]={kind,title:kind==='work'?'Рабочий день':holidays[e.getAttribute('h')]||(e.getAttribute('f')?'Перенесённый выходной':'Выходной')};
+ });
+ const r={year,published:root.getAttribute('date')||'',days,fetchedAt:Date.now()};
+ if(!validRecord(r,year))throw Error('Неполный календарь');return r;
+}
+function record(year){
+ if(Object.prototype.hasOwnProperty.call(records,year))return records[year];
+ let cached=null;try{cached=JSON.parse(localStorage.getItem(PREFIX+year));if(!validRecord(cached,year))cached=null;}catch(e){}
+ records[year]=cached||bundled[year]||null;return records[year];
+}
+function notify(year){listeners.forEach(fn=>{try{fn(year);}catch(e){console.error('Calendar UI update failed',e);}});}
+function ensureYear(year,force){
+ year=Number(year);if(!Number.isInteger(year)||year<2013||year>2100)return Promise.resolve(false);
+ if(pending[year])return pending[year];const r=record(year),now=Date.now();
+ if(!force&&r&&now-r.fetchedAt<TTL)return Promise.resolve(true);
+ if(!force&&attempted[year]&&now-attempted[year]<RETRY)return Promise.resolve(!!r);
+ attempted[year]=now;
+ pending[year]=(async()=>{
+  const urls=['https://raw.githubusercontent.com/xmlcalendar/data/master/ru/'+year+'/calendar.xml','https://xmlcalendar.ru/data/ru/'+year+'/calendar.xml'];
+  for(const url of urls){
+   const control=new AbortController(),timer=setTimeout(()=>control.abort(),5000);
+   try{
+    const response=await fetch(url,{credentials:'omit',referrerPolicy:'no-referrer',signal:control.signal,cache:'no-cache'});
+    if(!response.ok)throw Error('Calendar HTTP '+response.status);
+    const fresh=parseXML(await response.text(),year);records[year]=fresh;
+    try{localStorage.setItem(PREFIX+year,JSON.stringify(fresh));}catch(e){}
+    return true;
+   }catch(e){}finally{clearTimeout(timer);}
+  }
+  return !!record(year);
+ })().finally(()=>{delete pending[year];notify(year);});return pending[year];
+}
+function day(date){
+ const year=+date.slice(0,4),r=record(year);ensureYear(year);
+ if(!r)return {known:false,kind:'unknown',title:'Производственный календарь '+year+' не загружен'};
+ const explicit=r.days[date];if(explicit)return Object.assign({known:true},explicit);
+ const weekday=new Date(date+'T12:00:00Z').getUTCDay(),off=weekday===0||weekday===6;
+ return {known:true,kind:off?'off':'work',title:off?'Выходной':'Рабочий день'};
+}
+window.RuProductionCalendar={day,ensureYear,parseXML,subscribe:fn=>listeners.push(fn),info:year=>{
+ const r=record(+year);return {known:!!r,published:r&&r.published,fetchedAt:r&&r.fetchedAt,source:'https://xmlcalendar.ru/index.php?country=ru',loading:!!pending[year]};
+}};
+setInterval(()=>ensureYear(new Date().getFullYear()),3600000);
+})();
+
+</script>
 <title>HR-метрики i’way</title>
 <style>
   /* Fedra Sans Pro и логотип — те же, что в iway-welcome.html */
@@ -383,6 +453,7 @@
         </div>
       </div>
     </div>
+    <p class="sub" id="dCalendar" style="margin:-8px 0 18px" role="status"></p>
     <div class="tiles" id="dTiles"></div>
     <div id="dDetail"></div>
     <div class="dmain">
@@ -751,7 +822,16 @@ function weekKey(s){ var d = parse(s), wd = (d.getDay() + 6) % 7; d.setDate(d.ge
 
 // ---------- пропуски и отпуска ----------
 function addDays(s, n){ var d = parse(s); d.setDate(d.getDate() + n); return iso(d); }
-function isWeekend(s){ var w = parse(s).getDay(); return w === 0 || w === 6; }
+function calendarDay(d){ return window.RuProductionCalendar.day(d); }
+function isWeekend(d){ return calendarDay(d).kind === 'off'; }
+function calendarOff(d){ var c = calendarDay(d); return c.known && c.kind === 'off'; }
+function calendarEligible(p,d){ var t=team[p]; return t && d >= COLLECT_START && (!t.since || d >= t.since) && d <= today() && (!t.archived || (t.archivedAt && d < t.archivedAt)); }
+function weekDisplayEnd(start){ var end=addDays(start,4); for(var i=5;i<=6;i++){ var d=addDays(start,i),c=calendarDay(d); if(c.known && c.kind==='work')end=d; } return end; }
+function renderCalendarNote(){
+  var y=+state.date.slice(0,4),info=window.RuProductionCalendar.info(y),c=calendarDay(state.date);
+  $('dCalendar').textContent = info.known ? 'Производственный календарь РФ · '+y+' · Пятидневная неделя'+(state.mode==='day' && c.kind==='off' ? ' · в — '+c.title : '') : 'Календарь РФ на '+y+' год '+(info.loading ? 'загружается' : 'недоступен')+' — проверка пропусков за этот год приостановлена';
+  $('dCalendar').title = info.known ? 'Источник: XMLCalendar. '+(info.fetchedAt ? 'Проверен '+new Date(info.fetchedAt).toLocaleDateString('ru-RU') : 'Используется сохранённая копия календаря')+'. Сокращённые дни считаются обычными рабочими.' : 'Дни не считаются пропусками, пока производственный календарь не загружен.';
+}
 function vacationOf(p, d){ return (vacations[p] || []).filter(function(v){ return v.from <= d && d <= v.to; })[0] || null; }
 // Вакансии на время отпуска менеджера: в записи отпуска — кому передать (sub) и какие вакансии на паузе (pause: [id]).
 // Действует только в дни отпуска: на следующий день вакансии сами возвращаются к менеджеру, пауза снимается.
@@ -782,9 +862,11 @@ function hasDay(p, d){ var m = (entered[d] || {})[p]; return !!(m && Object.keys
 function dayStatus(p, d){
   var t = team[p];
   if(hasDay(p, d)) return 'ok';
+  if(calendarOff(d)) return 'off';
   if(vacationOf(p, d)) return 'vac';
   if(isWeekend(d) || d < COLLECT_START || (t.since && d < t.since) || d > today()) return 'off';
   if(t.archived && (!t.archivedAt || d >= t.archivedAt)) return 'off';
+  if(!calendarDay(d).known) return 'unknown';
   if(d < CHECK_FROM) return 'vac';
   return d === today() ? 'today' : 'missing';
 }
@@ -793,7 +875,7 @@ function missingDays(p){
   for(var d = from; d < today(); d = addDays(d, 1)) if(dayStatus(p, d) === 'missing') out.push(d);
   return out;
 }
-var STATUS_TEXT = {ok:'внесено', missing:'нужно внести', today:'сегодня ещё не внесено', vac:'отпуск', off:'выходной'};
+var STATUS_TEXT = {ok:'внесено', missing:'нужно внести', today:'сегодня ещё не внесено', vac:'отпуск', off:'в · выходной', unknown:'календарь не загружен'};
 function openEntry(p, d){ showView('entry'); if(!scope()) $('fPerson').value = p; $('fDate').value = d; loadForm(); $('fGroups').querySelector('input') && $('fGroups').querySelector('input').focus(); }
 function pubReminders(){
   var p = scope(), out = [];
@@ -895,7 +977,7 @@ function plural(n, one, few, many){
 }
 
 // ---------- отпуск ----------
-function workdays(a, b){ var n = 0; for(var d = a; d <= b; d = addDays(d, 1)) if(!isWeekend(d)) n++; return n; }
+function workdays(a, b){ var n = 0; for(var d = a; d <= b; d = addDays(d, 1)){ var c=calendarDay(d); if(!c.known)return null; if(c.kind !== 'off')n++; } return n; }
 function renderVacation(){
   var p = scope(), ps = p ? [p] : activePeople();
   $('oTitle').textContent = p ? 'Мой отпуск' : 'Отпуска';
@@ -913,7 +995,7 @@ function renderVacation(){
   $('oTable').innerHTML = '<thead><tr>'+(p ? '' : '<th>Сотрудник</th>')+'<th class="l">С</th><th class="l">По</th><th>Рабочих дней</th><th class="l">Статус</th><th class="l">Вакансии на время отпуска</th><th></th></tr></thead><tbody>' +
     (rows.length ? rows.slice(0, 40).map(function(r){
       var st = r.v.to < t ? 'прошёл' : r.v.from > t ? 'впереди' : 'идёт';
-      return '<tr'+(st === 'прошёл' ? ' class="off"' : '')+'>'+(p ? '' : '<td>'+esc(label(r.p))+'</td>')+'<td class="l">'+shortDate(r.v.from)+'</td><td class="l">'+shortDate(r.v.to)+'</td><td>'+workdays(r.v.from, r.v.to)+'</td>' +
+      return '<tr'+(st === 'прошёл' ? ' class="off"' : '')+'>'+(p ? '' : '<td>'+esc(label(r.p))+'</td>')+'<td class="l">'+shortDate(r.v.from)+'</td><td class="l">'+shortDate(r.v.to)+'</td><td>'+(workdays(r.v.from, r.v.to) === null ? '—' : workdays(r.v.from, r.v.to))+'</td>' +
         '<td class="l"><span class="pill '+(st === 'идёт' ? 'vac' : st === 'впереди' ? 'active' : '')+'">'+st+'</span></td>' +
         '<td class="l">'+(st === 'прошёл' ? (r.v.sub ? 'передавались: ' + esc(label(r.v.sub)) : '—') : coverCell(r))+'</td>' +
         '<td><div class="row-actions">'+(r.v.to >= CHECK_FROM ? '<button class="btn danger sm" data-p="'+r.p+'" data-i="'+r.i+'">Убрать</button>' : '')+'</div></td></tr>';
@@ -992,7 +1074,7 @@ function shiftPeriod(mode, r, n){
 function rangeLabel(mode, r){
   var a = parse(r.from), b = parse(r.to);
   if(mode === 'day') return human(r.from);
-  if(mode === 'week') b = parse(addDays(r.from, 4));   // в подписи — рабочая неделя, пн–пт
+  if(mode === 'week') b = parse(weekDisplayEnd(r.from));   // подпись включает перенесённые рабочие выходные
   if(mode === 'week') return 'Неделя ' + isoWeekNo(r.from) + ' · ' + a.getDate() + (a.getMonth() !== b.getMonth() ? ' ' + MONTHS_GEN[a.getMonth()] : '') + '–' + b.getDate() + ' ' + MONTHS_GEN[b.getMonth()];
   if(mode === 'month') return MONTHS[a.getMonth()] + ' ' + a.getFullYear();
   if(mode === 'quarter') return (Math.floor(a.getMonth() / 3) + 1) + ' квартал ' + a.getFullYear();
@@ -1013,6 +1095,7 @@ function enteredDays(r, ps){ var n = 0; rDates(r).forEach(function(d){ ps.forEac
 function scaledPrev(b, r, prev, ps){ if(!num(b) || !prev) return b; var a = enteredDays(r, ps), c = enteredDays(prev, ps); return a && c && a !== c ? Math.round(b * a / c) : b; }
 function rVal(r, ps, k){ return k === vacStock || k === candStock ? rStock(r, ps, k) : rSum(r, ps, k); }
 function renderDay(){
+  renderCalendarNote();
   var ps = visiblePeople(), mode = state.mode, day = state.date, r = periodOf(mode, day), isDay = mode === 'day';
   var prev = isDay ? (prevDate(day, ps) ? {from:prevDate(day, ps), to:prevDate(day, ps)} : null) : shiftPeriod(mode, r, -1);
   // период ещё идёт — сравниваем с тем же сроком прошлого (1–3 октября с 1–3 сентября), а не с целым периодом
@@ -1137,11 +1220,11 @@ function peopleTable(mode, r, prev, ps, rows){
   function status(p){
     if(isDay){
       var stt = dayStatus(p, r.from), at = ((entered[r.from] || {})[p] || {}).savedAt;
-      var txt = stt === 'ok' && at ? 'внесено в ' + new Date(at).toTimeString().slice(0, 5) : STATUS_TEXT[stt];
+      var txt = calendarOff(r.from) ? 'в · выходной'+(stt==='ok' ? ', данные внесены' : '') : stt === 'ok' && at ? 'внесено в ' + new Date(at).toTimeString().slice(0, 5) : STATUS_TEXT[stt];
       return '<span class="chip'+(stt === 'ok' || stt === 'vac' || stt === 'off' ? ' ok' : '')+'">'+esc(txt)+'</span>';
     }
     var got = 0, need = 0, vac = 0;
-    for(var d = r.from; d <= last; d = addDays(d, 1)){ var y = dayStatus(p, d); if(y === 'ok'){ got++; need++; } else if(y === 'missing') need++; else if(y === 'vac' && !isWeekend(d) && vacationOf(p, d)) vac++; }   // до начала учёта — не отпуск
+    for(var d = r.from; d <= last; d = addDays(d, 1)){ if(!calendarDay(d).known || calendarOff(d))continue; var y = dayStatus(p, d); if(y === 'ok'){ got++; need++; } else if(y === 'missing') need++; else if(y === 'vac' && !isWeekend(d) && vacationOf(p, d)) vac++; }   // до начала учёта — не отпуск
     return '<span class="chip'+(got >= need ? ' ok' : '')+'">'+got+' из '+need+' '+plural(need, 'дня', 'дней', 'дней')+(vac ? ' · ' + vac + ' дн. отпуск' : '')+'</span>';
   }
   if(!rows.length) return '<tbody><tr><td class="empty">За период никто не вносил данные.</td></tr></tbody>';
@@ -1159,13 +1242,15 @@ function openDays(p, opener){
   var mode = state.mode, r = periodOf(mode, state.date);
   if(mode === 'day') r = periodOf('week', state.date);   // за день — его неделя
   var last = r.to < today() ? r.to : today(), ds = [];
-  for(var d = r.from; d <= last; d = addDays(d, 1)){ var st = dayStatus(p, d); if(st !== 'off' && !(st === 'vac' && isWeekend(d))) ds.push({d:d, st:st}); }
+  for(var d = r.from; d <= last; d = addDays(d, 1)){ var st = dayStatus(p, d); if(calendarEligible(p,d) && (st !== 'off' || calendarOff(d))) ds.push({d:d, st:st}); }
   var head = '<thead><tr><th class="lab">Показатель</th>' + ds.map(function(x){ var q = parse(x.d);
-    return '<th class="'+(x.st === 'missing' || x.st === 'today' ? 'miss' : x.st === 'vac' ? 'vacd' : '')+'">'+String(q.getDate()).padStart(2, '0')+'.'+String(q.getMonth() + 1).padStart(2, '0')+'<small>'+WD[q.getDay()]+'</small></th>'; }).join('') + '</tr></thead>';
+    return '<th class="'+(x.st === 'missing' || x.st === 'today' ? 'miss' : x.st === 'vac' || calendarOff(x.d) ? 'vacd' : '')+'" title="'+esc(calendarDay(x.d).title)+'">'+String(q.getDate()).padStart(2, '0')+'.'+String(q.getMonth() + 1).padStart(2, '0')+'<small>'+WD[q.getDay()]+(calendarOff(x.d) ? ' · в' : '')+'</small></th>'; }).join('') + '</tr></thead>';
   var body = dtRows().filter(function(x){ return !x.g; }).map(function(row){
     var f = dtFlow(row), odd = f ? oddOf(dayVals(p, ds.map(function(x){ return x.d; }), f)) : function(){ return false; };
     return '<tr><td class="lab">'+esc(row.t.split(':')[0])+'</td>' + ds.map(function(x){
+      if(x.st === 'off' && calendarOff(x.d)) return '<td class="vacd" title="'+esc(calendarDay(x.d).title)+'">в</td>';
       if(x.st === 'vac') return '<td class="vacd">отп.</td>';
+      if(x.st === 'unknown') return '<td title="Календарь не загружен">—</td>';
       var m = (byDate[x.d] || {})[p];
       if(!m || x.st !== 'ok') return '<td class="miss">—</td>';
       var v, cls = '', own = (entered[x.d] || {})[p] || {}, syn = isSynced(x.d, p);
@@ -1179,7 +1264,8 @@ function openDays(p, opener){
       return '<td class="'+cls+'"'+tip+'>'+esc(String(v))+'</td>';
     }).join('') + '</tr>';
   }).join('') + '<tr><td class="lab"></td>' + ds.map(function(x){
-    if(x.st === 'vac') return '<td class="vacd"></td>';
+    if(x.st === 'vac' || (x.st === 'off' && calendarOff(x.d))) return '<td class="vacd"></td>';
+    if(x.st === 'unknown')return '<td></td>';
     var miss = x.st !== 'ok';
     return '<td class="'+(miss ? 'miss' : '')+'"><button type="button" class="ed" data-ed="'+x.d+'" aria-label="'+(miss ? 'Внести ' : 'Исправить ')+human(x.d)+'">'+(miss ? 'Внести' : '✎')+'</button></td>';
   }).join('') + '</tr>';
@@ -1188,7 +1274,7 @@ function openDays(p, opener){
   var box = document.createElement('div'); box.id = 'dDays';
   box.innerHTML = '<div class="dscrim" data-close></div><aside class="ddrawer" role="dialog" aria-modal="true" aria-label="'+esc(label(p))+' по дням">' +
     '<header><div><h3>'+esc(label(p))+' · '+esc(rangeLabel(mode === 'day' ? 'week' : mode, r))+' по дням</h3>' +
-    '<p class="hint">'+(miss.length ? '<span class="down">не внесено: '+miss.join(', ')+'</span> · ' : '')+'красным — необычно для человека, жёлтым — исправлено вручную, серым — из «Вакансий»; ✎ — открыть «Внести день»</p></div>' +
+    '<p class="hint">в — выходной по производственному календарю РФ. '+(miss.length ? '<span class="down">не внесено: '+miss.join(', ')+'</span> · ' : '')+'красным — необычно для человека, жёлтым — исправлено вручную, серым — из «Вакансий»; ✎ — открыть «Внести день»</p></div>' +
     '<button type="button" class="x" data-close aria-label="Закрыть">×</button></header>' +
     (ds.length ? '<div class="scroll"><table>' + head + '<tbody>' + body + '</tbody></table></div>' : '<p class="hint">За период рабочих дней нет.</p>') + '</aside>';
   document.body.appendChild(box);
@@ -1240,14 +1326,15 @@ function renderPicker(){
     if(m === 'week'){
       html += '<div class="pweeks"><div class="h"><span>нед.</span>' + hd.map(function(x){ return '<span>'+x+'</span>'; }).join('') + '</div>';
       for(var w = weekKey(m0); w <= monthEnd(m0); w = addDays(w, 7)){
-        var cells = ''; for(var i = 0; i < 7; i++){ dd = addDays(w, i); cells += '<span'+(dd.slice(0, 7) !== m0.slice(0, 7) ? ' style="opacity:.5"' : '')+'>'+parse(dd).getDate()+'</span>'; }
+        var cells = ''; for(var i = 0; i < 7; i++){ dd = addDays(w, i); cells += '<span title="'+esc(calendarDay(dd).title)+'"'+(dd.slice(0, 7) !== m0.slice(0, 7) ? ' style="opacity:.5"' : '')+'>'+parse(dd).getDate()+(calendarOff(dd) ? '<small style="display:block">в</small>' : '')+'</span>'; }
         html += btn(w, '<span class="wn">'+isoWeekNo(w)+'</span>' + cells, ' aria-label="Неделя '+isoWeekNo(w)+'"');
       }
       html += '</div>';
     } else {
       html += '<div class="pcal">' + hd.map(function(x){ return '<span class="h">'+x+'</span>'; }).join('');
       for(dd = weekKey(m0); dd <= monthEnd(m0) || parse(dd).getDay() !== 1; dd = addDays(dd, 1))
-        html += isWeekend(dd) || dd.slice(0, 7) !== m0.slice(0, 7) ? '<button type="button" disabled>'+parse(dd).getDate()+'</button>' : btn(dd, parse(dd).getDate(), ' aria-label="'+human(dd)+'"');
+        if(dd.slice(0,7)!==m0.slice(0,7)) html += '<button type="button" disabled>'+parse(dd).getDate()+'</button>';
+        else { var c=calendarDay(dd), mark=c.kind==='off' ? '<small style="display:block">в</small>' : ''; html += btn(dd, parse(dd).getDate()+mark, ' title="'+esc(c.title)+'" aria-label="'+human(dd)+(c.kind==='off' ? ', выходной' : '')+'"'+(c.kind==='off' ? ' style="color:var(--ink-3);background:var(--off-bg)"' : '')); }
       html += '</div>';
     }
   }
@@ -1260,9 +1347,10 @@ function renderPeak(mode, r, ps){
   // день и неделя — слишком мало дней для закономерности, берём 13 недель по выбранную
   var w = aRange(mode, r);
   var wds = [1, 2, 3, 4, 5];
+  [6,0].forEach(function(wd){ if(rDates(w).some(function(d){ return parse(d).getDay()===wd && calendarDay(d).kind==='work'; }))wds.push(wd); });
   function tot(k){
     var by = wds.map(function(){ return {s:null, n:0}; });
-    rDates(w).forEach(function(d){ var v = sum(d, ps, k), i = parse(d).getDay() - 1; if(v !== null && by[i]){ by[i].s = (by[i].s || 0) + v; by[i].n++; } });
+    rDates(w).forEach(function(d){ var v = sum(d, ps, k), i = wds.indexOf(parse(d).getDay()); if(v !== null && by[i]){ by[i].s = (by[i].s || 0) + v; by[i].n++; } });
     return by;
   }
   // цифры — в среднем за день с данными (праздники и пропуски не делают день недели «слабее»); доходимость — прошло / назначено по этому дню
@@ -1573,7 +1661,7 @@ function pairBars(rows, o){
       s += '<rect x="'+x2+'" y="'+y(x.v)+'" width="'+bw+'" height="'+Math.max(y(0) - y(x.v), 0)+'" rx="3" fill="var(--accent)"><title>'+esc(x.when)+': '+x.v+unit+'</title></rect>';
       if(labels) s += '<text x="'+(x2 + bw / 2)+'" y="'+(y(x.v) - 4)+'" text-anchor="middle" style="fill:var(--ink-2)">'+x.v+'</text>';
     }
-    if(labels || i % Math.ceil(n / 14) === 0) s += '<text x="'+cx+'" y="'+(H - 16)+'" text-anchor="middle">'+x.l1+'</text><text x="'+cx+'" y="'+(H - 3)+'" text-anchor="middle">'+x.l2+'</text>';
+    if(labels || i % Math.ceil(n / 14) === 0) s += '<text x="'+cx+'" y="'+(H - 16)+'" text-anchor="middle">'+x.l1+(x.off ? ' · в' : '')+'</text><text x="'+cx+'" y="'+(H - 3)+'" text-anchor="middle">'+x.l2+'</text>';
   });
   return s + '</svg>';
 }
@@ -1590,8 +1678,8 @@ function chartBuckets(mode, r){
   var out = [], len = daysBetween(r.from, r.to) + 1;
   var kind = mode === 'day' || mode === 'week' ? 'days' : mode === 'year' ? 'months' : mode === 'custom' ? (len <= 14 ? 'days' : len <= 120 ? 'weeks' : 'months') : 'weeks';
   if(kind === 'days'){
-    var from = mode === 'day' ? weekKey(r.from) : r.from, to = mode === 'day' ? addDays(from, 4) : r.to;
-    for(var d = from; d <= to; d = addDays(d, 1)) if(!isWeekend(d)){ var p = parse(d); out.push({from:d, to:d, l1:WD[p.getDay()], l2:p.getDate()+'.'+String(p.getMonth()+1).padStart(2,'0'), cur:d === state.date}); }
+    var from = mode === 'day' ? weekKey(r.from) : r.from, to = mode === 'day' ? weekDisplayEnd(from) : r.to;
+    for(var d = from; d <= to; d = addDays(d, 1)){ var p = parse(d),c=calendarDay(d); if((p.getDay()>=1 && p.getDay()<=5) || (c.known && c.kind==='work'))out.push({from:d, to:d, l1:WD[p.getDay()], l2:p.getDate()+'.'+String(p.getMonth()+1).padStart(2,'0'), cur:d === state.date, off:calendarOff(d), unknown:!c.known, calendarTitle:c.title}); }
   } else if(kind === 'weeks'){
     for(var w = weekKey(r.from); w <= r.to; w = addDays(w, 7)){
       var a = w < r.from ? r.from : w, b = addDays(w, 6) > r.to ? r.to : addDays(w, 6), pa = parse(a);
@@ -1617,7 +1705,8 @@ function renderChart(mode, r, ps){
   rows.forEach(function(x, i){
     var cx = L + i * step + step / 2, x1 = cx - bw - gap / 2, x2 = cx + gap / 2, bold = x.cur ? ' style="font-weight:700;fill:var(--ink)"' : '';
     var title = x.from === x.to ? human(x.from) : shortDate(x.from) + '–' + shortDate(x.to);
-    if(x.future || (x.pl === null && x.dn === null)){
+    if((x.off || x.unknown) && x.pl === null && x.dn === null){ s += '<text x="'+cx+'" y="'+(y(0)-8)+'" text-anchor="middle" style="fill:var(--ink-3)"><title>'+esc(x.calendarTitle)+'</title>'+(x.off ? 'в' : '—')+'</text>'; }
+    else if(x.future || (x.pl === null && x.dn === null)){
       if(labels) s += '<text x="'+cx+'" y="'+(y(0) - 8)+'" text-anchor="middle"'+(x.future ? '' : ' style="fill:var(--warn-ink)"')+'>'+(x.future ? 'впереди' : 'не внесено')+'</text>';
     } else {
       [[x1, x.pl, 'var(--muted-bar)', 'назначено'], [x2, x.dn, 'var(--accent)', 'прошло']].forEach(function(m){
@@ -2291,7 +2380,7 @@ function rebuild(){
     recruiters().forEach(function(p){
       var t = team[p];
       if((t.archived && (!t.archivedAt || d >= t.archivedAt)) || (t.since && d < t.since) || d < syncFromOf(p)) return;
-      if(isWeekend(d) && !hasDay(p, d)) return;
+      if((isWeekend(d) || !calendarDay(d).known) && !hasDay(p, d)) return;
       var row = byDate[d] || (byDate[d] = {});
       row[p] = Object.assign(registryDay(p, d), row[p] || {});   // исправленное вручную за день важнее расчёта
     });
@@ -2941,7 +3030,7 @@ $('dModes').onclick = function(e){
   var b = e.target.closest('[data-mode]'); if(!b) return;
   e.stopPropagation();   // вкладки перерисовываются — иначе щелчок сочли бы щелчком мимо окошка и закрыли его
   var m = b.dataset.mode, d = state.mode === 'custom' ? state.to : state.date;
-  if(m === 'day' && isWeekend(d)) d = addDays(d, parse(d).getDay() === 6 ? -1 : -2);
+  // Выходной можно открыть для просмотра: он не считается пропущенным рабочим днём.
   setPeriod(m, d); pickerOpen(true);
 };
 $('dCur').onclick = function(e){ e.stopPropagation(); pickerOpen($('dPop').hidden); };
@@ -3059,4 +3148,9 @@ var api = CLOUD ? null : window.claude;
   db.collection('rejections').onSnapshot(function(s){ rejections = {}; s.docs.forEach(function(x){ rejections[x.id] = x.data(); }); render(); }, function(){});
   db.collection('vacancies').onSnapshot(function(s){ vacancies = {}; s.docs.forEach(function(x){ vacancies[x.id] = x.data(); }); vacanciesLoaded = true; rebuild(); render(); }, function(){});
 }, offline);
+</script>
+
+<script>
+window.RuProductionCalendar.subscribe(function(){ rebuild(); render(); if(!$('dPop').hidden)renderPicker(); });
+window.RuProductionCalendar.ensureYear(+today().slice(0,4));
 </script>

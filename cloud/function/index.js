@@ -67,7 +67,7 @@ function page(local, which) {
   const html = pageHtml(local, which).replace(/<script>/g, '<script nonce="' + nonce + '">');
   return respond(200, html, {
     'Content-Type': 'text/html; charset=utf-8',
-    'Content-Security-Policy': "default-src 'none'; script-src 'nonce-" + nonce + "'; style-src 'unsafe-inline'; img-src 'self' data:; font-src data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    'Content-Security-Policy': "default-src 'none'; script-src 'nonce-" + nonce + "'; style-src 'unsafe-inline'; img-src 'self' data:; font-src data:; connect-src 'self' https://raw.githubusercontent.com https://xmlcalendar.ru; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
   });
 }
 
