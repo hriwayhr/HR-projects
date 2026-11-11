@@ -22,12 +22,16 @@ const MAX_DOC = 256 * 1024;
 function norm(s) { return String(s || '').trim().toLowerCase(); }
 
 // Чья вакансия: в «Ответственном» фамилия пользователя, а если фамилии нет — имя (как на странице)
-function ownerOf(manager, people) {
-  const m = norm(manager);
-  if (!m) return null;
-  const ids = Object.keys(people || {}).sort((a, b) => (people[a].order || 0) - (people[b].order || 0) || String(people[a].name).localeCompare(String(people[b].name)));
-  const has = f => ids.find(p => { const x = norm(people[p][f]); return x && m.includes(x); });
-  return has('surname') || has('name') || null;
+function ownerOf(manager, people, ownerId) {
+  if (ownerId !== undefined) return typeof ownerId === 'string' && Object.prototype.hasOwnProperty.call(people || {}, ownerId) ? ownerId : null;
+  const tokens = s => (norm(s).match(/[\p{L}\p{N}]+/gu) || []);
+  const m = tokens(manager), ids = Object.keys(people || {});
+  if (!m.length) return null;
+  const has = value => { const t = tokens(value); return t.length && t.every(x => m.includes(x)); };
+  const full = ids.filter(p => people[p].surname && people[p].name && has(people[p].surname) && has(people[p].name));
+  const surname = ids.filter(p => has(people[p].surname));
+  const matches = full.length ? full : surname.length ? surname : ids.filter(p => has(people[p].name));
+  return matches.length === 1 ? matches[0] : null;
 }
 
 // Кто из команды: по корпоративной почте; в архиве — не пускаем
@@ -74,7 +78,7 @@ function readable(user, path, data, people) {
   if (coll === 'months') return data.person === user.pid ? data : null;
   // отпуск коллеги, на время которого вакансии переданы пользователю, — чтобы страница знала, что и до какого дня он ведёт
   if (coll === 'vacations') return id === user.pid || (data.list || []).some(v => v && v.sub === user.pid) ? data : null;
-  if (coll === 'vacancies') return ownersFor(user).includes(ownerOf(data.manager, people)) ? data : null;
+  if (coll === 'vacancies') return ownersFor(user).includes(ownerOf(data.manager, people, data.ownerId)) ? data : null;
   if (coll === 'rejections') {
     const items = (data.items || []).filter(x => ownerOf(x.w, people) === user.pid);
     return items.length ? Object.assign({}, data, { items }) : null;
@@ -103,7 +107,7 @@ function writeError(user, path, prev, next, people) {
     if (!next) return '';
     if (next.code !== id) return 'Код не совпадает с адресом.';
     // без https браузер не умеет SHA-256 и страница записала бы пароль открытым текстом
-    if (next.hash !== undefined && !/^[0-9a-f]{64}$/.test(String(next.hash))) return 'Пароль не зашифрован — откройте портал по https.';
+    if (next.hash !== undefined && next.hash !== (prev || {}).hash && !/^[0-9a-f]{64}$/.test(String(next.hash))) return 'Пароль не зашифрован — откройте портал по https.';
     // логин новичка не должен совпадать со входом команды: вход сначала ищет команду, и новичок бы не вошёл
     const taken = [norm(next.login), norm(next.email)].filter(Boolean).find(v => Object.keys(people || {}).some(p => norm(people[p].login) === v || norm(people[p].email) === v));
     return taken ? 'Логин «' + taken + '» уже занят в команде.' : '';
@@ -128,8 +132,8 @@ function writeError(user, path, prev, next, people) {
   if (coll === 'vacancies') {
     if (next === null) return 'Удаляет вакансию администратор.';
     const mineNow = ownersFor(user);
-    if (prev && !mineNow.includes(ownerOf(prev.manager, people))) return 'Это вакансия другого рекрутера.';
-    if (!mineNow.includes(ownerOf(next.manager, people))) return 'Ответственным должны быть вы.';
+    if (prev && !mineNow.includes(ownerOf(prev.manager, people, prev.ownerId))) return 'Это вакансия другого рекрутера.';
+    if (!mineNow.includes(ownerOf(next.manager, people, next.ownerId))) return 'Ответственным должны быть вы.';
     return '';
   }
   return 'Нет прав.';

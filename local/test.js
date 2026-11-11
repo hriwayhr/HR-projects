@@ -59,9 +59,9 @@ test('локальная версия: первый запуск, вход по 
     assert.deepEqual((await b.docs())['months/anna_2026-10'].days, want);
     // права действуют: рекрутер не пишет чужое
     assert.equal((await b.call('POST', '/api/doc', { path: 'vacancies/v2', op: 'set', data: { title: 'x', manager: 'Шулятицкая' } })).status, 403);
-    // в папке — по журналу на ПК и ночная копия
+    // в папке — по журналу на ПК, атомарный файл первого импорта и ночная копия
     const files = fs.readdirSync(data).sort();
-    assert.ok(files.includes('backups') && files.filter(f => f.startsWith('changes-')).length === 2, files.join());
+    assert.ok(files.includes('backups') && files.filter(f => f.startsWith('changes-') && !f.startsWith('changes-import-')).length === 2 && files.filter(f => f.startsWith('changes-import-')).length === 1, files.join());
   } finally { A.kill(); B.kill(); }
   // перезапуск: данные на месте; вторая копия на том же порту не мешает
   const A2 = await start(data, 8811, 'PC-ЮЛИЯ');

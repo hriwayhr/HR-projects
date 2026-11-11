@@ -192,7 +192,7 @@ test('портал: один вход, роли администратор / HR-
   const own = JSON.parse((await call('GET', '/api/sync', e)).body).docs.find(d => d.path === 'employees/IW-AAAA').data;
   assert.equal(own.hash, undefined);
   assert.equal(await put(e, 'employees/IW-AAAA', Object.assign({}, own, { progress: { day1: true } }), own), 200);   // свои шаги — можно
-  assert.equal((await store.get('employees/IW-AAAA')).hash, sha('s3', 'N-3'));                                 // пароль при этом цел
+  assert.ok(await require('../cloud/function/auth').verifyPassword((await store.get('employees/IW-AAAA')).hash, sha('s3', 'N-3')));                                 // пароль при этом цел
   assert.equal(await put(e, 'employees/IW-AAAA', Object.assign({}, own, { offer: { salary: 2 } }), own), 403);    // оффер — только HR
   assert.equal(await put(e, 'employees/IW-BBBB', { code: 'IW-BBBB' }), 403);
   assert.equal((await h({ httpMethod: 'GET', url: '/metrics', headers: { cookie: e } })).statusCode, 302);  // метрики сотруднику закрыты
@@ -375,4 +375,32 @@ test('письмо с кодом: разговор с почтовым серв�
   assert.equal(Buffer.from(body.replace(/\r\n/g, ''), 'base64').toString(), 'Код входа в портал: 123456');
   await assert.rejects(forTests.smtpSend(Object.assign({}, smtp, { pass: 'wrong' }), 'shua@iway.ru', 's', 't', plain), /SMTP AUTH: 535/);
   } finally { srv.close(); }
+});
+
+test('пароли: старый вход постепенно переходит на scrypt; неверный пароль и повреждённый формат не проходят', async () => {
+  const auth = require('../cloud/function/auth'), crypto = require('crypto');
+  const digest = crypto.createHash('sha256').update('salt::Test-2026').digest('hex');
+  const protectedHash = await auth.sealPassword(digest);
+  assert.match(protectedHash, /^scrypt-v1\$/); assert.notEqual(protectedHash, digest);
+  assert.equal(await auth.verifyPassword(protectedHash, digest), true);
+  assert.equal(await auth.verifyPassword(digest, digest), true);
+  assert.equal(await auth.verifyPassword(protectedHash, '0'.repeat(64)), false);
+  assert.equal(await auth.verifyPassword('scrypt-v1$bad$bad', digest), false);
+  assert.notEqual(await auth.sealPassword(digest), protectedHash, 'random server salt');
+});
+
+test('пароли: успешный вход обновляет старый хеш один раз и сохраняет данные сотрудника', async () => {
+  const crypto = require('crypto'), auth = require('../cloud/function/auth');
+  const { forTests } = require('../cloud/function/index'), store = forTests.memoryStore();
+  const hash = crypto.createHash('sha256').update('old-salt::Employee-2026').digest('hex');
+  await store.tx('employees/IW-MIGRATE', () => ({ code: 'IW-MIGRATE', login: 'migrate', salt: 'old-salt', hash, firstName: 'Пример', progress: { passport: true } }));
+  const handler = forTests.makeHandler(store, forTests.config({ LOCAL: '1', SESSION_SECRET: 's'.repeat(48) }));
+  const login = password => handler({ httpMethod: 'POST', url: '/api/plogin', headers: { 'x-hr': '1' }, body: JSON.stringify({ login: 'migrate', password }) }, {});
+  assert.equal((await login('wrong')).statusCode, 401); assert.equal((await store.get('employees/IW-MIGRATE')).hash, hash);
+  const first = await login('Employee-2026'); assert.equal(first.statusCode, 200);
+  const updated = await store.get('employees/IW-MIGRATE'); assert.match(updated.hash, /^scrypt-v1\$/);
+  assert.deepEqual(updated.progress, { passport: true }); assert.equal(updated.salt, 'old-salt');
+  const cookie = first.multiValueHeaders['Set-Cookie'][0].split(';')[0];
+  assert.equal((await login('Employee-2026')).statusCode, 200); assert.equal((await store.get('employees/IW-MIGRATE')).hash, updated.hash);
+  assert.equal((await handler({ httpMethod: 'GET', url: '/api/me', headers: { cookie } }, {})).statusCode, 200);
 });

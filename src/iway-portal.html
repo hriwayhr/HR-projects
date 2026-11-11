@@ -132,6 +132,8 @@
     max-width:1040px; margin:0 auto; padding:10px 20px;
     display:flex; align-items:center; gap:18px;
   }
+  .save-state{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink-2);}
+  @media(max-width:860px){ .topbar-in{flex-wrap:wrap;gap:10px 16px;} .save-state{order:4;flex-basis:100%;} }
   .wordmark{display:inline-flex; align-items:center; gap:10px; text-decoration:none; white-space:nowrap;}
   .logo{display:block; width:64px; height:27px; background:var(--logo) no-repeat left center; background-size:contain; flex:none;}
   .logo.inv{background-image:var(--logo-inv);}
@@ -523,7 +525,7 @@
   .tab[aria-selected="true"]{background:var(--blue); border-color:var(--blue); color:var(--blue-ink);}
   /* ——— главный экран портала: разделы по уровню доступа ——— */
   .hub-lead{margin-top:-8px; margin-bottom:24px; font-size:15px; color:var(--ink-2); max-width:62ch;}
-  .hub{display:grid; gap:14px; grid-template-columns:repeat(auto-fill, minmax(290px, 1fr)); align-items:start;}
+  .hub{display:grid; gap:14px; grid-template-columns:repeat(auto-fill, minmax(290px, 1fr)); align-items:stretch;}
   .hub-card{
     display:flex; flex-direction:column; gap:10px; min-height:168px; text-align:left;
     border:1.5px solid var(--ink); border-radius:14px; background:var(--surface); padding:22px 22px 20px;
@@ -1130,6 +1132,7 @@
       <span id="readyPct">0%</span>
     </div>
     <!-- имя и «Выйти» — последними: правый верхний угол шапки -->
+    <div class="save-state" id="saveFeedback" hidden><span id="saveStatus" role="status" aria-live="polite"></span><button type="button" class="mini" id="saveRetry" hidden>Повторить сохранение</button></div>
     <div class="who" id="who"><span class="n" id="whoName"></span><a href="#exit">Выйти</a></div>
   </div>
 </div>
@@ -1684,14 +1687,15 @@
   /* ——— сервер портала: вход и права проверяет сервер, страница получает только разрешённое ———
      Тот же интерфейс, что у базы артефакта (collection/where/doc), поэтому dbStore работает поверх него как есть. */
   function serverDb(){
-    var cache = {}, ver = 0;
+    var cache = {}, ver = 0, accessScope = '';
     function req(method, url, body){
       return fetch(url, {method:method, credentials:'same-origin', headers:Object.assign({'X-HR':'1'}, body ? {'Content-Type':'application/json'} : {}), body:body ? JSON.stringify(body) : undefined})
         .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error || 'Сервер не ответил.'); return j; }); });
     }
     function sync(){
       /* перекрытие в 5 секунд — на случай расхождения часов */
-      return req('GET', '/api/sync?since=' + Math.max(0, ver - 5e6)).then(function(r){
+      return req('GET', '/api/sync?since=' + Math.max(0, ver - 5e6) + '&scope=' + encodeURIComponent(accessScope)).then(function(r){
+        if(r.reset) cache = {}; accessScope = r.scope || '';
         r.docs.forEach(function(d){ if(d.data) cache[d.path] = d.data; else delete cache[d.path]; });
         ver = Math.max(ver, r.ver);
       });
@@ -3928,13 +3932,26 @@
   $('tabAdmins').addEventListener('click', function(){ switchTab('admins'); });
 
   /* ——— личная страница сотрудника ——— */
-  var saveTimer = null, saveChain = Promise.resolve();
-  function saveRec(){
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(function(){
-      saveChain = saveChain.then(function(){ return state.store.saveEmployee(state.rec); }).catch(function(){});
-    }, 400);
+  var saveChain = Promise.resolve(), pendingSaves = 0, failedSaves = {};
+  function saveStatus(){
+    $('saveFeedback').hidden = false;
+    var failed = Object.keys(failedSaves).length;
+    $('saveStatus').textContent = pendingSaves ? 'Сохраняется…' : failed ? 'Не удалось сохранить изменения' : 'Сохранено';
+    $('saveRetry').hidden = !failed || !!pendingSaves;
   }
+  function queueRec(rec){
+    var snapshot = JSON.parse(JSON.stringify(rec));
+    pendingSaves++; saveStatus();
+    saveChain = saveChain.then(function(){ return state.store.saveEmployee(snapshot); })
+      .then(function(){ delete failedSaves[snapshot.code]; }, function(){ failedSaves[snapshot.code] = snapshot; })
+      .then(function(){ pendingSaves--; saveStatus(); });
+    return saveChain;
+  }
+  function saveRec(){ return queueRec(state.rec); }
+  $('saveRetry').addEventListener('click', function(){ Object.keys(failedSaves).forEach(function(code){ queueRec(failedSaves[code]); }); });
+  window.addEventListener('beforeunload', function(e){
+    if(pendingSaves || Object.keys(failedSaves).length){ e.preventDefault(); e.returnValue = ''; }
+  });
   /* ——— этапы кабинета ———
      Этап открывается, когда наступил его срок: «1-й день» — дата выхода,
      неделя и месяц — смещения от неё, последний — конец испытательного срока

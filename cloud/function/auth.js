@@ -70,4 +70,23 @@ async function exchange(cfg, query, headers, fetchFn = fetch) {
   return { email: String(u.default_email || '').toLowerCase(), yid: String(u.id || '') };
 }
 
-module.exports = { sign, verify, cookies, headerOf, setCookie, sessionCookie, sessionEmail, loginRedirect, exchange, COOKIE, STATE_COOKIE, SESSION_HOURS };
+// Slow server-side wrapper around the legacy browser digest. No plaintext passwords are stored.
+// The fixed format bounds the work factor; imported values cannot request excessive KDF parameters.
+const LEGACY_HASH = /^[a-f0-9]{64}$/;
+const SEALED_HASH = /^scrypt-v1\$([a-f0-9]{32})\$([a-f0-9]{64})$/;
+function derivePassword(digest, salt) {
+  return new Promise((resolve, reject) => crypto.scrypt(digest, salt, 32,
+    { N: 32768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 }, (err, key) => err ? reject(err) : resolve(key)));
+}
+async function sealPassword(hash) {
+  if (!LEGACY_HASH.test(String(hash || ''))) return hash;
+  const salt = crypto.randomBytes(16).toString('hex');
+  return 'scrypt-v1$' + salt + '$' + (await derivePassword(hash, salt)).toString('hex');
+}
+async function verifyPassword(hash, digest) {
+  const match = SEALED_HASH.exec(String(hash || ''));
+  if (match) return crypto.timingSafeEqual(Buffer.from(match[2], 'hex'), await derivePassword(digest, match[1]));
+  return LEGACY_HASH.test(String(hash || '')) && crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(digest, 'hex'));
+}
+
+module.exports = { sealPassword, verifyPassword, LEGACY_HASH, sign, verify, cookies, headerOf, setCookie, sessionCookie, sessionEmail, loginRedirect, exchange, COOKIE, STATE_COOKIE, SESSION_HOURS };

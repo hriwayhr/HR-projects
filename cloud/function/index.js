@@ -122,7 +122,10 @@ async function callback(cfg, store, query, headers, fetchFn) {
   return redirect('/', [auth.sessionCookie(cfg.sessionSecret, email), auth.setCookie(auth.STATE_COOKIE, '', 0)]);
 }
 
-async function sync(user, store, since) {
+async function sync(user, store, since, scope) {
+  const currentScope = crypto.createHash('sha256').update(JSON.stringify([user.pid, user.role, !!user.admin, acl.ownersFor(user).sort()])).digest('hex');
+  const reset = !!scope && scope !== currentScope;
+  if (reset) since = 0;
   let changed = await store.changes(since);
   // передача начинается и кончается по дате, а не правкой документа: вакансии коллеги в отпуске отдаём каждый раз целиком
   if (since && !user.admin && acl.ownersFor(user).length > 1) {
@@ -134,7 +137,7 @@ async function sync(user, store, since) {
   // невидимое после изменения (вакансию передали другому) приходит как удалённое — страница его уберёт;
   // новичку удалённое не шлём вовсе: иначе он увидел бы адреса всех документов (коды коллег, месяцы метрик)
   // при полной загрузке невидимое не отдаём совсем — даже адресом
-  return { ver: docs.reduce((m, d) => Math.max(m, d.ver), since), docs: docs.filter(d => (since && user.role !== 'employee') || d.data !== null).map(d => ({ path: d.path, data: d.data })) };
+  return { scope: currentScope, reset, ver: docs.reduce((m, d) => Math.max(m, d.ver), since), docs: docs.filter(d => (since && user.role !== 'employee') || d.data !== null).map(d => ({ path: d.path, data: d.data })) };
 }
 
 // Слияние трёх версий: base — документ, как его видела страница до правки, mine — с правкой, theirs — сейчас в базе.
@@ -153,18 +156,39 @@ function merge3(b, m, t) {
   return m;   // одно и то же поле поменяли оба — побеждает эта правка
 }
 
+async function protectCredentials(path, value, previous) {
+  if (!value) return value;
+  if (path !== 'config/team' && !path.startsWith('employees/')) return value;
+  const next = JSON.parse(JSON.stringify(value));
+  const records = path === 'config/team' ? Object.entries(next.people || {}) : [['', next]];
+  for (const [id, rec] of records) if (rec && rec.hash) {
+    const old = path === 'config/team' ? previous && previous.people && previous.people[id] : previous;
+    if (old && old.salt === rec.salt && auth.LEGACY_HASH.test(rec.hash) && await auth.verifyPassword(old.hash, rec.hash)) rec.hash = old.hash;
+    else rec.hash = await auth.sealPassword(rec.hash);
+  }
+  return next;
+}
+
 async function write(user, store, body) {
   const { path: p, op, data } = body || {};
   if (typeof p !== 'string' || !['set', 'update', 'delete'].includes(op)) return json(400, { error: 'Неверный запрос.' });
   let err = '';
-  const ver = await store.tx(p, prev => {
+  const ver = await store.tx(p, async prev => {
     let next = op === 'delete' ? null : op === 'update' ? Object.assign({}, prev || {}, data)
       : 'base' in body ? merge3(body.base === null ? undefined : body.base, data, prev === null ? undefined : prev) : data;
     if (next === undefined) next = null;
     if (op === 'update' && !prev) { err = 'Документа нет.'; return undefined; }
     if (next && typeof next === 'object') next = JSON.parse(JSON.stringify(next));   // только JSON, без прототипов
+    if (p.startsWith('vacancies/') && prev && next && next.manager !== prev.manager && next.ownerId === prev.ownerId) {
+      const owner = user.people[next.ownerId];
+      if (!owner || acl.norm(next.manager) !== acl.norm([owner.name, owner.surname].filter(Boolean).join(' '))) delete next.ownerId;
+    }
+    if (p.startsWith('vacancies/') && next && next.ownerId === undefined) {
+      const ownerId = acl.ownerOf(next.manager, user.people);
+      if (ownerId) next.ownerId = ownerId;
+    }
     err = acl.writeError(user, p, prev, next, user.people);
-    return err ? undefined : next;
+    return err ? undefined : await protectCredentials(p, next, prev);
   }, user.email);
   if (err) return json(403, { error: err });
   return json(200, { ver });
@@ -279,7 +303,7 @@ async function resetFinish(cfg, store, b, headers) {
   if (pw.length < 8 || pw.length > 128) return json(400, { error: 'Пароль — от 8 до 128 символов.' });
   const r = await checkCode(store, b, 'reset');
   if (typeof r === 'string') return json(401, { error: r });
-  const salt = crypto.randomBytes(8).toString('hex'), hash = crypto.createHash('sha256').update(salt + '::' + pw).digest('hex');
+  const salt = crypto.randomBytes(8).toString('hex'), hash = await auth.sealPassword(crypto.createHash('sha256').update(salt + '::' + pw).digest('hex'));
   await store.tx('config/team', prev => {
     const next = JSON.parse(JSON.stringify(prev));
     next.people[r.pid] = Object.assign(next.people[r.pid], { salt, hash });
@@ -326,8 +350,8 @@ async function passwordLogin(cfg, store, b, ip, headers) {
     t = emps.find(e => acl.norm(e.login) === login) || emps.find(e => acl.norm(e.email) === login) || emps.find(e => acl.norm(e.code) === login);
     session = t && 'emp:' + t.code;
   }
-  const want = Buffer.from(String((t && t.hash) || '')), got = Buffer.from(crypto.createHash('sha256').update(String((t && t.salt) || '') + '::' + String(b.password || '')).digest('hex'));
-  if (!t || !t.hash || want.length !== got.length || !crypto.timingSafeEqual(want, got)) {
+  const digest = crypto.createHash('sha256').update(String((t && t.salt) || '') + '::' + String(b.password || '')).digest('hex');
+  if (!t || !t.hash || !await auth.verifyPassword(t.hash, digest)) {
     addFail(pairKey, now); addFail(ipKey, now); addFail(loginKey, now);
     await new Promise(r => setTimeout(r, 400));             // перебор паролей — медленно
     return json(401, { error: 'Неверный логин или пароль.' });
@@ -337,6 +361,24 @@ async function passwordLogin(cfg, store, b, ip, headers) {
   if (GOOD.size >= KEYS_MAX) prune(GOOD, now, GOOD_MS, v => v);
   if (GOOD.size < KEYS_MAX) GOOD.set(pairKey, now);
   if (t.archived) return json(403, { error: 'Учётная запись в архиве — обратитесь к администратору.' });
+  // Upgrade only after a correct password, atomically against the current credential.
+  if (auth.LEGACY_HASH.test(t.hash)) {
+    const oldHash = t.hash, sealed = await auth.sealPassword(oldHash), documentPath = pid ? 'config/team' : 'employees/' + t.code;
+    await store.tx(documentPath, prev => {
+      const current = pid ? prev && prev.people && prev.people[pid] : prev;
+      if (!current || current.archived || current.hash !== oldHash || current.salt !== t.salt) return undefined;
+      const next = JSON.parse(JSON.stringify(prev));
+      (pid ? next.people[pid] : next).hash = sealed;
+      return next;
+    }, 'password-upgrade:' + (pid || t.code));
+    const record = await store.get(documentPath), current = pid ? record && record.people && record.people[pid] : record;
+    // A concurrent successful login may have performed the same upgrade first.
+    if (!current || current.archived || current.salt !== t.salt || !await auth.verifyPassword(current.hash, digest))
+      return json(409, { error: 'Учётная запись изменилась — повторите вход.' });
+    t = current;
+  }
+
+  session = pid ? acl.norm(t.login) : 'emp:' + t.code;
   if (pid && twoFactor(cfg, t) && !devList(cfg, headers).includes(pid + ':' + pwMark(t.hash))) {
     const r = await sendCode(cfg, pid, t, 'login', ip);
     if (typeof r === 'string') return json(r.startsWith('Не удалось') ? 502 : 429, { error: r });
@@ -352,8 +394,11 @@ async function importDocs(store, docs) {
   if (!Object.keys(people).some(p => people[p].admin && people[p].login && people[p].hash && !people[p].archived))
     return 'В файле нет администратора с паролем — загрузите версию для ПК «HR-метрики.html».';
   const paths = Object.keys(docs).filter(p => acl.PATH_RE.test(p) && docs[p] && typeof docs[p] === 'object' && !Array.isArray(docs[p]));
-  for (const p of paths) await store.tx(p, () => JSON.parse(JSON.stringify(docs[p])), 'import');
-  return paths.length;
+  if (!store.bulk) return 'Для атомарного импорта требуется сервер с SQLite.';
+  const prepared = {};
+  for (const p of paths) prepared[p] = await protectCredentials(p, docs[p], await store.get(p));
+  const result = await store.bulk(prepared, { emptyOnly: true, who: 'import' });
+  return result.error || result.written;
 }
 // Данные из файла версии для ПК (HTML, внутри — SEED) или резервной копии (JSON с docs)
 function docsFromFile(text) {
@@ -376,10 +421,11 @@ async function replaceFromJournals(store, user, b) {
     return json(400, { error: 'В файлах нет команды с администратором и паролем — выберите все файлы changes-….jsonl из папки data.' });
   const keep = Object.keys(docs).filter(p => acl.PATH_RE.test(p) && isObj(docs[p]));
   // пребординг портала в журналах локальной версии не бывает — его не трогаем
-  const old = (await store.changes(0)).filter(d => d.data !== null && !keep.includes(d.path) && !acl.isPreboard(d.path)).map(d => d.path);
-  for (const p of old) await store.tx(p, () => null, user.email);
-  for (const p of keep) await store.tx(p, () => JSON.parse(JSON.stringify(docs[p])), user.email);
-  return json(200, { ok: true, docs: keep.length, removed: old.length });
+  if (!store.bulk) return json(503, { error: 'Для атомарной замены требуется сервер с SQLite.' });
+  const prepared = {};
+  for (const p of keep) prepared[p] = await protectCredentials(p, docs[p], await store.get(p));
+  const result = await store.bulk(prepared, { replace: true, preserve: acl.isPreboard, who: user.email });
+  return json(200, { ok: true, docs: result.written, removed: result.removed });
 }
 // Перенос пребординга из прежнего артефакта: администратор загружает файл с документами employees/* и config/departments|page|templates.
 // Учётные записи HR (admins/*) не переносятся: вход HR — из «Команды».
@@ -391,7 +437,10 @@ async function importPreboard(store, user, b) {
     const err = acl.writeError(user, p, null, docs[p], user.people);
     if (err) return json(400, { error: p + ': ' + err });
   }
-  for (const p of paths) await store.tx(p, () => JSON.parse(JSON.stringify(docs[p])), user.email);
+  if (!store.bulk) return json(503, { error: 'Для атомарного импорта требуется сервер с SQLite.' });
+  const prepared = {};
+  for (const p of paths) prepared[p] = await protectCredentials(p, docs[p], await store.get(p));
+  await store.bulk(prepared, { who: user.email });
   return json(200, { ok: true, docs: paths.length });
 }
 async function importInitial(store, b) {
@@ -428,7 +477,7 @@ function makeHandler(store, cfg, fetchFn) {
       if (cfg.local && user.admin && method === 'POST' && url === '/api/replace-data') return await replaceFromJournals(store, user, body() || {});
       if (method === 'GET' && url === '/api/me') return json(200, { pid: user.pid, email: user.email, admin: user.admin, role: user.role, code: user.code,
         name: user.name || [(user.people[user.pid] || {}).name, (user.people[user.pid] || {}).surname].filter(Boolean).join(' ') });
-      if (method === 'GET' && url === '/api/sync') return json(200, await sync(user, store, Math.max(0, Number(query.since) || 0)));
+      if (method === 'GET' && url === '/api/sync') return json(200, await sync(user, store, Math.max(0, Number(query.since) || 0), query.scope));
       if (method === 'POST' && url === '/api/doc') {
         const b = body();
         return b ? await write(user, store, b) : json(400, { error: 'Неверный JSON.' });

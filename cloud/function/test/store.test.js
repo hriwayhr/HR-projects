@@ -88,3 +88,39 @@ test('ночная копия: раз в день, права 600, пустую 
   assert.equal((fs.statSync(path.join(dir, files[0])).mode & 0o777).toString(8), '600');
   assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(dir, files[0]))).docs), ['vacancies/a']);
 });
+
+for (const [name, make] of [['память', () => memoryStore()], ['SQLite', () => sqliteStore(path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'hr-bulk-')), 'db.sqlite'))]]) {
+  test(name + ': атомарный импорт сериализован, повторный импорт не меняет базу', async () => {
+    const s = make();
+    const outcomes = await Promise.all([
+      s.bulk({ 'config/team': { tag: 'first' }, 'months/a': { n: 1 } }, { emptyOnly: true }),
+      s.bulk({ 'config/team': { tag: 'second' }, 'months/b': { n: 2 } }, { emptyOnly: true })
+    ]);
+    assert.equal(outcomes[0].written, 2); assert.match(outcomes[1].error, /уже есть/);
+    assert.deepEqual(await s.get('config/team'), { tag: 'first' }); assert.equal(await s.get('months/b'), null);
+    // Serialization failure must leave both old documents intact, without partial deletes.
+    await assert.rejects(s.bulk({ 'config/team': { bad: 1n } }, { replace: true }));
+    assert.equal(await s.count(), 2); assert.deepEqual(await s.get('months/a'), { n: 1 });
+    if (s.close) s.close();
+  });
+}
+
+test('SQLite: ошибка в середине замены откатывает документы и аудит; копия содержит прежние данные', async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'hr-atomic-')), file = path.join(folder, 'db.sqlite');
+  const s = sqliteStore(file); await s.tx('months/old', () => ({ value: 42 }), 'seed');
+  const { DatabaseSync } = require('node:sqlite'), control = new DatabaseSync(file);
+  control.exec("CREATE TRIGGER fail_import BEFORE INSERT ON docs WHEN NEW.path = 'months/fail' BEGIN SELECT RAISE(ABORT, 'simulated disk failure'); END;");
+  const beforeAudit = control.prepare('SELECT COUNT(*) AS n FROM audit').get().n;
+  await assert.rejects(s.bulk({ 'months/new': { n: 1 }, 'months/fail': { n: 2 } }, { replace: true, who: 'admin' }), /simulated/);
+  assert.deepEqual(await s.get('months/old'), { value: 42 }); assert.equal(await s.get('months/new'), null);
+  assert.equal(control.prepare('SELECT COUNT(*) AS n FROM audit').get().n, beforeAudit);
+  const snapshots = fs.readdirSync(path.join(folder, 'backups')).filter(n => n.endsWith('.json'));
+  assert.equal(snapshots.length, 1);
+  const snapshot = path.join(folder, 'backups', snapshots[0]);
+  assert.deepEqual(JSON.parse(fs.readFileSync(snapshot)).docs, { 'months/old': { value: 42 } });
+  assert.equal(fs.statSync(snapshot).mode & 0o777, 0o600);
+  control.exec('DROP TRIGGER fail_import');
+  const result = await s.bulk({ 'months/new': { n: 1 } }, { replace: true, who: 'admin' });
+  assert.equal(result.written, 1); assert.equal(await s.get('months/old'), null); assert.deepEqual(await s.get('months/new'), { n: 1 });
+  control.close(); s.close();
+});
