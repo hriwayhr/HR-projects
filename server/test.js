@@ -16,6 +16,7 @@ test('сервер: страница, защита, вход через Янде
     const page = await fetch(base + '/');
     assert.equal(page.status, 200);
     assert.match(page.headers.get('content-security-policy'), /script-src 'nonce-/);
+    assert.match(page.headers.get('content-security-policy'), /connect-src 'self' https:\/\/raw\.githubusercontent\.com https:\/\/xmlcalendar\.ru;/);
     assert.match(await page.text(), /window\.HR_CLOUD = true[\s\S]*HR-метрики/);
     assert.equal((await fetch(base + '/api/me')).status, 401);
     assert.equal((await fetch(base + '/api/sync', { headers: { Cookie: 'hr_s=forged.sig' } })).status, 401);
