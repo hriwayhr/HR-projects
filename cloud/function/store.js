@@ -9,6 +9,16 @@
 let lastVer = 0;
 function newVer() { lastVer = Math.max(lastVer + 1, Date.now() * 1000); return lastVer; }
 
+// Build the complete change list before touching live rows. An empty-only import checks
+// its precondition inside the same serialized operation as the writes.
+function bulkPlan(current, docs, opts) {
+  const active = current.filter(r => !r.deleted);
+  if (opts.emptyOnly && active.length) return { error: 'В папке уже есть данные.' };
+  const entries = Object.entries(docs).map(([path, data]) => ({ path, data: JSON.stringify(data), deleted: 0 }));
+  const removed = opts.replace ? active.filter(r => !Object.prototype.hasOwnProperty.call(docs, r.path) && !(opts.preserve && opts.preserve(r.path))) : [];
+  return { writes: removed.map(r => ({ path: r.path, data: '{}', deleted: 1 })).concat(entries), written: entries.length, removed: removed.length };
+}
+
 // ---------- в памяти: для тестов и локального запуска ----------
 function memoryStore() {
   const rows = new Map(), audit = [];
@@ -28,6 +38,20 @@ function memoryStore() {
       });
       queue = run.catch(() => {});
       return run;
+    },
+    bulk(docs, opts = {}) {
+      const run = queue.then(() => {
+        const plan = bulkPlan([...rows.entries()].map(([path, r]) => ({ path, ...r })), docs, opts);
+        if (plan.error) return plan;
+        const nextRows = new Map(rows), nextAudit = [];
+        for (const r of plan.writes) {
+          const ver = newVer(); nextRows.set(r.path, { data: r.data, deleted: !!r.deleted, ver });
+          nextAudit.push({ ts: ver, who: opts.who, op: r.deleted ? 'delete' : 'set', path: r.path });
+        }
+        rows.clear(); nextRows.forEach((r, path) => rows.set(path, r)); audit.push(...nextAudit);
+        return { written: plan.written, removed: plan.removed };
+      });
+      queue = run.catch(() => {}); return run;
     },
     async changes(since) {
       return [...rows.entries()].filter(([, r]) => r.ver > since).sort((a, b) => a[1].ver - b[1].ver)
@@ -151,6 +175,32 @@ function sqliteStore(file) {
       queue = run.catch(() => {});
       return run;
     },
+    bulk(docs, opts = {}) {
+      const run = queue.then(() => {
+        db.exec('BEGIN IMMEDIATE');
+        try {
+          const current = q.changes.all(0), plan = bulkPlan(current, docs, opts);
+          if (plan.error) { db.exec('ROLLBACK'); return plan; }
+          if (opts.replace && current.some(r => !r.deleted)) {
+            // A replacement gets its own durable snapshot, not yesterday's daily copy.
+            const fs = require('fs'), path = require('path');
+            const dir = path.join(path.dirname(file), 'backups'); fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+            const name = path.join(dir, 'before-replace-' + Date.now() + '-' + require('crypto').randomBytes(6).toString('hex') + '.json');
+            const snapshot = Object.fromEntries(current.filter(r => !r.deleted).map(r => [r.path, JSON.parse(r.data)]));
+            const fd = fs.openSync(name + '.tmp', 'wx', 0o600);
+            try { fs.writeFileSync(fd, JSON.stringify({ format: 'hr-metrics', at: new Date().toISOString(), docs: snapshot })); fs.fsyncSync(fd); }
+            finally { fs.closeSync(fd); }
+            fs.renameSync(name + '.tmp', name);
+          }
+          for (const r of plan.writes) {
+            const ver = newVer(); q.put.run(r.path, r.data, ver, r.deleted);
+            q.audit.run(ver, opts.who || '', r.deleted ? 'delete' : 'set', r.path);
+          }
+          db.exec('COMMIT'); return { written: plan.written, removed: plan.removed };
+        } catch (e) { db.exec('ROLLBACK'); throw e; }
+      });
+      queue = run.catch(() => {}); return run;
+    },
     async changes(since) { return q.changes.all(since).map(r => ({ path: r.path, ver: r.ver, data: r.deleted ? null : JSON.parse(r.data) })); },
     async count() { return q.count.get().n; },
     close() { db.close(); },
@@ -187,7 +237,8 @@ function logStore(dir, pc) {
     if (!o || typeof o.path !== 'string' || !Array.isArray(o.at)) return;
     if (!ops.has(o.path)) ops.set(o.path, []);
     ops.get(o.path).push(o); touched.add(o.path);
-    if (o.pc === pc) { lastTs = Math.max(lastTs, o.ts); n = Math.max(n, o.n + 1); }
+    lastTs = Math.max(lastTs, Number(o.ts) || 0);
+    if (o.pc === pc) n = Math.max(n, o.n + 1);
   }
   function rebuild(touched) {
     touched.forEach(p => {
@@ -237,6 +288,35 @@ function logStore(dir, pc) {
       });
       queue = run.catch(() => {});
       return run;
+    },
+    // First import remains compatible with older journal readers: publish a complete,
+    // ordinary JSONL file by one rename. A lock serializes concurrent initial imports.
+    bulk(values, opts = {}) {
+      if (!opts.emptyOnly || opts.replace) return Promise.reject(new Error('Замена данных журнала не поддерживается; используйте сервер с SQLite.'));
+      const run = queue.then(() => {
+        const lock = pathm.join(dir, 'initial-import.lock');
+        let fd;
+        try { fd = fs.openSync(lock, 'wx', 0o600); }
+        catch (e) { if (e.code === 'EEXIST') return { error: 'Импорт уже выполняется на другом ПК.' }; throw e; }
+        let temp;
+        try {
+          poll(true);
+          if ([...docs.values()].some(d => d.data !== undefined)) return { error: 'В папке уже есть данные.' };
+          const id = 'import-' + require('crypto').randomBytes(12).toString('hex');
+          const file = pathm.join(dir, 'changes-' + id + '.jsonl'); temp = file + '.tmp';
+          const ts = Date.now();
+          const lines = Object.entries(values).map(([path, v], n) => JSON.stringify({ ts, pc: id, n, path, at: [], v, who: opts.who }));
+          const data = lines.join('\n') + '\n';
+          const output = fs.openSync(temp, 'wx', 0o600);
+          try { fs.writeFileSync(output, data); fs.fsyncSync(output); } finally { fs.closeSync(output); }
+          fs.renameSync(temp, file); temp = null; poll(true);
+          return { written: lines.length, removed: 0 };
+        } finally {
+          if (temp && fs.existsSync(temp)) fs.unlinkSync(temp);
+          fs.closeSync(fd); fs.unlinkSync(lock);
+        }
+      });
+      queue = run.catch(() => {}); return run;
     },
     async changes(since) {
       poll();

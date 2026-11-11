@@ -231,3 +231,33 @@ test('владелец вакансии — по фамилии, как на с�
   assert.equal(acl.ownerOf('Юлия', people), 'y');
   assert.equal(acl.ownerOf('Иванов', people), null);
 });
+
+test('ответственный: совпадение части фамилии и тёзки не дают чужих прав; ID переживает переименование', async () => {
+  const people = { a: { name: 'Иван', surname: 'Иванов' }, b: { name: 'Анна', surname: 'Иванова' }, c: { name: 'Анна', surname: 'Иванова' } };
+  const acl = require('../acl');
+  assert.equal(acl.ownerOf('Иванов', people), 'a');
+  assert.equal(acl.ownerOf('Анна Иванова', { a: people.a, b: people.b }), 'b');
+  assert.equal(acl.ownerOf('Иванова', people), null); assert.equal(acl.ownerOf('Анна', people), null);
+  assert.equal(acl.ownerOf('Анна Иванова', people), null);
+  assert.equal(acl.ownerOf('Анна Иванова', people, 'b'), 'b'); assert.equal(acl.ownerOf('Иванов', people, 'missing'), null);
+  assert.equal(acl.readable({ pid: 'a', role: 'hr', admin: false }, 'vacancies/demo', { manager: 'Анна Иванова', ownerId: 'b' }, people), null);
+});
+
+test('синхронизация: окончание подмены сбрасывает клиентский кеш без изменения вакансии', async () => {
+  const { forTests } = require('../index'), auth = require('../auth');
+  const originalNow = Date.now; Date.now = () => Date.parse('2026-11-02T20:59:00Z');
+  try {
+    const store = forTests.memoryStore(), hash = 'a'.repeat(64);
+    await store.tx('config/team', () => ({ people: { a: { name: 'Alpha', login: 'a', hash }, b: { name: 'Beta', login: 'b', hash } } }));
+    await store.tx('vacations/b', () => ({ list: [{ from: '2026-11-02', to: '2026-11-02', sub: 'a' }] }));
+    await store.tx('vacancies/demo', () => ({ manager: 'Beta', ownerId: 'b' }));
+    const cfg = forTests.config({ LOCAL: '1', SESSION_SECRET: 's'.repeat(48) }), handler = forTests.makeHandler(store, cfg);
+    const cookie = auth.sessionCookie(cfg.sessionSecret, 'a|' + forTests.pwMark(hash)).split(';')[0];
+    const sync = async (since, scope) => JSON.parse((await handler({ httpMethod: 'GET', url: '/api/sync', headers: { cookie }, queryStringParameters: { since, scope } }, {})).body);
+    const first = await sync(0); assert.ok(first.docs.find(d => d.path === 'vacancies/demo' && d.data));
+    Date.now = () => Date.parse('2026-11-02T21:01:00Z');
+    const second = await sync(first.ver, first.scope);
+    assert.equal(second.reset, true); assert.notEqual(second.scope, first.scope);
+    assert.equal(second.docs.some(d => d.path === 'vacancies/demo' && d.data), false);
+  } finally { Date.now = originalNow; }
+});

@@ -465,7 +465,7 @@
             <label class="f">Название<input type="text" id="v_title" required></label>
             <label class="f">Отдел<input type="text" id="v_dept" list="deptList"></label>
             <label class="f">Статус<select id="v_status"></select></label>
-            <label class="f">Ответственный менеджер<input type="text" id="v_manager" list="mgrList"></label>
+            <label class="f">Ответственный менеджер<select id="v_manager"></select></label>
             <label class="f">Заказчик (кто запросил вакансию)<input type="text" id="v_customer" list="custList" placeholder="Имя сотрудника"></label>
           </div>
         </fieldset>
@@ -1951,9 +1951,14 @@ function median(a){ if(!a.length) return null; var b = a.slice().sort(function(x
 // Чья вакансия: в «Ответственном» фамилия пользователя, а если фамилии нет — имя.
 // Так «Шулятицкая» и «Анна Шулятицкая» — одна и та же Анна.
 function vacOwner(v){
-  var m = norm(v.manager); if(!m) return null;
-  function has(f){ return allPeople().filter(function(p){ var x = norm(team[p][f]); return x && m.indexOf(x) >= 0; })[0]; }
-  return has('surname') || has('name') || null;
+  if(v.ownerId !== undefined) return typeof v.ownerId === 'string' && Object.prototype.hasOwnProperty.call(team, v.ownerId) ? v.ownerId : null;
+  function tokens(s){ return norm(s).match(/[\p{L}\p{N}]+/gu) || []; }
+  var m = tokens(v.manager); if(!m.length) return null;
+  function has(value){ var t = tokens(value); return t.length && t.every(function(x){ return m.indexOf(x) >= 0; }); }
+  var ids = Object.keys(team), full = ids.filter(function(p){ return team[p].surname && team[p].name && has(team[p].surname) && has(team[p].name); });
+  var surname = ids.filter(function(p){ return has(team[p].surname); });
+  var matches = full.length ? full : surname.length ? surname : ids.filter(function(p){ return has(team[p].name); });
+  return matches.length === 1 ? matches[0] : null;
 }
 function mine(v, p){ return vacOwner(v) === p || ownerOn(v, today()) === p; }   // и вакансии коллеги в отпуске, переданные на это время
 function managerLabel(v){ var p = vacOwner(v); return p ? label(p) : (v.manager || '—'); }
@@ -2298,7 +2303,11 @@ function openVac(id){
   var me = scope() && team[scope()];
   var v = id ? vacancies[id] : {status:'активна', manager: me ? fullName(scope()) : ''};
   editingVac = id || null;
-  VAC_FIELDS.forEach(function(f){ $('v_'+f).value = v[f] == null ? '' : v[f]; });
+  VAC_FIELDS.forEach(function(f){ if(f !== 'manager') $('v_'+f).value = v[f] == null ? '' : v[f]; });
+  var currentOwner = vacOwner(v), ids = allPeople().filter(function(p){ return !team[p].archived || p === currentOwner; });
+  $('v_manager').innerHTML = '<option value="">Не назначен</option>' + ids.map(function(p){ return '<option value="'+esc(p)+'">'+esc(fullName(p) + ' · ' + (team[p].email || team[p].login || p) + (team[p].archived ? ' (архив)' : ''))+'</option>'; }).join('');
+  if(v.manager && !currentOwner) $('v_manager').insertAdjacentHTML('beforeend', '<option value="__unresolved">'+esc(v.manager)+' — уточните ответственного</option>');
+  $('v_manager').value = currentOwner || (v.manager ? '__unresolved' : '');
   setLinks(linkObjs(v));
   setSeats(id ? seatsOf(v) : [{requestedAt:today()}]);
   $('vEdTitle').textContent = id ? 'Вакансия' : 'Новая вакансия';
@@ -2313,7 +2322,10 @@ function saveVac(e){
   // прежние поля карточки (ставка, даты, офферы, кто вышел) теперь живут в единицах найма; остальное — как было
   var v = Object.assign({}, editingVac ? vacancies[editingVac] : {});
   ['rate','requestedAt','publishedAt','archivedAt','closedAt','startAt','person','extensions','offersSent','offersAccepted','reason','search','probation','link'].forEach(function(f){ delete v[f]; });
-  VAC_FIELDS.forEach(function(f){ var x = $('v_'+f).value.trim(); if(x !== '') v[f] = x; else delete v[f]; });
+  VAC_FIELDS.forEach(function(f){ if(f === 'manager') return; var x = $('v_'+f).value.trim(); if(x !== '') v[f] = x; else delete v[f]; });
+  var owner = $('v_manager').value;
+  if(owner && !Object.prototype.hasOwnProperty.call(team, owner)){ $('vStat').className = 'status err'; $('vStat').textContent = 'Выберите ответственного из команды.'; return; }
+  if(owner){ v.ownerId = owner; v.manager = fullName(owner); } else { delete v.ownerId; delete v.manager; }
   var seats = readSeats();
   if(!seats.length){ $('vStat').className = 'status err'; $('vStat').textContent = 'Добавьте хотя бы одну единицу найма.'; return; }
   seats.forEach(function(x){ if(!x.requestedAt) x.requestedAt = today(); });
@@ -2716,7 +2728,7 @@ function renderTalantix(){
 // Сервер отдаёт только то, что пользователю можно видеть, и проверяет каждую запись.
 // Изменения других людей подтягиваются раз в минуту, при возврате на вкладку и после своих записей.
 function cloudDb(){
-  var cache = {}, ver = 0, subs = [], timer = null, first = null;
+  var cache = {}, ver = 0, accessScope = '', subs = [], timer = null, first = null;
   function req(method, url, body){
     return fetch(url, {method:method, credentials:'same-origin', headers:Object.assign({'X-HR':'1'}, body ? {'Content-Type':'application/json'} : {}), body:body ? JSON.stringify(body) : undefined})
       .then(function(r){
@@ -2730,7 +2742,8 @@ function cloudDb(){
   function fire(s){ s.seen = true; s.cb(s.doc ? snapDoc(s.doc) : snapColl(s.coll)); }
   function sync(full){
     // перекрытие в 5 секунд — на случай расхождения часов между экземплярами сервера
-    return req('GET', '/api/sync?since=' + (full ? 0 : Math.max(0, ver - 5e6))).then(function(r){
+    return req('GET', '/api/sync?since=' + (full ? 0 : Math.max(0, ver - 5e6)) + '&scope=' + encodeURIComponent(accessScope)).then(function(r){
+      full = full || !!r.reset; accessScope = r.scope || '';
       if(full) cache = {};
       var changed = [];
       r.docs.forEach(function(d){
