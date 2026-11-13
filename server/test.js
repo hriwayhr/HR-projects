@@ -405,3 +405,44 @@ test('пароли: успешный вход обновляет старый х
   assert.equal((await login('Employee-2026')).statusCode, 200); assert.equal((await store.get('employees/IW-MIGRATE')).hash, updated.hash);
   assert.equal((await handler({ httpMethod: 'GET', url: '/api/me', headers: { cookie } }, {})).statusCode, 200);
 });
+
+test('принятые офферы: очередь по правам, атомарная выдача, отмена и сохранность учётных записей', async () => {
+  const { forTests } = require('../cloud/function/index'), auth = require('../cloud/function/auth'), crypto = require('crypto');
+  const store=forTests.memoryStore(),secret='h'.repeat(48),cfg=forTests.config({LOCAL:'1',SESSION_SECRET:secret});
+  const people={a:{name:'Анна',surname:'Первая',login:'anna',hash:'test-a'},b:{name:'Борис',surname:'Второй',login:'boris',hash:'test-b'},admin:{name:'HR',login:'boss',hash:'test-c',admin:true}};
+  await store.tx('config/team',()=>({people}));
+  const handler=forTests.makeHandler(store,cfg),cookie=p=>auth.sessionCookie(secret,people[p].login+'|'+forTests.pwMark(people[p].hash)).split(';')[0];
+  async function call(p,method,url,data,override){const r=await handler({httpMethod:method,url,headers:{'x-hr':'1',cookie:override||cookie(p)},body:data?JSON.stringify(data):''});return {status:r.statusCode,data:JSON.parse(r.body)};}
+  const vacancy={title:'Менеджер',dept:'Отдел бронирования',manager:'Анна Первая',ownerId:'a',status:'активна',multi:true,seats:[{requestedAt:'2026-10-01',offers:[{candidate:'Тестова Мария Сергеевна',result:'accepted',startAt:'2026-12-01'}]}]};
+  await store.tx('vacancies/test',()=>vacancy);
+  let queue=await call('a','GET','/api/hiring/pending');assert.equal(queue.status,200);assert.equal(queue.data.people.length,1);const pending=queue.data.people[0];assert.equal(pending.hash,undefined);assert.equal(await store.get('employees/'+pending.code),null);
+  assert.equal((await call('b','GET','/api/hiring/pending')).data.people.length,0);
+  assert.equal((await call('admin','GET','/api/hiring/pending')).data.people.length,1);
+  // A legacy position acquires stable IDs on its first edit without changing its pending identity.
+  vacancy.seats[0].offers[0].candidate='Тестова Мария Петровна';assert.equal((await call('a','POST','/api/doc',{path:'vacancies/test',op:'set',data:vacancy})).status,200);
+  queue=await call('a','GET','/api/hiring/pending');assert.equal(queue.data.people[0].code,pending.code);assert.equal(queue.data.people[0].middleName,'Петровна');
+  const salt='test-salt',hash=crypto.createHash('sha256').update(salt+'::Test-2026').digest('hex'),record={...queue.data.people[0],personalEmail:'test@example.test',salt,hash};
+  assert.equal((await call('b','POST','/api/hiring/issue',{record})).status,409);
+  const issued=await Promise.all([call('a','POST','/api/hiring/issue',{record}),call('a','POST','/api/hiring/issue',{record})]);assert.deepEqual(issued.map(r=>r.status).sort(),[200,409]);
+  const employee=await store.get('employees/'+pending.code);assert.notEqual(employee.hash,hash);assert.ok(await auth.verifyPassword(employee.hash,hash));assert.equal(employee.pendingAccess,undefined);assert.equal(employee.hiringSource.key,pending.hiringSource.key);
+  assert.equal((await call('a','GET','/api/hiring/pending')).data.people.length,0);
+  const before=JSON.stringify(employee);vacancy.seats[0].offers[0].result='declined';await call('a','POST','/api/doc',{path:'vacancies/test',op:'set',data:vacancy});assert.equal(JSON.stringify(await store.get('employees/'+pending.code)),before);
+  const empCookie=auth.sessionCookie(secret,'emp:'+employee.code+'|'+forTests.pwMark(employee.hash)).split(';')[0];
+  assert.equal((await call('a','GET','/api/hiring/pending',null,empCookie)).status,403);assert.equal((await call('a','POST','/api/hiring/issue',{record},empCookie)).status,403);
+  // Direct document writes cannot bypass source validation for a second linked account.
+  assert.equal((await call('a','POST','/api/doc',{path:'employees/forged',op:'set',data:{...record,code:'forged'}})).status,403);
+  const fresh={...vacancy,seats:[{requestedAt:'2026-10-01',offers:[{candidate:'Второй Тест',result:'accepted'}]}]};await store.tx('vacancies/new',()=>fresh);
+  const waiting=(await call('a','GET','/api/hiring/pending')).data.people[0];fresh.seats[0].offers[0].result='declined';await store.tx('vacancies/new',()=>fresh);
+  assert.equal((await call('a','POST','/api/hiring/issue',{record:{...waiting,personalEmail:'new@example.test',salt,hash}})).status,409);assert.equal(await store.get('employees/'+waiting.code),null);
+});
+
+test('закрытие позиции без выхода: сервер проверяет дату, причину и факт выхода', async () => {
+  const { forTests }=require('../cloud/function/index'),auth=require('../cloud/function/auth'),acl=require('../cloud/function/acl');
+  const store=forTests.memoryStore(),secret='z'.repeat(48);await store.tx('config/team',()=>({people:{a:{name:'Анна',login:'anna',hash:'h',admin:true}}}));
+  const handler=forTests.makeHandler(store,forTests.config({LOCAL:'1',SESSION_SECRET:secret}));const headers={'x-hr':'1',cookie:auth.sessionCookie(secret,'anna|'+forTests.pwMark('h')).split(';')[0]};
+  const today=acl.todayMsk(),seat={requestedAt:today,search:'закрыта без выхода',searchClosedAt:today,searchCloseReason:'удержание',offers:[]};
+  const save=s=>handler({httpMethod:'POST',url:'/api/doc',headers,body:JSON.stringify({path:'vacancies/closure',op:'set',data:{title:'Тест',status:'поиск завершён',multi:true,seats:[s]}})});
+  assert.equal((await save({...seat,searchCloseReason:''})).statusCode,403);assert.equal((await save({...seat,searchClosedAt:'2099-01-01'})).statusCode,403);assert.equal((await save({...seat,searchCloseReason:'другое'})).statusCode,403);assert.equal((await save({...seat,startAt:today})).statusCode,403);
+  assert.equal((await save({...seat,hiringId:1})).statusCode,403);
+  assert.equal((await save(seat)).statusCode,200);const saved=await store.get('vacancies/closure');assert.ok(saved.seats[0].hiringId);assert.equal(saved.seats[0].startAt,undefined);
+});

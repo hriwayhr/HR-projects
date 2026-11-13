@@ -556,7 +556,7 @@
   }
   .team-preview b{color:var(--ink); font-weight:600;}
   .issued{margin-top:18px; border:1.5px solid var(--blue); border-radius:12px; padding:18px; background:var(--shell);}
-  .issued .code{font-size:25px; font-weight:700; letter-spacing:.1em; color:var(--blue-deep); font-variant-numeric:lining-nums;}
+  .issued .code{overflow-wrap:anywhere; font-size:25px; font-weight:700; letter-spacing:.1em; color:var(--blue-deep); font-variant-numeric:lining-nums;}
   .issued .row{margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;}
   .issued input{flex:1; min-width:220px; font-family:var(--body); font-size:13.5px; padding:10px 12px; border:1.5px solid var(--line-strong); border-radius:9px; background:var(--paper); color:var(--ink-2);}
   .tbl-wrap{overflow-x:auto;}
@@ -831,7 +831,7 @@
       <div class="who"><a class="back" href="#home" id="hrBack">← Разделы</a><span class="n" id="hrWho"></span><a href="#exit">Выйти</a></div>
       <div class="tabs" role="tablist">
         <button class="tab" id="tabNew" role="tab" aria-selected="true">Новый доступ</button>
-        <button class="tab" id="tabPeople" role="tab" aria-selected="false">Выданные доступы</button>
+        <button class="tab" id="tabPeople" role="tab" aria-selected="false">Доступы</button>
         <button class="tab" id="tabAdmins" role="tab" aria-selected="false">Администраторы</button>
         <button class="tab" id="tabDepts" role="tab" aria-selected="false">Отделы</button>
         <button class="tab" id="tabTpl" role="tab" aria-selected="false">Шаблоны</button>
@@ -844,7 +844,7 @@
     <div id="panePeople" hidden>
       <div class="panel">
         <div class="panel-head">
-          <h2>Выданные доступы</h2>
+          <h2>Доступы</h2>
           <input id="peopleSearch" class="search" type="search" placeholder="Поиск по имени, логину, почте" autocomplete="off">
         </div>
         <div class="pg-wrap">
@@ -868,9 +868,16 @@
         <h2>Новый доступ</h2>
         <p class="sub">Заполни данные — почта и код сгенерируются автоматически, их можно поправить вручную.</p>
         <form id="newForm">
+          <div class="field" style="margin:20px 0 24px">
+            <label for="hiringCandidate">Кандидат из HR-метрик</label>
+            <select id="hiringCandidate"><option value="">Создать вручную</option></select>
+            <p class="hint">Здесь кандидаты с принятым оффером и ФИО. Выбери человека — данные из вакансии заполнятся автоматически.</p>
+            <p class="hint" id="hiringSource" hidden></p>
+          </div>
           <div class="form-grid">
             <div class="field"><label for="fLast">Фамилия</label><input id="fLast" required maxlength="40"></div>
             <div class="field"><label for="fFirst">Имя</label><input id="fFirst" required maxlength="40"></div>
+            <div class="field"><label for="fMiddle">Отчество</label><input id="fMiddle" maxlength="80" autocomplete="additional-name"></div>
             <div class="field">
               <label for="fGender">Пол</label>
               <select id="fGender">
@@ -905,8 +912,8 @@
             <div class="team-preview" id="teamPreview">Выбери отдел — здесь появится команда, которую увидит сотрудник.</div>
           </div>
           <div id="offerBlock">
-            <h3 class="pg-name" style="font-size:16px; margin-top:28px;">Оффер</h3>
-            <p class="hint" style="margin:6px 0 16px;">Оффер — шаг до доступа: заполни поля и собери письмо, а доступ создашь, когда кандидат согласится. Пустые поля в письмо не попадут, дозаполнить можно позже кнопкой «Оффер» в карточке.</p>
+            <h3 class="pg-name" id="offerNewTitle" style="font-size:16px; margin-top:28px;">Оффер</h3>
+            <p class="hint" id="offerNewHint" style="margin:6px 0 16px;">Оффер — шаг до доступа: заполни поля и собери письмо, а доступ создашь, когда кандидат согласится. Пустые поля в письмо не попадут, дозаполнить можно позже кнопкой «Оффер» в карточке.</p>
             <div class="form-grid" id="offerNew"></div>
             <div class="actions" style="margin-top:16px;">
               <button class="mini" type="button" id="offerDraft">Собрать оффер</button>
@@ -915,11 +922,11 @@
           </div>
           <div id="offerSkip" hidden>
             <h3 class="pg-name" style="font-size:16px; margin-top:28px;">Приглашение на стажировку</h3>
-            <p class="hint" style="margin:6px 0 16px;">Для этого отдела оффер не отправляется. Первое сообщение можно собрать сразу — доступ создашь, когда кандидат согласится; второе сообщение с доступами появится вместе с ним.</p>
+            <p class="hint" id="internNewHint" style="margin:6px 0 16px;">Для этого отдела оффер не отправляется. Первое сообщение можно собрать сразу — доступ создашь, когда кандидат согласится; второе сообщение с доступами появится вместе с ним.</p>
             <div class="actions">
               <button class="mini" type="button" id="chatDraft">Собрать приглашение</button>
             </div>
-            <p class="hint" style="margin-top:10px;">Карточка при этом не создаётся — нужно только имя.</p>
+            <p class="hint" id="internDraftHint" style="margin-top:10px;">Карточка при этом не создаётся — нужно только имя.</p>
           </div>
           <div class="actions" style="margin-top:20px;">
             <button class="btn" type="submit">Создать доступ</button>
@@ -1726,6 +1733,14 @@
   function serverStore(){
     var s = dbStore(serverDb());
     s.mode = 'server';
+    function hiringRequest(url,record){
+      return fetch(url,{method:record?'POST':'GET',credentials:'same-origin',headers:record?{'X-HR':'1','Content-Type':'application/json'}:{},body:record?JSON.stringify({record:record}):undefined}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||'Не удалось обновить кандидатов.');return j;});});
+    }
+    var list=s.listEmployees,save=s.saveEmployee;
+    s.listEmployees=function(){return Promise.all([list(),hiringRequest('/api/hiring/pending')]).then(function(r){return r[0].concat(r[1].people);});};
+    s.saveEmployee=function(rec){return rec.pendingAccess && rec.hiringSource ? hiringRequest('/api/hiring/issue',rec).then(function(){return s.getEmployee(rec.code);}).then(function(saved){if(saved)Object.assign(rec,saved);delete rec.pendingAccess;}) : save(rec);};
+    s.watchEmployees=function(cb){var timer=setInterval(function(){if(!document.hidden && state.view==='admin')s.listEmployees().then(cb,function(){});},15000);return function(){clearInterval(timer);};};
+
     /* учётные записи HR — в «Команде» HR-метрик, а не в admins/* */
     s.getAdmin = function(){ var m = state.server; return Promise.resolve(m && m.role !== 'employee' ? {email:m.email, name:m.name} : null); };
     s.listAdmins = function(){ return s.getAdmin().then(function(a){ return a ? [a] : []; }); };
@@ -2095,7 +2110,7 @@
       var o = document.createElement('option'); o.value = d.name; o.textContent = d.name; sel.appendChild(o);
     });
   }
-  function deptByName(name){ return state.depts.filter(function(d){ return d.name === name; })[0] || null; }
+  function deptByName(name){ var key=String(name||'').trim().toLowerCase();return state.depts.filter(function(d){ return String(d.name||'').trim().toLowerCase() === key; })[0] || null; }
   function renderTeamPreview(){
     var d = deptByName($('fDept').value), box = $('teamPreview');
     if(!d){ box.textContent = 'Выбери отдел — здесь появится команда, которую увидит сотрудник.'; return; }
@@ -2111,6 +2126,16 @@
     var intern = isIntern($('fDept').value);
     $('offerBlock').hidden = intern;
     $('offerSkip').hidden = !intern;
+    var linked=!!state.hiringSelected;
+    $('chatDraft').hidden=intern && linked;$('internDraftHint').hidden=intern && linked;
+    $('internNewHint').textContent=linked
+      ? 'Кандидат уже принят в HR-метриках. После создания доступа появятся сообщения о стажировке для отправки в чат. Оффер формировать не нужно.'
+      : 'Для этого отдела оффер не отправляется. Первое сообщение можно собрать сразу — доступ создашь, когда кандидат согласится; второе сообщение с доступами появится вместе с ним.';
+    if(intern)$('offerPanel').hidden=true;
+    if(linked){
+      var rec=state.people.filter(function(r){return r.code===state.hiringSelected;})[0];
+      if(rec){$('hiringSource').textContent='Принят в HR-метриках · '+rec.hiringSource.position+' · '+(intern ? 'Стажировка' : 'Адаптация сотрудника')+'. Проверь данные, укажи пол и личную почту перед выдачей доступа.';}
+    }
   }
   $('fDept').addEventListener('change', function(){ renderTeamPreview(); syncOfferBlock(); });
   function suggestMail(){
@@ -2181,15 +2206,50 @@
       return rec;
     });
   }
+  function renderHiringSelect(){
+    var sel=$('hiringCandidate'),selected=state.hiringSelected||'';
+    sel.innerHTML='';var manual=document.createElement('option');manual.value='';manual.textContent='Создать вручную';sel.appendChild(manual);
+    state.people.filter(function(r){return r.hiringSource&&!hasAccess(r)&&!r.sourceInactive;}).forEach(function(r){
+      var o=document.createElement('option');o.value=r.code;o.textContent=[r.lastName,r.firstName,r.middleName].filter(Boolean).join(' ')+' · '+r.hiringSource.position;sel.appendChild(o);
+    });sel.value=selected;
+  }
+  function clearHiringSelection(){
+    state.hiringSelected=null;$('hiringCandidate').value='';$('hiringSource').hidden=true;$('offerNewTitle').textContent='Оффер';$('offerNewHint').textContent='Оффер — шаг до доступа: заполни поля и собери письмо, а доступ создашь, когда кандидат согласится.';$('offerDraft').hidden=false;
+  }
+  function prepareHiringAccess(code){
+    var rec=state.people.filter(function(r){return r.pendingAccess && !hasAccess(r);}).filter(function(r){return r.code===code;})[0];if(!rec){refreshPeople();return;}
+    state.hiringSelected=code;switchTab('new');$('issued').hidden=true;['mailPanel','offerPanel','chatPanel'].forEach(function(id){$(id).hidden=true;});
+    $('newForm').reset();renderHiringSelect();$('hiringCandidate').value=code;
+    $('fLast').value=rec.lastName||'';$('fFirst').value=rec.firstName||'';$('fMiddle').value=rec.middleName||'';
+    $('fPersonal').value=rec.personalEmail||'';$('fDate').value=rec.startDate||'';$('fTime').value=rec.startTime||'';
+    if(rec.dept&&!Array.from($('fDept').options).some(function(o){return o.value===rec.dept;})){var o=document.createElement('option');o.value=rec.dept;o.textContent=rec.dept;$('fDept').appendChild(o);}
+    $('fDept').value=rec.dept||'';$('fMail').dataset.touched='';suggestMail();
+    state.newOffer=Object.assign({},rec.offer);renderOfferFields($('offerNew'),{offer:state.newOffer});
+    $('hiringSource').textContent='Оффер принят · '+rec.hiringSource.position+' · '+(rec.dept||'отдел не указан')+'. Проверь данные, укажи пол и личную почту перед выдачей доступа.';$('hiringSource').hidden=false;
+    $('offerNewTitle').textContent='Оффер из HR-метрик';$('offerNewHint').textContent='Кандидат уже принял оффер. Должность и срок перенесены из вакансии; остальные условия можно уточнить перед выдачей доступа.';$('offerDraft').hidden=true;
+    renderTeamPreview();syncOfferBlock();$('newForm').scrollIntoView({behavior:'smooth',block:'start'});
+  }
+  $('hiringCandidate').addEventListener('change',function(){
+    if(this.value){prepareHiringAccess(this.value);return;}
+    $('newForm').reset();clearHiringSelection();$('fMail').dataset.touched='';resetNewOffer();renderTeamPreview();syncOfferBlock();
+  });
+  window.addEventListener('focus',function(){if(state.view==='admin')refreshPeople();});
   function resetNewOffer(){
     state.newOffer = {};
     renderOfferFields($('offerNew'), {offer: state.newOffer});
   }
   $('newForm').addEventListener('submit', function(e){
     e.preventDefault();
-    var rec = {
-      code: newCode(),
+    var pending = null;
+    if(state.hiringSelected){
+      pending = state.people.filter(function(r){return r.pendingAccess && !hasAccess(r);}).filter(function(r){return r.code===state.hiringSelected;})[0];
+      if(!pending){notify('Проверь статус кандидата', 'Оффер изменён или доступ уже выдан. Обнови список кандидатов.');refreshPeople();return;}
+    }
+    var submit = $('newForm').querySelector('button[type="submit"]');if(submit.disabled)return;submit.disabled=true;
+    var rec = Object.assign({}, pending || {}, {
+      code: pending ? pending.code : newCode(),
       login: '',
+      middleName: $('fMiddle').value.trim(),
       lastName: $('fLast').value.trim(),
       firstName: $('fFirst').value.trim(),
       dept: $('fDept').value,
@@ -2201,9 +2261,9 @@
       startTime: $('fTime').value || '',
       createdAt: new Date().toISOString(),
       openedAt: '', progress: {},
-      offer: state.newOffer
-    };
-    if(!rec.dept){ $('fDept').focus(); return; }
+      offer: Object.assign({},state.newOffer), accessAt:new Date().toISOString()
+    });
+    if(!rec.dept){ submit.disabled=false; $('fDept').focus(); return; }
     rec.login = rec.code.toLowerCase();
     var pass = newPassword();
     setPassword(rec, pass).then(function(){
@@ -2213,7 +2273,8 @@
       $('issuedCode').textContent = rec.code + ' · ' + pass;
       $('issuedLink').value = credsText(rec, pass).replace(/\n/g, '  |  ');
       $('issuedLink').dataset.full = credsText(rec, pass);
-      var hadOffer = offerFilled(rec);
+      var hadOffer = !rec.hiringSource && offerFilled(rec);
+      clearHiringSelection();
       $('newForm').reset(); $('fDept').selectedIndex = 0; $('fMail').dataset.touched = '';
       resetNewOffer();
       renderTeamPreview(); syncOfferBlock(); refreshPeople();
@@ -2223,7 +2284,7 @@
         if(hadOffer) showOffer(rec);     /* оффер заполнили — значит собираемся его слать */
         showMail(rec, pass);
       }
-    }).catch(function(){ notify('Не удалось сохранить доступ', 'Проверь права на страницу и попробуй ещё раз.'); });
+    }).catch(function(err){ notify('Не удалось сохранить доступ', err.message || 'Проверь права на страницу и попробуй ещё раз.'); refreshPeople(); }).then(function(){submit.disabled=false;});
   });
   function copyText(text, btn, label){
     var done = function(){ var old = btn.textContent; btn.textContent = label || 'Скопировано'; setTimeout(function(){ btn.textContent = old; }, 1800); };
@@ -2708,6 +2769,7 @@
       });
       return;
     }
+    $('mailPanel').hidden=true;$('offerPanel').hidden=true;
     state.chatRec = rec;
     var msg = buildChat(rec, pass);
     $('chatPanel').hidden = false;
@@ -2754,6 +2816,7 @@
       });
       return;
     }
+    $('chatPanel').hidden=true;
     var mail = buildEmail(rec, pass);
     state.mail = mail; state.mailRec = rec;
     $('mailSent').textContent = 'Отметить отправленным';
@@ -2822,8 +2885,8 @@
     ask({title:'Скопируй вручную', text:'Буфер обмена недоступен — выдели текст и нажми Ctrl+C.', label:'Текст', input:text, ok:'Готово', noCancel:true});
   }
   function setPeople(list){
-    state.people = list;
-    renderPeople();
+    state.people = list.filter(function(r){return !r.sourceInactive || hasAccess(r);});
+    renderPeople(); renderHiringSelect();
   }
   function refreshPeople(){
     state.store.listEmployees().then(setPeople).catch(function(){ setPeople([]); });
@@ -2879,7 +2942,7 @@
     if(!hasAccess(rec)){
       var w = offerWord(rec);
       if(rec.offerReply === 'no') return {key:'declined', label:'отказ', cls:'warn'};
-      if(rec.offerReply === 'yes') return {key:'accepted', label:w + ' принят', cls:'ready'};
+      if(rec.offerReply === 'yes') return {key:'accepted', label:rec.hiringSource ? 'ждёт выдачи доступа' : w + ' принят', cls:'ready'};
       if(rec.offerSentAt) return {key:'offered', label:'ждём ответа', cls:'info'};
       return {key:'draft', label:w + ' не отправлен', cls:''};
     }
@@ -2894,7 +2957,7 @@
      виден целиком, вместе с числом людей на каждом этапе. Ключи совпадают с
      statusOf, кроме «card» — это отметка, а не этап. */
   var FILTER_GROUPS = [
-    {cap:'', items:[{key:'all', label:'Все записи'}]},
+    {cap:'', items:[{key:'all', label:'Все записи'}, {key:'accessQueue',label:'Ждут выдачи доступа'}]},
     {cap:'Кандидаты', items:[
       {key:'draft', label:'Оффер не отправлен'},
       {key:'offered', label:'Ждут ответа'},
@@ -2913,12 +2976,13 @@
   var FILTERS = FILTER_GROUPS.reduce(function(acc, gr){ return acc.concat(gr.items); }, []);
   function matchFilter(rec, key){
     if(key === 'all') return true;
+    if(key === 'accessQueue') return !hasAccess(rec) && rec.offerReply === 'yes';
     if(key === 'card') return docStats(rec).cardNeed;
     return statusOf(rec).key === key;
   }
   function matchSearch(rec, q){
     if(!q) return true;
-    var hay = [rec.firstName, rec.lastName, rec.login, rec.code, rec.email, rec.personalEmail, rec.dept]
+    var hay = [rec.firstName, rec.lastName, rec.middleName, rec.hiringSource && rec.hiringSource.position, rec.login, rec.code, rec.email, rec.personalEmail, rec.dept]
       .join(' ').toLowerCase();
     return hay.indexOf(q) > -1;
   }
@@ -3009,13 +3073,14 @@
 
     var name = document.createElement('span'); name.className = 'pr-name';
     var who = document.createElement('b'); who.className = 'pr-who';
-    who.textContent = rec.lastName + ' ' + rec.firstName;
+    who.textContent = [rec.lastName,rec.firstName,rec.middleName].filter(Boolean).join(' ');
     name.appendChild(who);
     var id = document.createElement('span'); id.className = 'pr-id';
     id.textContent = has ? (rec.login || rec.code) : 'кандидат';
     /* пометки держим в строке логина, а не чипами в статусе: иначе строка
        вырастает на лишний ряд и список теряет ровный шаг */
     if(has && ds.cardNeed) id.appendChild(mark('нужна карта'));
+    if(isIntern(rec.dept))id.appendChild(mark('стажировка'));
     if(rec.demoPass) id.appendChild(mark('тестовый профиль'));
     name.appendChild(id);
 
@@ -3177,12 +3242,18 @@
          ? 'отказ' + (rec.offerReplyAt ? ' · ' + fmtShort.format(new Date(rec.offerReplyAt)) : '')
          : 'ждём'), !rec.offerReply));
     rows.appendChild(row('Личная почта', rec.personalEmail || 'не указана', !rec.personalEmail));
+    if(rec.hiringSource){
+      rows.appendChild(row('Вакансия', rec.hiringSource.position || 'не указана'));
+      rows.appendChild(row('Источник', 'HR-метрики · принят'));
+      rows.appendChild(row('Формат адаптации', isIntern(rec.dept) ? 'Стажировка' : 'Адаптация сотрудника'));
+      var link=document.createElement('a');link.className='back';link.href='/metrics?vacancy='+encodeURIComponent(rec.hiringSource.vacancyId);link.textContent='Открыть вакансию →';rows.appendChild(link);
+    }
     box.appendChild(rows);
 
     var act = document.createElement('div'); act.className = 'pc-act';
     var grant = document.createElement('button');
     grant.type = 'button'; grant.className = 'btn sm'; grant.textContent = 'Создать доступ';
-    grant.addEventListener('click', function(){ grantAccess(rec); });
+    grant.addEventListener('click', function(){ if(rec.hiringSource)prepareHiringAccess(rec.code);else grantAccess(rec); });
 
     var letter = document.createElement('button');
     letter.type = 'button'; letter.className = 'mini';
@@ -3212,7 +3283,7 @@
     editBtn.addEventListener('click', function(){ openEdit(rec); });
 
     act.appendChild(grant); act.appendChild(letter);
-    act.appendChild(replyBtn('Принят', 'yes')); act.appendChild(replyBtn('Отказ', 'no'));
+    if(!rec.hiringSource){act.appendChild(replyBtn('Принят', 'yes')); act.appendChild(replyBtn('Отказ', 'no'));}
     act.appendChild(editBtn);
     box.appendChild(act);
     return box;
@@ -3261,7 +3332,7 @@
       last: $('eLast'), first: $('eFirst'), gender: $('eGender'), dept: $('eDept'),
       date: $('eDate'), time: $('eTime'), login: $('eLogin'), mail: $('eMail'), personal: $('ePersonal')
     };
-    $('editTitle').textContent = rec.lastName + ' ' + rec.firstName;
+    $('editTitle').textContent = [rec.lastName, rec.firstName, rec.middleName].filter(Boolean).join(' ');
     $('editSub').textContent = 'Код доступа ' + rec.code;
     f.last.value = rec.lastName || ''; f.first.value = rec.firstName || '';
     f.gender.value = rec.gender === 'm' ? 'm' : 'f';
@@ -3301,8 +3372,8 @@
       close();
       ask({title: hasAccess(rec) ? 'Удалить доступ?' : 'Удалить кандидата?', danger:true, ok:'Удалить',
            text: hasAccess(rec)
-             ? rec.lastName + ' ' + rec.firstName + ' (' + rec.code + ') больше не сможет войти, отметки в чек-листах пропадут. Отменить нельзя.'
-             : rec.lastName + ' ' + rec.firstName + ' пропадёт из списка вместе с оффером. Отменить нельзя.'})
+             ? [rec.lastName, rec.firstName, rec.middleName].filter(Boolean).join(' ') + ' (' + rec.code + ') больше не сможет войти, отметки в чек-листах пропадут. Отменить нельзя.'
+             : [rec.lastName, rec.firstName, rec.middleName].filter(Boolean).join(' ') + ' пропадёт из списка вместе с оффером. Отменить нельзя.'})
         .then(function(v){
           if(!v) return;
           state.store.removeEmployee(rec.code).then(refreshPeople);
@@ -3412,7 +3483,7 @@
     state.store.saveDepartments(state.depts).then(function(){
       $('deptSaved').hidden = false;
       setTimeout(function(){ $('deptSaved').hidden = true; }, 2200);
-      renderDeptRows(); fillDeptSelect();
+      var selectedDept=$('fDept').value;renderDeptRows(); fillDeptSelect();$('fDept').value=selectedDept;syncOfferBlock();renderPeople();
     }).catch(function(){ notify('Не удалось сохранить справочник', 'Попробуй ещё раз.'); });
   });
   /* ——— блоки страницы сотрудника: правит HR, настройки общие для всех ——— */
@@ -3924,7 +3995,7 @@
     /* письмо, оффер и сообщения относятся только к выдаче доступов */
     $('issuePanels').hidden = !(t === 'new' || t === 'people');
   }
-  $('tabPeople').addEventListener('click', function(){ switchTab('people'); });
+  $('tabPeople').addEventListener('click', function(){ switchTab('people'); refreshPeople(); });
   $('tabNew').addEventListener('click', function(){ switchTab('new'); });
   $('tabPage').addEventListener('click', function(){ switchTab('page'); });
   $('tabTpl').addEventListener('click', function(){ switchTab('tpl'); });
@@ -4056,7 +4127,7 @@
   function renderEmployee(){
     var rec = state.rec, d = deptByName(rec.dept);
     $('heroName').textContent = rec.firstName + ', добро пожаловать';
-    $('heroEyebrow').textContent = 'Пребординг · до первого рабочего дня';
+    $('heroEyebrow').textContent = isIntern(rec.dept) ? 'Стажировка · подготовка к выходу' : 'Пребординг · до первого рабочего дня';
     $('whoName').textContent = rec.firstName + ' ' + rec.lastName;
     $('mDept').textContent = rec.dept || 'уточняется';
     $('mHead').textContent = (d && d.head) ? 'Руководитель: ' + d.head : 'руководителя уточняем';
