@@ -169,6 +169,79 @@ async function protectCredentials(path, value, previous) {
   return next;
 }
 
+// Accepted offers are a live HR queue; no employee/password is created until HR issues access.
+const HIRING_ID = /^[A-Za-z0-9_-]{1,100}$/;
+const CLOSE_REASONS = ['внутренний перевод','перераспределение нагрузки','потребность отпала','удержание','другое'];
+function hiringSeats(v) { return Array.isArray(v.seats) ? v.seats : [v]; }
+function hiringKey(id,s,si,o,oi) { return [id,s.hiringId || 'legacy-seat-'+si,o.hiringId || 'legacy-offer-'+oi].join('/'); }
+function hiringCode(key) { return 'IW-'+crypto.createHash('sha256').update(key).digest('hex').slice(0,20).toUpperCase(); }
+function vacancyDataError(v) {
+  if (!Array.isArray(v.seats)) return '';
+  const seen = new Set();
+  for (let i=0;i<v.seats.length;i++) {
+    const s=v.seats[i];if(!s || typeof s!=='object' || Array.isArray(s))return 'Неверная позиция.';
+    s.hiringId=s.hiringId || 'legacy-seat-'+i;
+    if(typeof s.hiringId!=='string' || !HIRING_ID.test(s.hiringId) || seen.has(s.hiringId))return 'Идентификаторы позиций должны быть уникальными.';seen.add(s.hiringId);
+    if(s.offers!==undefined && !Array.isArray(s.offers))return 'Неверный список офферов.';
+    const offers=new Set();
+    for (let j=0;j<(Array.isArray(s.offers)?s.offers.length:0);j++) {
+      const o=s.offers[j];if(!o || typeof o!=='object' || Array.isArray(o))return 'Неверный оффер.';
+      o.hiringId=o.hiringId || 'legacy-offer-'+j;
+      if(typeof o.hiringId!=='string' || !HIRING_ID.test(o.hiringId) || offers.has(o.hiringId))return 'Идентификаторы офферов должны быть уникальными.';offers.add(o.hiringId);
+    }
+    if(s.search==='закрыта без выхода') {
+      if(s.startAt || (s.offers||[]).some(o=>o.started))return 'Позиция не может одновременно иметь фактический выход и закрытие без выхода.';
+      const d=s.searchClosedAt;
+      if(typeof d!=='string' || !/^\d{4}-\d{2}-\d{2}$/.test(d) || isNaN(Date.parse(d)) || new Date(d).toISOString().slice(0,10)!==d || d<(s.requestedAt||'') || d>acl.todayMsk())return 'Неверная дата закрытия позиции.';
+      if(!CLOSE_REASONS.includes(s.searchCloseReason))return 'Укажите причину закрытия позиции.';
+      if(s.searchCloseComment!==undefined && (typeof s.searchCloseComment!=='string' || s.searchCloseComment.length>500))return 'Комментарий к закрытию слишком длинный.';
+      if(s.searchCloseReason==='другое' && !String(s.searchCloseComment||'').trim())return 'Для другой причины нужен комментарий.';
+    }
+  }
+  return '';
+}
+function acceptedHiring(user,id,v) {
+  if(!v || !acl.readable(user,'vacancies/'+id,v,user.people))return [];
+  const result=[];
+  hiringSeats(v).forEach((s,si)=>{
+    if(s.search==='закрыта без выхода' || s.startAt)return;
+    (Array.isArray(s.offers)?s.offers:[]).forEach((o,oi)=>{
+      const name=String(o.candidate||'').trim().replace(/\s+/g,' ');
+      if(o.result!=='accepted' || o.started || !name)return;
+      const key=hiringKey(id,s,si,o,oi),parts=name.split(' ');
+      result.push({code:hiringCode(key),login:'',email:'',personalEmail:'',lastName:parts[0]||'',firstName:parts[1]||'',middleName:parts.slice(2).join(' '),dept:v.dept||'',startDate:o.startAt||'',startTime:'',createdAt:v.updatedAt||'',openedAt:'',sentAt:'',accessAt:'',progress:{},offerReply:'yes',offerReplyAt:o.answerAt||'',offerSentAt:o.sentAt||'',offer:{position:v.title||'',probation:o.probMonths?o.probMonths+' мес.':''},pendingAccess:true,
+        hiringSource:{key,vacancyId:id,seatId:s.hiringId||'legacy-seat-'+si,offerId:o.hiringId||'legacy-offer-'+oi,fullName:name,position:v.title||'',dept:v.dept||'',startDate:o.startAt||'',probation:o.probMonths?o.probMonths+' мес.':'',sentAt:o.sentAt||'',answerAt:o.answerAt||'',recruiter:v.manager||''}});
+    });
+  });return result;
+}
+async function pendingHiring(user,store) {
+  const docs=(await store.changes(0)).filter(d=>d.data),employees=docs.filter(d=>d.path.startsWith('employees/')).map(d=>d.data);
+  const issued=new Set(employees.filter(e=>e.hash && e.hiringSource).map(e=>e.hiringSource.key));
+  return docs.filter(d=>d.path.startsWith('vacancies/')).flatMap(d=>acceptedHiring(user,d.path.slice(10),d.data)).filter(r=>!issued.has(r.hiringSource.key) && !employees.some(e=>e.code===r.code));
+}
+async function issueHiring(user,store,record) {
+  if(user.role==='employee')return json(403,{error:'Доступ выдаёт HR.'});
+  const source=record && record.hiringSource;
+  if(!source || typeof source.vacancyId!=='string' || !HIRING_ID.test(source.vacancyId))return json(400,{error:'Неверный источник оффера.'});
+  const key=String(source.key||''),code=hiringCode(key);let error='',status=409;
+  // The employee transaction serializes issuance and the fresh vacancy check on the server store.
+  const ver=await store.tx('employees/'+code,async prev=>{
+    if(prev){error='Доступ этому кандидату уже выдан. Обновите список.';return undefined;}
+    if((await store.changes(0)).some(d=>d.data && d.path.startsWith('employees/') && d.data.hiringSource && d.data.hiringSource.key===key)){error='Доступ этому кандидату уже выдан. Обновите список.';return undefined;}
+    const v=await store.get('vacancies/'+source.vacancyId);
+    const pending=acceptedHiring(user,source.vacancyId,v).find(r=>r.hiringSource.key===key);
+    if(!pending){error='Кандидат больше не ожидает выдачи доступа или вакансия недоступна.';return undefined;}
+    const next=Object.assign({},pending);
+    for(const field of ['lastName','firstName','middleName','gender','dept','email','personalEmail','startDate','startTime','salt','hash'])if(record[field]!==undefined)next[field]=record[field];
+    if(['firstName','lastName','dept'].some(k=>typeof next[k]!=='string'||!next[k].trim()||next[k].length>160) || (next.middleName!==undefined && (typeof next.middleName!=='string'||next.middleName.length>160)) || typeof next.personalEmail!=='string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(next.personalEmail) || !next.dept || typeof next.salt!=='string' || !/^[0-9a-f]{64}$/.test(String(next.hash))){error='Укажите имя, фамилию, отдел, личную почту и зашифрованный пароль.';status=400;return undefined;}
+    next.offer=Object.assign({},pending.offer,record.offer&&typeof record.offer==='object'&&!Array.isArray(record.offer)?record.offer:{});
+    delete next.pendingAccess;next.login=code.toLowerCase();next.createdAt=next.accessAt=next.updatedAt=new Date().toISOString();
+    error=acl.writeError(user,'employees/'+code,null,next,user.people);if(error){status=403;return undefined;}
+    return protectCredentials('employees/'+code,next,null);
+  },user.email);
+  return error?json(status,{error}):json(200,{ver,code});
+}
+
 async function write(user, store, body) {
   const { path: p, op, data } = body || {};
   if (typeof p !== 'string' || !['set', 'update', 'delete'].includes(op)) return json(400, { error: 'Неверный запрос.' });
@@ -188,6 +261,8 @@ async function write(user, store, body) {
       if (ownerId) next.ownerId = ownerId;
     }
     err = acl.writeError(user, p, prev, next, user.people);
+    if(!err && p.startsWith('vacancies/') && next)err=vacancyDataError(next);
+    if(!err && p.startsWith('employees/') && next && next.hiringSource && (!prev || !prev.hiringSource || prev.hiringSource.key!==next.hiringSource.key))err='Для выдачи доступа из оффера используйте очередь кандидатов.';
     return err ? undefined : await protectCredentials(p, next, prev);
   }, user.email);
   if (err) return json(403, { error: err });
@@ -477,6 +552,8 @@ function makeHandler(store, cfg, fetchFn) {
       if (cfg.local && user.admin && method === 'POST' && url === '/api/replace-data') return await replaceFromJournals(store, user, body() || {});
       if (method === 'GET' && url === '/api/me') return json(200, { pid: user.pid, email: user.email, admin: user.admin, role: user.role, code: user.code,
         name: user.name || [(user.people[user.pid] || {}).name, (user.people[user.pid] || {}).surname].filter(Boolean).join(' ') });
+      if(cfg.local && method==='GET' && url==='/api/hiring/pending')return user.role==='employee'?json(403,{error:'Только для HR.'}):json(200,{people:await pendingHiring(user,store)});
+      if(cfg.local && method==='POST' && url==='/api/hiring/issue')return await issueHiring(user,store,(body()||{}).record);
       if (method === 'GET' && url === '/api/sync') return json(200, await sync(user, store, Math.max(0, Number(query.since) || 0), query.scope));
       if (method === 'POST' && url === '/api/doc') {
         const b = body();
